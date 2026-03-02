@@ -1,0 +1,76 @@
+from fastapi import WebSocket
+from typing import Dict, List, Optional
+
+
+class RoomManager:
+    """Tracks WebSocket connections and users grouped by room code."""
+
+    def __init__(self):
+        self.rooms: Dict[str, List[WebSocket]] = {}
+        # Maps room_code -> list of {"id": str, "name": str}
+        self.room_users: Dict[str, List[dict]] = {}
+        # Maps websocket -> (room_code, user_name)
+        self._ws_meta: Dict[WebSocket, tuple] = {}
+
+    async def connect(self, websocket: WebSocket, room_code: str, user_name: str = "Guest"):
+        await websocket.accept()
+        self.rooms.setdefault(room_code, []).append(websocket)
+        self.room_users.setdefault(room_code, [])
+        self._ws_meta[websocket] = (room_code, user_name)
+
+        # Add user entry (use object id as unique id)
+        user_entry = {"id": str(id(websocket)), "name": user_name}
+        self.room_users[room_code].append(user_entry)
+
+        # Broadcast updated user list to everyone in the room (including the new joiner)
+        await self.broadcast_user_update(room_code)
+
+    def disconnect(self, websocket: WebSocket, room_code: str):
+        room = self.rooms.get(room_code, [])
+        if websocket in room:
+            room.remove(websocket)
+
+        # Remove this user from the users list
+        ws_id = str(id(websocket))
+        users = self.room_users.get(room_code, [])
+        self.room_users[room_code] = [u for u in users if u["id"] != ws_id]
+
+        # Clean up meta
+        self._ws_meta.pop(websocket, None)
+
+        if not room:
+            self.rooms.pop(room_code, None)
+            self.room_users.pop(room_code, None)
+
+    def get_users(self, room_code: str) -> List[dict]:
+        return self.room_users.get(room_code, [])
+
+    async def broadcast_user_update(self, room_code: str):
+        """Send the current user list to all clients in the room."""
+        users = self.get_users(room_code)
+        message = {"event": "USER_UPDATE", "users": users}
+        for ws in self.rooms.get(room_code, []):
+            try:
+                await ws.send_json(message)
+            except Exception:
+                pass
+
+    async def broadcast(self, message: dict, room_code: str, exclude: Optional[WebSocket] = None):
+        for ws in self.rooms.get(room_code, []):
+            if ws != exclude:
+                try:
+                    await ws.send_json(message)
+                except Exception:
+                    pass
+
+    async def send_to_peer(self, message: dict, room_code: str, peer_id: str):
+        """Send a message to a specific peer (used for WebRTC signaling)."""
+        for ws in self.rooms.get(room_code, []):
+            try:
+                await ws.send_json(message)
+                return
+            except Exception:
+                pass
+
+    def room_size(self, room_code: str) -> int:
+        return len(self.rooms.get(room_code, []))

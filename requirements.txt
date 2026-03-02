@@ -1,0 +1,3 @@
+# Root level dependencies for utility scripts
+requests
+colorama

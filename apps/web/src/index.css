@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #E8332A;
+  --color-primary-hover: #CC2B24;
+
+  --color-secondary: #F0B429;
+  --color-secondary-hover: #D8A225;
+
+  --color-accent: #7EB89A;
+  --color-accent-alt: #C4A0A0;
+
+  --color-background: #E8EAF0;
+  --color-surface: #FFFFFF;
+
+  --color-text-main: #1A1A1A;
+  --color-text-muted: #555555;
+
+  --font-sans: "Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  --animate-spin-slow: spin 3s linear infinite;
+  --animate-pulse-slow: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-rain: rain 15s linear infinite;
+}
+
+@keyframes rain {
+  0% {
+    background-position: 0% 0%;
+  }
+
+  100% {
+    background-position: 0% 100%;
+  }
+}
+
+@layer base {
+  body {
+    @apply antialiased;
+    color: var(--color-text-main);
+    background: linear-gradient(135deg, #D5D9E8 0%, #E8EAF0 100%);
+    min-height: 100vh;
+  }
+}
+
+@layer utilities {
+  .glass-panel {
+    @apply bg-white border border-gray-100/50 rounded-[20px];
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.10);
+  }
+
+  .glass-panel-secondary {
+    @apply bg-white/90 backdrop-blur-md border border-gray-200/50 rounded-[20px];
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  }
+
+  .animate-rain {
+    display: none;
+    /* Removing rain effect for clean layout */
+  }
+
+  .bg-grid {
+    background-image:
+      linear-gradient(rgba(0, 0, 0, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 0, 0, 0.03) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  /* slate-300 */
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+  /* slate-400 */
+}
+
+/* Canvas Container */
+#ar-scene-container {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+}
