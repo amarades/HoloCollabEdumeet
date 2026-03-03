@@ -5,7 +5,8 @@ import {
     MonitorPlay,
     Settings,
     Upload,
-    Trash2
+    Trash2,
+    Box
 } from 'lucide-react';
 
 interface SessionSidebarProps {
@@ -41,8 +42,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
     const tools = [
         { id: 'whiteboard', icon: Pencil, label: 'Whiteboard' },
-        { id: 'quiz', icon: MessageSquare, label: 'Quiz' },
+        { id: 'quiz', icon: MessageSquare, label: 'Quiz / Poll' },
         { id: 'media', icon: MonitorPlay, label: 'Media' },
+        { id: '3d', icon: Box, label: '3D Scene' },
         { id: 'settings', icon: Settings, label: 'Settings' },
     ];
 

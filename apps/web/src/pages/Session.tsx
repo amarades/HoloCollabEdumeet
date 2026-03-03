@@ -16,6 +16,11 @@ import { apiRequest } from '../services/api';
 
 import { SessionSidebar } from '../components/session/wrapper/SessionSidebar';
 import { ChatPanel } from '../components/session/layout/ChatPanel';
+import { Whiteboard } from '../components/session/tools/Whiteboard';
+import { QuizPanel } from '../components/session/tools/QuizPanel';
+import { MediaPanel } from '../components/session/tools/MediaPanel';
+import { SettingsPanel } from '../components/session/tools/SettingsPanel';
+import { ScenePanel } from '../components/session/tools/ScenePanel';
 
 const Session = () => {
     const { sessionId } = useParams();
@@ -24,6 +29,7 @@ const Session = () => {
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const videoRef = useRef<HTMLVideoElement>(null);
+    const scenePanelFileInputRef = useRef<HTMLInputElement>(null);
 
     const arSceneRef = useRef<ARScene | null>(null);
     const socketRef = useRef<SocketManager | null>(null);
@@ -523,6 +529,55 @@ const Session = () => {
                         ))}
                     </div>
                 </div>
+            )}
+
+            {/* Tool Panels */}
+            {activeTool === 'whiteboard' && (
+                <Whiteboard
+                    onClose={() => setActiveTool(null)}
+                    socket={socketInstance}
+                    user={user}
+                />
+            )}
+
+            {activeTool === 'quiz' && (
+                <QuizPanel
+                    onClose={() => setActiveTool(null)}
+                    socket={socketInstance}
+                    user={user}
+                />
+            )}
+
+            {activeTool === 'media' && (
+                <MediaPanel
+                    onClose={() => setActiveTool(null)}
+                />
+            )}
+
+            {activeTool === '3d' && (
+                <ScenePanel
+                    onClose={() => setActiveTool(null)}
+                    modelLoaded={modelLoaded}
+                    modelVisible={modelVisible}
+                    onToggleModel={handleToggleModel}
+                    onDeleteModel={() => { handleDeleteModel(); setActiveTool(null); }}
+                    onUpload={() => scenePanelFileInputRef.current?.click()}
+                />
+            )}
+
+            {/* Hidden file input for ScenePanel uploads */}
+            <input
+                ref={scenePanelFileInputRef}
+                type="file"
+                accept=".glb,.gltf"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleModelUpload(f); e.target.value = ''; }}
+                className="hidden"
+            />
+
+            {activeTool === 'settings' && (
+                <SettingsPanel
+                    onClose={() => setActiveTool(null)}
+                />
             )}
 
             {/* Chat Panel */}
