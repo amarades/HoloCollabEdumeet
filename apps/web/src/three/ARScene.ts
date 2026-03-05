@@ -4,13 +4,13 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 
 // Define State Interface
 export interface ModelState {
+    model_url?: string; // Add model_url field
     rotation?: { x: number; y: number; z: number };
     scale?: number;
     position?: { x: number; y: number; z: number };
     camera?: { position: { x: number; y: number; z: number } };
     selected_part?: string | null;
     visible?: boolean;
-    model_url?: string;
 }
 
 export class ARScene {
@@ -258,6 +258,7 @@ export class ARScene {
         if (!this.currentModel) return null;
 
         return {
+            model_url: this.currentModelUrl, // Add this line
             rotation: {
                 x: this.currentModel.rotation.x,
                 y: this.currentModel.rotation.y,

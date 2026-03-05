@@ -2,20 +2,34 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Smile, Send } from 'lucide-react';
 import { SocketManager } from '../../../realtime/SocketManager';
 import type { ChatMessage } from '../../../realtime/SocketManager';
+import { ChatStorage } from '../../../services/ChatStorage';
 
 interface ChatPanelProps {
     socket: SocketManager | null;
     user: any;
+    roomId: string;
 }
 
 interface Message extends ChatMessage {
     isOwn: boolean;
 }
 
-export const ChatPanel: React.FC<ChatPanelProps> = ({ socket, user }) => {
+export const ChatPanel: React.FC<ChatPanelProps> = ({ socket, user, roomId }) => {
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    // Load messages from storage on component mount
+    useEffect(() => {
+        if (!roomId) return;
+        
+        const storedMessages = ChatStorage.getMessages(roomId);
+        const formattedMessages: Message[] = storedMessages.map(msg => ({
+            ...msg,
+            isOwn: msg.sender === user?.name
+        }));
+        setMessages(formattedMessages);
+    }, [roomId, user?.name]);
 
     useEffect(() => {
         if (!socket) return;
@@ -32,6 +46,15 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ socket, user }) => {
                 timestamp: msg.timestamp || Date.now(),
                 isOwn: msg.sender === user?.name
             };
+            
+            // Save to storage
+            ChatStorage.saveMessage(roomId, {
+                id: newMessage.id,
+                text: newMessage.text,
+                sender: newMessage.sender,
+                timestamp: newMessage.timestamp
+            });
+            
             setMessages(prev => [...prev, newMessage]);
         };
 
@@ -41,7 +64,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ socket, user }) => {
             // Remove by registering a no-op — prevents ghost listeners
             socket.on('CHAT_MESSAGE', () => { });
         };
-    }, [socket, user]);
+    }, [socket, user, roomId]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

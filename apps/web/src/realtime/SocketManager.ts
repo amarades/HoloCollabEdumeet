@@ -3,6 +3,7 @@ export interface User {
     id: string;
     name: string;
     role: string;
+    isHost?: boolean; // Add host indicator
 }
 
 export interface GestureData {
@@ -38,6 +39,7 @@ export class SocketManager {
     // Session State
     private roomId: string | null = null;
     private userName: string | null = null;
+    private userId: string | null = null;
     private scene: any = null; // Pending strict typing for Three.js scene
 
     // Event Callbacks
@@ -73,6 +75,7 @@ export class SocketManager {
         this.roomId = roomId;
         this.scene = scene;
         this.userName = userName;
+        this.userId = `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`; // Generate unique ID
         this.onUserUpdate = onUserUpdate;
         if (onGesture) this.onGesture = onGesture;
 
@@ -235,6 +238,10 @@ export class SocketManager {
         }
         this.connected = false;
         console.log('[SocketManager] Disconnected by user');
+    }
+
+    getUserId() {
+        return this.userId;
     }
 
     isConnected() {

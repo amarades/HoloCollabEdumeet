@@ -7,6 +7,7 @@ interface Participant {
     stream?: MediaStream | null;
     cameraOn?: boolean;
     micOn?: boolean;
+    isHost?: boolean;
 }
 
 interface VideoGridProps {
@@ -14,7 +15,9 @@ interface VideoGridProps {
     localStream?: MediaStream | null;
     localCameraOn?: boolean;
     localMicOn?: boolean;
+    localIsHost?: boolean;
     participants: Participant[];
+    remoteStreams?: Record<string, MediaStream>;
     /** When true, renders as a compact strip (split-view mode) */
     compact?: boolean;
 }
@@ -23,11 +26,19 @@ export const VideoGrid: React.FC<VideoGridProps> = ({
     localName,
     localStream,
     localCameraOn = true,
-
+    localMicOn = true,
+    localIsHost = false,
     participants,
+    remoteStreams = {},
     compact = false,
 }) => {
     const total = participants.length + 1; // +1 for local
+    
+    // Merge participants with remote streams
+    const participantsWithStreams = participants.map(participant => ({
+        ...participant,
+        stream: remoteStreams[participant.id] || null
+    }));
 
     const gridCols =
         compact ? 'grid-cols-1' :
@@ -42,19 +53,21 @@ export const VideoGrid: React.FC<VideoGridProps> = ({
                 key="local"
                 stream={localStream}
                 name={localName}
-                muted
+                muted={!localMicOn}
                 isLocal
                 cameraOn={localCameraOn}
+                isHost={localIsHost}
             />
 
             {/* Remote participants */}
-            {participants.map((p) => (
+            {participantsWithStreams.map((p) => (
                 <VideoTile
                     key={p.id}
                     stream={p.stream}
                     name={p.name}
                     muted={!p.micOn}
                     cameraOn={p.cameraOn ?? true}
+                    isHost={p.isHost}
                 />
             ))}
 

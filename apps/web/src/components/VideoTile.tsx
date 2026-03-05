@@ -6,6 +6,7 @@ interface VideoTileProps {
     muted?: boolean;
     isLocal?: boolean;
     cameraOn?: boolean;
+    isHost?: boolean;
 }
 
 export const VideoTile: React.FC<VideoTileProps> = ({
@@ -14,6 +15,7 @@ export const VideoTile: React.FC<VideoTileProps> = ({
     muted = false,
     isLocal = false,
     cameraOn = true,
+    isHost = false,
 }) => {
     const videoRef = React.useRef<HTMLVideoElement>(null);
 
@@ -50,9 +52,16 @@ export const VideoTile: React.FC<VideoTileProps> = ({
             )}
             {/* Name tag */}
             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2 flex items-center justify-between">
-                <span className="text-white text-xs font-medium truncate">
-                    {name}{isLocal ? ' (You)' : ''}
-                </span>
+                <div className="flex items-center gap-2">
+                    {isHost && (
+                        <span className="bg-purple-500 text-white text-xs px-1.5 py-0.5 rounded-full font-medium">
+                            HOST
+                        </span>
+                    )}
+                    <span className="text-white text-xs font-medium truncate">
+                        {name}{isLocal ? ' (You)' : ''}
+                    </span>
+                </div>
                 {muted && (
                     <svg className="w-3.5 h-3.5 text-red-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}

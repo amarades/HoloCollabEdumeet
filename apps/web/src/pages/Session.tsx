@@ -3,7 +3,9 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ARScene } from '../three/ARScene';
 import { SocketManager } from '../realtime/SocketManager';
+import { WebRTCManager } from '../realtime/WebRTCManager';
 import { VideoManager } from '../services/VideoManager';
+import { PermissionsService } from '../services/PermissionsService';
 import { GestureService } from '../services/GestureService';
 import { GestureRecognizer } from '../services/GestureRecognizer';
 import { useAuth } from '../context/AuthContext';
@@ -28,6 +30,7 @@ import { HostControls } from '../components/session/tools/HostControls';
 import { AIAssistant } from '../components/AIAssistant';
 import { VideoGrid } from '../components/VideoGrid';
 import { ConnectionQuality } from '../components/ConnectionQuality';
+import { ParticipantApproval } from '../components/session/ParticipantApproval';
 
 const Session = () => {
     const { sessionId } = useParams();
@@ -43,19 +46,21 @@ const Session = () => {
     const socketRef = useRef<SocketManager | null>(null);
     const videoManagerRef = useRef<VideoManager | null>(null);
     const gestureServiceRef = useRef<GestureService | null>(null);
+    const webRTCManagerRef = useRef<WebRTCManager | null>(null);
 
     const [socketInstance, setSocketInstance] = useState<SocketManager | null>(null);
 
     const [users, setUsers] = useState<any[]>([]);
     const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+    const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({});
     const [micOn, setMicOn] = useState(true);
     const [cameraOn, setCameraOn] = useState(true);
     const [isConnected, setIsConnected] = useState(false);
-    const [gesturesEnabled, setGesturesEnabled] = useState(true);
+    const [gesturesEnabled, setGesturesEnabled] = useState(false); // Disabled by default
     const [modelVisible, setModelVisible] = useState(true);
     const [currentGesture, setCurrentGesture] = useState<string>('None');
     const [modelLoaded, setModelLoaded] = useState(false);
-    const gesturesEnabledRef = useRef(true);
+    const gesturesEnabledRef = useRef(false);
 
     // Layout state
     const [splitView, setSplitView] = useState(false);
@@ -138,6 +143,13 @@ const Session = () => {
                     const stream = await videoManager.start(videoRef.current!);
                     if (cancelled) { videoManager.stop(); return; }
                     setLocalStream(stream);
+                    
+                    // Set local stream for WebRTC after socket is initialized
+                    setTimeout(() => {
+                        if (webRTCManagerRef.current) {
+                            webRTCManagerRef.current.setLocalStream(stream);
+                        }
+                    }, 1000); // Wait for WebRTC manager to be initialized
                 } catch (videoError) {
                     console.warn('Video initialization failed, continuing without video:', videoError);
                 }
@@ -150,6 +162,27 @@ const Session = () => {
                 // ── WebSocket ────────────────────────────────────────────────
                 socket = new SocketManager();
                 socketRef.current = socket;
+
+                // ── WebRTC Manager ────────────────────────────────────────
+                const webRTCManager = new WebRTCManager(socket, {
+                    onRemoteStream: (userId: string, stream: MediaStream) => {
+                        setRemoteStreams(prev => ({
+                            ...prev,
+                            [userId]: stream
+                        }));
+                    },
+                    onRemoteStreamRemoved: (userId: string) => {
+                        setRemoteStreams(prev => {
+                            const newStreams = { ...prev };
+                            delete newStreams[userId];
+                            return newStreams;
+                        });
+                    },
+                    onError: (error: Error) => {
+                        console.error('WebRTC error:', error);
+                    }
+                });
+                webRTCManagerRef.current = webRTCManager;
 
                 scene.onStateChange = (state) => {
                     socketRef.current?.emit('MODEL_TRANSFORM', state);
@@ -169,6 +202,9 @@ const Session = () => {
 
                 socket.on('MODEL_CHANGED', (data) => {
                     console.log('Remote user changed model:', data);
+                    if (arSceneRef.current && data.model_url) {
+                        arSceneRef.current.loadModel(data.model_url).catch(console.error);
+                    }
                 });
 
                 socket.onChat = (msg) => {
@@ -176,6 +212,10 @@ const Session = () => {
                 };
 
                 if (!cancelled) setSocketInstance(socket);
+
+                // ── Permissions Service ───────────────────────────────────────
+                const permissionsService = PermissionsService.getInstance();
+                permissionsService.initialize(socket, true); // Current user is host
 
                 // ── Gesture Tracking ─────────────────────────────────────────
                 gestureService = new GestureService();
@@ -282,8 +322,10 @@ const Session = () => {
             if (checkInterval) clearInterval(checkInterval);
             videoManager?.stop();
             gestureService?.stop();
+            webRTCManagerRef.current?.destroy();
             socket?.disconnect();
             scene?.dispose();
+            PermissionsService.getInstance().destroy();
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sessionId, user?.email]);
@@ -363,6 +405,9 @@ const Session = () => {
 
     return (
         <div className="relative h-screen w-screen overflow-hidden bg-background">
+            {/* ── Participant Approval ── */}
+            <ParticipantApproval isHost={true} />
+            
             <div className="relative z-10 h-full flex flex-col">
 
                 {/* ── Main Area ── */}
@@ -376,7 +421,15 @@ const Session = () => {
                                 localStream={localStream}
                                 localCameraOn={cameraOn}
                                 localMicOn={micOn}
-                                participants={users.map(u => ({ id: u.id || u.name, name: u.name, cameraOn: true, micOn: true }))}
+                                localIsHost={true} // Current user is host
+                                participants={users.map(u => ({ 
+                                    id: u.id || u.name, 
+                                    name: u.name, 
+                                    cameraOn: true, 
+                                    micOn: true,
+                                    isHost: u.isHost || false 
+                                }))}
+                                remoteStreams={remoteStreams}
                                 compact
                             />
                         </div>
@@ -537,9 +590,15 @@ const Session = () => {
                         </button>
 
                         <button
-                            onClick={() => setGesturesEnabled(g => !g)}
+                            onClick={() => {
+                                // Only host can toggle gestures
+                                const permissionsService = PermissionsService.getInstance();
+                                if (permissionsService.hasPermission('local', 'canControlGestures')) {
+                                    setGesturesEnabled(g => !g);
+                                }
+                            }}
                             className={`p-4 rounded-full transition-all shadow-sm border ${gesturesEnabled ? 'bg-primary/10 border-primary/30 text-primary hover:bg-primary/20' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'}`}
-                            title="Toggle Hand Tracking"
+                            title="Toggle Hand Tracking (Host Only)"
                         >
                             <Sparkles size={22} />
                         </button>
@@ -763,7 +822,7 @@ const Session = () => {
                         </button>
                     </div>
                     <div className="flex-1 overflow-hidden relative bg-white pb-4">
-                        <ChatPanel socket={socketInstance} user={user} />
+                        <ChatPanel socket={socketInstance} user={user} roomId={sessionId} />
                     </div>
                 </div>
             )}
