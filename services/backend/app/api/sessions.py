@@ -59,7 +59,24 @@ async def create_session(session_data: dict, request: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
+@router.get("/validate/{room_code}")
+async def validate_session(room_code: str):
+    """Validate a room code and return session details and participants without joining."""
+    session = await db.get_session_by_code(room_code.upper())
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if not session.is_active:
+        raise HTTPException(status_code=400, detail="This session has ended")
+        
+    participants = [{"id": p.id, "name": p.name, "role": p.role} for p in session.participants]
+    
+    return {
+        "session_id": session.id,
+        "session_name": session.name,
+        "topic": session.topic,
+        "participants": participants,
+        "host_id": session.host_id
+    }
 
 @router.post("/join")
 async def join_session(join_data: dict, request: Request):

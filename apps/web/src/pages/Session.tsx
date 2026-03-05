@@ -1,16 +1,19 @@
 
-import { useEffect, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ARScene } from '../three/ARScene';
 import { SocketManager } from '../realtime/SocketManager';
 import { VideoManager } from '../services/VideoManager';
 import { GestureService } from '../services/GestureService';
 import { GestureRecognizer } from '../services/GestureRecognizer';
 import { useAuth } from '../context/AuthContext';
+import { useScene } from '../hooks/useScene';
+import { useSessionControls, REACTIONS } from '../hooks/useSessionControls';
 import {
     Mic, MicOff, Video, VideoOff, PhoneOff,
-    Hand, Eye, EyeOff, Users,
-    MessageSquare, X, CheckCircle2, Copy, Check
+    Hand, Box, Sparkles, Users,
+    MessageSquare, X, CheckCircle2, Copy, Check,
+    Columns, Maximize2, Monitor, MonitorOff, ShieldCheck
 } from 'lucide-react';
 import { apiRequest } from '../services/api';
 
@@ -21,10 +24,15 @@ import { QuizPanel } from '../components/session/tools/QuizPanel';
 import { MediaPanel } from '../components/session/tools/MediaPanel';
 import { SettingsPanel } from '../components/session/tools/SettingsPanel';
 import { ScenePanel } from '../components/session/tools/ScenePanel';
+import { HostControls } from '../components/session/tools/HostControls';
+import { AIAssistant } from '../components/AIAssistant';
+import { VideoGrid } from '../components/VideoGrid';
+import { ConnectionQuality } from '../components/ConnectionQuality';
 
 const Session = () => {
     const { sessionId } = useParams();
     const navigate = useNavigate();
+    const location = useLocation();
     const { user } = useAuth();
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -39,6 +47,7 @@ const Session = () => {
     const [socketInstance, setSocketInstance] = useState<SocketManager | null>(null);
 
     const [users, setUsers] = useState<any[]>([]);
+    const [localStream, setLocalStream] = useState<MediaStream | null>(null);
     const [micOn, setMicOn] = useState(true);
     const [cameraOn, setCameraOn] = useState(true);
     const [isConnected, setIsConnected] = useState(false);
@@ -48,15 +57,50 @@ const Session = () => {
     const [modelLoaded, setModelLoaded] = useState(false);
     const gesturesEnabledRef = useRef(true);
 
+    // Layout state
+    const [splitView, setSplitView] = useState(false);
+    const [fullscreen3D, setFullscreen3D] = useState(false);
+
     // Active Tool State
     const [activeTool, setActiveTool] = useState<string | null>(null);
     const [showParticipants, setShowParticipants] = useState(false);
     const [showChat, setShowChat] = useState(false);
     const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
 
-    // Room code — only present when user just created the session
+    // Room code & role (host vs participant) for this session
     const [roomCode] = useState<string | null>(() => sessionStorage.getItem('room_code'));
+    const [sessionRole] = useState<string>(() => {
+        const navState = (location.state as any) || {};
+        return navState.role || sessionStorage.getItem('session_role') || 'student';
+    });
+    const isHost = sessionRole === 'host';
     const [codeCopied, setCodeCopied] = useState(false);
+
+    // Meeting timer
+    const [meetingStartTime] = useState(Date.now());
+
+    // Chat history for AI context
+    const [chatHistory, setChatHistory] = useState<{ sender: string; text: string }[]>([]);
+
+    // ── Scene sync hook ────────────────────────────────────────────────────
+    const {
+        sceneObjects,
+        addObject,
+        deleteObject,
+        selectObject,
+        selectedId,
+    } = useScene(socketInstance);
+
+    // ── Session controls hook (raise-hand, reactions, screen share, quality) ─
+    const {
+        handRaised, toggleHand,
+        reactions, sendReaction,
+        isScreenSharing, toggleScreenShare,
+        connectionQuality,
+    } = useSessionControls(socketInstance, user?.name || 'You');
+
+    const [showHostControls, setShowHostControls] = useState(false);
+    const [showReactionPicker, setShowReactionPicker] = useState(false);
 
     const handleCopyCode = async () => {
         if (roomCode) {
@@ -66,117 +110,134 @@ const Session = () => {
         }
     };
 
-    // Sync ref
     useEffect(() => {
         gesturesEnabledRef.current = gesturesEnabled;
     }, [gesturesEnabled]);
 
-    // --- Initialization Logic ---
+    // ── Initialization ─────────────────────────────────────────────────────
+    // NOTE: depend on user.email (stable primitive) not the whole user object,
+    // to prevent the effect from re-running every render due to a new object reference.
     useEffect(() => {
         if (!canvasRef.current || !videoRef.current || !user || !sessionId) return;
 
+        // Guard flag so async operations that complete after cleanup are ignored
+        let cancelled = false;
+        let gestureTimer: ReturnType<typeof setTimeout> | null = null;
+        let checkInterval: ReturnType<typeof setInterval> | null = null;
+        let videoManager: VideoManager | null = null;
+        let gestureService: GestureService | null = null;
+        let socket: SocketManager | null = null;
+        let scene: ARScene | null = null;
+
         const initSession = async () => {
             try {
-                // 1. Initialize Video Manager
-                const videoManager = new VideoManager();
+                // ── Video ────────────────────────────────────────────────────
+                videoManager = new VideoManager();
                 videoManagerRef.current = videoManager;
-                await videoManager.start(videoRef.current!);
+                try {
+                    const stream = await videoManager.start(videoRef.current!);
+                    if (cancelled) { videoManager.stop(); return; }
+                    setLocalStream(stream);
+                } catch (videoError) {
+                    console.warn('Video initialization failed, continuing without video:', videoError);
+                }
+                if (cancelled) return;
 
-                // 2. Initialize AR Scene
-                const scene = new ARScene(canvasRef.current!);
+                // ── 3D Scene ─────────────────────────────────────────────────
+                scene = new ARScene(canvasRef.current!);
                 arSceneRef.current = scene;
 
-                // 3. Initialize Socket Connection
-                const socket = new SocketManager();
+                // ── WebSocket ────────────────────────────────────────────────
+                socket = new SocketManager();
                 socketRef.current = socket;
+
+                scene.onStateChange = (state) => {
+                    socketRef.current?.emit('MODEL_TRANSFORM', state);
+                };
 
                 socket.connect(
                     sessionId,
                     scene,
                     user.name,
                     (updatedUsers) => {
-                        // Filter out the current user — they are shown separately as 'You' in the panel
-                        setUsers(updatedUsers.filter((u: any) => u.name !== user.name));
+                        if (!cancelled) setUsers(updatedUsers.filter((u: any) => u.name !== user.name));
                     },
                     (gestureEvent) => {
-                        console.log("Gesture Detected", gestureEvent);
+                        console.log('Gesture Detected', gestureEvent);
                     }
                 );
-                setSocketInstance(socket);
 
                 socket.on('MODEL_CHANGED', (data) => {
                     console.log('Remote user changed model:', data);
                 });
 
-                // 4. Initialize Gesture Service
-                const gestureService = new GestureService();
+                socket.onChat = (msg) => {
+                    if (!cancelled) setChatHistory(prev => [...prev.slice(-20), { sender: msg.sender, text: msg.text }]);
+                };
+
+                if (!cancelled) setSocketInstance(socket);
+
+                // ── Gesture Tracking ─────────────────────────────────────────
+                gestureService = new GestureService();
                 gestureServiceRef.current = gestureService;
                 const gestureRecognizer = new GestureRecognizer();
-                console.log('Initializing gesture service...');
 
                 try {
                     await gestureService.initialize();
-                    console.log('Gesture service initialized, waiting for video...');
+                    if (cancelled) return;
 
                     const startGestureDetection = () => {
-                        if (!videoRef.current) return;
-
-                        console.log('Starting gesture detection with improved recognizer');
-                        console.log('Video readyState:', videoRef.current.readyState);
+                        if (cancelled || !videoRef.current || !gestureService) return;
 
                         gestureService.start(videoRef.current!, (results) => {
-                            if (!gesturesEnabledRef.current) return;
+                            if (!gesturesEnabledRef.current || cancelled) return;
 
                             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                                 const landmarks = results.multiHandLandmarks[0];
                                 const gesture = gestureRecognizer.recognize(landmarks);
 
-                                if (scene.currentModel && gesture.confidence > 0.7) {
+                                if (scene?.currentModel && gesture.confidence > 0.7) {
                                     switch (gesture.type) {
                                         case 'fist':
-                                            console.log('🤜 FIST: Resetting model');
                                             scene.currentModel.rotation.set(0, 0, 0);
                                             scene.currentModel.scale.setScalar(1);
                                             scene.currentModel.position.set(0, 0, 0);
                                             scene.camera.position.set(0, 0, 5);
                                             setCurrentGesture('Fist - Reset');
                                             break;
+                                        case 'fist_left':
+                                            scene.currentModel.rotation.y -= 0.05;
+                                            setCurrentGesture('Fist - Rotate Left');
+                                            break;
+                                        case 'fist_right':
+                                            scene.currentModel.rotation.y += 0.05;
+                                            setCurrentGesture('Fist - Rotate Right');
+                                            break;
                                         case 'pointing':
                                             if (gesture.position) {
-                                                console.log('☝️ POINTING: Moving model');
-                                                scene.currentModel.position.set(
-                                                    gesture.position.x,
-                                                    gesture.position.y,
-                                                    gesture.position.z
-                                                );
+                                                scene.currentModel.position.set(gesture.position.x, gesture.position.y, gesture.position.z);
                                                 setCurrentGesture('Pointing - Move');
                                             }
                                             break;
                                         case 'open_left':
-                                            console.log('👈 OPEN LEFT: Rotating left');
                                             scene.currentModel.rotation.y -= 0.05;
                                             setCurrentGesture('Open Hand - Rotate Left');
                                             break;
                                         case 'open_right':
-                                            console.log('👉 OPEN RIGHT: Rotating right');
                                             scene.currentModel.rotation.y += 0.05;
                                             setCurrentGesture('Open Hand - Rotate Right');
                                             break;
                                         case 'pinch_in':
-                                            console.log('🤏 PINCH IN: Zooming in');
                                             if (gesture.scale) {
-                                                const currentScale = scene.currentModel.scale.x;
-                                                const newScale = Math.max(0.5, currentScale * gesture.scale);
-                                                scene.currentModel.scale.setScalar(newScale);
+                                                const s = Math.max(0.5, scene.currentModel.scale.x * gesture.scale);
+                                                scene.currentModel.scale.setScalar(s);
                                             }
                                             setCurrentGesture('Pinch Close - Zoom In');
                                             break;
                                         case 'pinch_out':
-                                            console.log('👌 PINCH OUT: Zooming out');
                                             if (gesture.scale) {
-                                                const currentScale = scene.currentModel.scale.x;
-                                                const newScale = Math.min(3, currentScale * gesture.scale);
-                                                scene.currentModel.scale.setScalar(newScale);
+                                                const s = Math.min(3, scene.currentModel.scale.x * gesture.scale);
+                                                scene.currentModel.scale.setScalar(s);
                                             }
                                             setCurrentGesture('Pinch Far - Zoom Out');
                                             break;
@@ -186,92 +247,73 @@ const Session = () => {
                                     scene.notifyStateChange();
                                 }
 
-                                const landmarksArray = Array.from(landmarks).map(landmark => ({
-                                    x: landmark.x,
-                                    y: landmark.y,
-                                    z: landmark.z
-                                }));
-
-                                if (socket) {
-                                    socket.emit('GESTURE_LANDMARKS', {
-                                        landmarks: landmarksArray,
-                                        gesture: gesture.type,
-                                        confidence: gesture.confidence,
-                                        timestamp: Date.now()
-                                    });
-                                }
+                                const landmarksArray = Array.from(landmarks).map(lm => ({ x: lm.x, y: lm.y, z: lm.z }));
+                                socket?.emit('GESTURE_LANDMARKS', {
+                                    landmarks: landmarksArray, gesture: gesture.type,
+                                    confidence: gesture.confidence, timestamp: Date.now()
+                                });
                             } else {
                                 setCurrentGesture('Ready');
                             }
                         });
-
-                        console.log('✅ Gesture service started with improved detection');
                     };
 
-                    setTimeout(startGestureDetection, 2000);
+                    // Delay gesture start so the video stream is stable first
+                    gestureTimer = setTimeout(startGestureDetection, 2000);
                 } catch (error) {
-                    console.error('❌ Failed to initialize gesture service:', error);
+                    console.error('Failed to initialize gesture service:', error);
                 }
 
-                const checkInterval = setInterval(() => {
-                    setIsConnected(socket.isConnected());
+                checkInterval = setInterval(() => {
+                    if (!cancelled) setIsConnected(socket?.isConnected() ?? false);
                 }, 1000);
 
-                return () => {
-                    clearInterval(checkInterval);
-                    videoManager.stop();
-                    gestureService.stop();
-                    socket.disconnect();
-                    scene.dispose();
-                };
-
             } catch (err) {
-                console.error("Failed to initialize session:", err);
+                console.error('Failed to initialize session:', err);
             }
         };
 
-        const cleanupPromise = initSession();
-        return () => { cleanupPromise.then(cleanup => cleanup && cleanup()); };
-    }, [sessionId, user]);
+        initSession();
 
-    // --- Media Controls ---
+        // ── Cleanup ───────────────────────────────────────────────────────────
+        return () => {
+            cancelled = true;
+            if (gestureTimer) clearTimeout(gestureTimer);
+            if (checkInterval) clearInterval(checkInterval);
+            videoManager?.stop();
+            gestureService?.stop();
+            socket?.disconnect();
+            scene?.dispose();
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sessionId, user?.email]);
+
+    // ── Media Controls ─────────────────────────────────────────────────────
     const handleModelUpload = async (file: File) => {
         if (!file.name.toLowerCase().endsWith('.glb') && !file.name.toLowerCase().endsWith('.gltf')) {
             alert('Only GLB and GLTF files are supported');
             return;
         }
-
         if (file.size > 50 * 1024 * 1024) {
             alert('File size must be less than 50MB');
             return;
         }
-
         try {
             const formData = new FormData();
             formData.append('model', file);
-            formData.append('name', file.name.replace(/\.[^/.]+$/, ""));
+            formData.append('name', file.name.replace(/\.[^/.]+$/, ''));
             formData.append('category', 'Session Upload');
 
-            const newModel = await apiRequest('/api/models/upload', {
-                method: 'POST',
-                body: formData
-            });
+            const newModel = await apiRequest('/api/models/upload', { method: 'POST', body: formData });
 
             if (arSceneRef.current) {
                 await arSceneRef.current.loadModel(newModel.url);
                 setModelLoaded(true);
             }
-
             if (socketRef.current) {
-                socketRef.current.emit('MODEL_CHANGED', {
-                    model_url: newModel.url,
-                    model_name: newModel.name,
-                    timestamp: Date.now()
-                });
+                socketRef.current.emit('MODEL_CHANGED', { model_url: newModel.url, model_name: newModel.name, timestamp: Date.now() });
             }
-
             alert(`Model "${newModel.name}" uploaded successfully!`);
-
         } catch (error) {
             console.error('Model upload failed:', error);
             alert('Failed to upload model. Please try again.');
@@ -279,8 +321,7 @@ const Session = () => {
     };
 
     const handleToggleModel = () => {
-        const newState = !modelVisible;
-        setModelVisible(newState);
+        setModelVisible(v => !v);
         if (arSceneRef.current) arSceneRef.current.toggleModelVisibility();
     };
 
@@ -293,57 +334,112 @@ const Session = () => {
     };
 
     const handleToggleVideo = () => {
-        const newState = !cameraOn;
-        setCameraOn(newState);
-        if (videoManagerRef.current) videoManagerRef.current.toggleVideo(newState);
+        setCameraOn(v => !v);
+        if (videoManagerRef.current) videoManagerRef.current.toggleVideo(!cameraOn);
     };
 
     const handleToggleAudio = () => {
-        const newState = !micOn;
-        setMicOn(newState);
-        if (videoManagerRef.current) videoManagerRef.current.toggleAudio(newState);
+        setMicOn(v => !v);
+        if (videoManagerRef.current) videoManagerRef.current.toggleAudio(!micOn);
     };
 
-    const handleLeave = () => {
-        setShowLeaveConfirm(true);
-    };
+    const handleLeave = () => setShowLeaveConfirm(true);
+    const confirmLeave = () => navigate('/dashboard');
 
-    const confirmLeave = () => {
-        navigate('/dashboard');
-    };
+    // ── AI scene command handler ────────────────────────────────────────────
+    const handleAISceneCommand = useCallback((action: string, payload: any) => {
+        if (action === 'ADD_OBJECT') {
+            addObject(payload.type || 'box', payload.color || '#6366f1', payload.position);
+        } else if (action === 'DELETE_OBJECT' && payload.id) {
+            deleteObject(payload.id);
+        }
+    }, [addObject, deleteObject]);
+
+    // ── Participants for AI context ─────────────────────────────────────────
+    const aiParticipants = [
+        { id: 'local', name: user?.name || 'You' },
+        ...users.map(u => ({ id: u.id || u.name, name: u.name })),
+    ];
 
     return (
         <div className="relative h-screen w-screen overflow-hidden bg-background">
-            {/* Main content */}
             <div className="relative z-10 h-full flex flex-col">
-                {/* Main video area */}
-                <div className="flex-1 relative p-4 md:p-6 pb-0">
-                    <div className="relative h-full rounded-[24px] overflow-hidden bg-gray-900 shadow-sm border border-gray-200/50 flex">
+
+                {/* ── Main Area ── */}
+                <div className={`flex-1 relative p-4 md:p-6 pb-0 flex ${splitView ? 'gap-4' : ''}`}>
+
+                    {/* Video column (split-view only) */}
+                    {splitView && !fullscreen3D && (
+                        <div className="w-64 flex-shrink-0 rounded-[20px] overflow-hidden bg-gray-900 border border-gray-200/30">
+                            <VideoGrid
+                                localName={user?.name || 'You'}
+                                localStream={localStream}
+                                localCameraOn={cameraOn}
+                                localMicOn={micOn}
+                                participants={users.map(u => ({ id: u.id || u.name, name: u.name, cameraOn: true, micOn: true }))}
+                                compact
+                            />
+                        </div>
+                    )}
+
+                    {/* 3D / main view */}
+                    <div className="flex-1 relative rounded-[24px] overflow-hidden bg-gray-900 shadow-sm border border-gray-200/50 flex">
 
                         {/* Status Pills */}
                         <div className="absolute top-6 left-6 flex flex-col gap-3 z-30 pointer-events-none">
                             <div className="flex items-center gap-2 bg-white/90 border border-gray-200 shadow-sm backdrop-blur-md rounded-full px-4 py-2">
-                                {isConnected ? (
-                                    <CheckCircle2 className="w-4 h-4 text-green-500" />
-                                ) : (
-                                    <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                                )}
+                                {isConnected
+                                    ? <CheckCircle2 className="w-4 h-4 text-green-500" />
+                                    : <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />}
                                 <span className="text-gray-700 text-sm font-medium">
-                                    {isConnected ? 'Connected' : 'Reconnecting...'}
+                                    {isConnected ? 'Connected' : 'Reconnecting…'}
                                 </span>
+                                <ConnectionQuality quality={connectionQuality} />
                             </div>
 
-                            {/* Gesture Status */}
                             <div className={`flex items-center gap-2 bg-white/90 border ${gesturesEnabled ? 'border-primary/30 text-primary' : 'border-gray-200 text-gray-500'} shadow-sm backdrop-blur-md rounded-full px-4 py-2 transition-colors`}>
                                 <Hand className="w-4 h-4" />
                                 <span className="text-sm font-medium">{currentGesture}</span>
                             </div>
+
+                            {/* Scene object count badge */}
+                            {sceneObjects.length > 0 && (
+                                <div className="flex items-center gap-2 bg-white/90 border border-violet-200 text-violet-600 shadow-sm backdrop-blur-md rounded-full px-4 py-2">
+                                    <span className="text-sm font-medium">{sceneObjects.length} object{sceneObjects.length !== 1 ? 's' : ''} in scene</span>
+                                </div>
+                            )}
+
+                            {/* Hand raised indicator */}
+                            {handRaised && (
+                                <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 shadow-sm backdrop-blur-md rounded-full px-4 py-2">
+                                    <span className="text-sm font-medium">✋ Hand raised</span>
+                                </div>
+                            )}
                         </div>
 
-                        {/* Host video / big feed */}
+                        {/* Floating reactions overlay */}
+                        {reactions.length > 0 && (
+                            <div className="absolute left-1/2 -translate-x-1/2 bottom-8 z-40 flex gap-3 pointer-events-none">
+                                {reactions.map(r => (
+                                    <div key={r.id} className="flex flex-col items-center animate-bounce-slow">
+                                        <span className="text-4xl drop-shadow-lg" style={{ animation: 'floatUp 4s ease-out forwards' }}>{r.emoji}</span>
+                                        <span className="text-xs text-white font-medium bg-black/40 rounded-full px-2 py-0.5 mt-1">{r.userName}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Screen share banner */}
+                        {isScreenSharing && (
+                            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-4 py-2 rounded-full text-sm font-medium shadow-lg z-50 flex items-center gap-2">
+                                <Monitor className="w-4 h-4" />
+                                Sharing your screen
+                            </div>
+                        )}
+
+                        {/* Main video / canvas area */}
                         <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
                             <div className="relative w-full h-full">
-                                {/* Base video */}
                                 <video
                                     ref={videoRef}
                                     autoPlay
@@ -352,7 +448,6 @@ const Session = () => {
                                     className={`absolute inset-0 w-full h-full object-cover z-10 transition-opacity duration-300 ${cameraOn ? 'opacity-100' : 'opacity-0'}`}
                                     style={{ transform: 'scaleX(-1)' }}
                                 />
-
                                 {!cameraOn && (
                                     <div className="absolute inset-0 z-0 bg-gray-800 flex items-center justify-center">
                                         <div className="w-32 h-32 rounded-full bg-gray-700 flex items-center justify-center text-4xl text-white font-medium shadow-inner">
@@ -368,19 +463,34 @@ const Session = () => {
                                     style={{ background: 'transparent', touchAction: 'none' }}
                                 />
 
-                                {/* Subtitle overlay */}
+                                {/* Name tag */}
                                 <div className="absolute bottom-6 left-6 bg-black/40 backdrop-blur-sm rounded-lg px-3 py-1.5 text-white text-sm font-medium z-30 pointer-events-none">
-                                    {user?.name || "Participant"}
+                                    {user?.name || 'Participant'}
                                 </div>
 
-                                {/* Tools Overlay */}
+                                {/* Fullscreen floating video tiles (fullscreen3D mode) */}
+                                {fullscreen3D && (
+                                    <div className="absolute top-6 left-6 flex flex-col gap-2 z-30 pointer-events-auto max-h-80 overflow-y-auto">
+                                        {users.slice(0, 4).map(u => (
+                                            <div key={u.id || u.name} className="w-32 rounded-xl overflow-hidden shadow-lg border border-white/20">
+                                                <div className="bg-gray-800 aspect-video flex items-center justify-center">
+                                                    <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-bold">
+                                                        {u.name?.[0]?.toUpperCase()}
+                                                    </div>
+                                                </div>
+                                                <div className="bg-black/60 px-2 py-1">
+                                                    <span className="text-white text-xs truncate block">{u.name}</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Sidebar Tools */}
                                 <div className="absolute top-6 right-6 z-40 pointer-events-auto shadow-xl rounded-2xl">
                                     <SessionSidebar
                                         activeTool={activeTool}
                                         onSelectTool={setActiveTool}
-                                        onModelUpload={handleModelUpload}
-                                        modelLoaded={modelLoaded}
-                                        onDeleteModel={handleDeleteModel}
                                     />
                                 </div>
                             </div>
@@ -388,10 +498,10 @@ const Session = () => {
                     </div>
                 </div>
 
-                {/* Bottom Control Bar */}
+                {/* ── Bottom Control Bar ── */}
                 <div className="p-4 md:p-6 bg-transparent z-30 flex items-center justify-between">
 
-                    {/* Left: Room Code (host only) or Meeting label */}
+                    {/* Left: Room code / label */}
                     <div className="hidden md:flex items-center gap-3">
                         {roomCode ? (
                             <button
@@ -401,9 +511,7 @@ const Session = () => {
                             >
                                 <span className="text-gray-400 text-xs">Code:</span>
                                 <span className="font-mono font-bold tracking-widest text-primary">{roomCode}</span>
-                                {codeCopied
-                                    ? <Check className="w-4 h-4 text-green-500" />
-                                    : <Copy className="w-4 h-4 text-gray-400 group-hover:text-primary transition-colors" />}
+                                {codeCopied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 text-gray-400 group-hover:text-primary transition-colors" />}
                             </button>
                         ) : (
                             <div className="px-4 py-2 bg-white rounded-full border border-gray-200 shadow-sm text-gray-700 font-medium text-sm">
@@ -413,50 +521,97 @@ const Session = () => {
                     </div>
 
                     {/* Center: Primary Controls */}
-                    <div className="flex items-center gap-4 mx-auto md:mx-0">
+                    <div className="flex items-center gap-3 mx-auto md:mx-0">
                         <button
                             onClick={handleToggleAudio}
-                            className={`p-4 rounded-full transition-all shadow-sm ${!micOn
-                                ? 'bg-red-500 text-white hover:bg-red-600'
-                                : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
-                                }`}
+                            className={`p-4 rounded-full transition-all shadow-sm ${!micOn ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}
                         >
                             {!micOn ? <MicOff size={22} /> : <Mic size={22} />}
                         </button>
 
                         <button
                             onClick={handleToggleVideo}
-                            className={`p-4 rounded-full transition-all shadow-sm ${!cameraOn
-                                ? 'bg-red-500 text-white hover:bg-red-600'
-                                : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
-                                }`}
+                            className={`p-4 rounded-full transition-all shadow-sm ${!cameraOn ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}
                         >
                             {!cameraOn ? <VideoOff size={22} /> : <Video size={22} />}
                         </button>
 
                         <button
-                            onClick={() => setGesturesEnabled(!gesturesEnabled)}
-                            className={`p-4 rounded-full transition-all shadow-sm border ${gesturesEnabled
-                                ? 'bg-primary/10 border-primary/30 text-primary hover:bg-primary/20'
-                                : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
-                                }`}
+                            onClick={() => setGesturesEnabled(g => !g)}
+                            className={`p-4 rounded-full transition-all shadow-sm border ${gesturesEnabled ? 'bg-primary/10 border-primary/30 text-primary hover:bg-primary/20' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'}`}
                             title="Toggle Hand Tracking"
                         >
-                            <Hand size={22} />
+                            <Sparkles size={22} />
                         </button>
 
                         <button
                             onClick={handleToggleModel}
-                            className={`p-4 rounded-full transition-all shadow-sm border ${modelVisible
-                                ? 'bg-green-50 border-green-200 text-green-600 hover:bg-green-100'
-                                : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
-                                }`}
+                            className={`p-4 rounded-full transition-all shadow-sm border ${modelVisible ? 'bg-green-50 border-green-200 text-green-600 hover:bg-green-100' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'}`}
                             title="Toggle 3D Scene"
                         >
-                            {modelVisible ? <Eye size={22} /> : <EyeOff size={22} />}
+                            <Box size={22} className={modelVisible ? "" : "opacity-50"} />
                         </button>
 
-                        <div className="w-px h-8 bg-gray-300 mx-1"></div>
+                        {/* Layout toggles */}
+                        <button
+                            onClick={() => { setSplitView(v => !v); setFullscreen3D(false); }}
+                            className={`p-4 rounded-full transition-all shadow-sm border ${splitView ? 'bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+                            title="Split View (Video + 3D)"
+                        >
+                            <Columns size={22} />
+                        </button>
+
+                        <button
+                            onClick={() => { setFullscreen3D(v => !v); setSplitView(false); }}
+                            className={`p-4 rounded-full transition-all shadow-sm border ${fullscreen3D ? 'bg-violet-50 border-violet-200 text-violet-600 hover:bg-violet-100' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+                            title="Fullscreen 3D"
+                        >
+                            <Maximize2 size={22} />
+                        </button>
+
+                        {/* Raise hand */}
+                        <button
+                            onClick={toggleHand}
+                            className={`p-4 rounded-full transition-all shadow-sm border ${handRaised ? 'bg-amber-50 border-amber-300 text-amber-600 hover:bg-amber-100' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+                            title="Raise / Lower Hand"
+                        >
+                            <Hand size={22} />
+                        </button>
+
+                        {/* Emoji reactions */}
+                        <div className="relative">
+                            <button
+                                onClick={() => setShowReactionPicker(p => !p)}
+                                className="p-4 rounded-full transition-all shadow-sm border bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
+                                title="Send Reaction"
+                            >
+                                <span className="text-xl leading-none">😊</span>
+                            </button>
+                            {showReactionPicker && (
+                                <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-white border border-gray-200 rounded-2xl shadow-xl p-2 flex gap-1 z-50">
+                                    {REACTIONS.map(emoji => (
+                                        <button
+                                            key={emoji}
+                                            onClick={() => { sendReaction(emoji); setShowReactionPicker(false); }}
+                                            className="text-2xl p-2 hover:bg-gray-100 rounded-xl transition-colors"
+                                        >
+                                            {emoji}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Screen share */}
+                        <button
+                            onClick={toggleScreenShare}
+                            className={`p-4 rounded-full transition-all shadow-sm border ${isScreenSharing ? 'bg-blue-50 border-blue-300 text-blue-600 hover:bg-blue-100' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+                            title={isScreenSharing ? 'Stop Sharing' : 'Share Screen'}
+                        >
+                            {isScreenSharing ? <MonitorOff size={22} /> : <Monitor size={22} />}
+                        </button>
+
+                        <div className="w-px h-8 bg-gray-300 mx-1" />
 
                         <button
                             onClick={handleLeave}
@@ -469,29 +624,32 @@ const Session = () => {
                     {/* Right: Side panel toggles */}
                     <div className="hidden md:flex items-center gap-3">
                         <button
-                            onClick={() => setShowParticipants(!showParticipants)}
-                            className={`p-3.5 rounded-full transition-all border shadow-sm ${showParticipants
-                                ? 'bg-gray-100 border-gray-300 text-gray-900'
-                                : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                                }`}
+                            onClick={() => setShowParticipants(p => !p)}
+                            className={`p-3.5 rounded-full transition-all border shadow-sm ${showParticipants ? 'bg-gray-100 border-gray-300 text-gray-900' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
                         >
                             <Users size={20} />
                         </button>
-
                         <button
-                            onClick={() => setShowChat(!showChat)}
-                            className={`p-3.5 rounded-full transition-all border shadow-sm ${showChat
-                                ? 'bg-blue-50 border-blue-200 text-blue-600'
-                                : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                                }`}
+                            onClick={() => setShowChat(c => !c)}
+                            className={`p-3.5 rounded-full transition-all border shadow-sm ${showChat ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
                         >
                             <MessageSquare size={20} />
                         </button>
+                        {/* Host controls — only visible to session host */}
+                        {isHost && (
+                            <button
+                                onClick={() => setShowHostControls(h => !h)}
+                                className={`p-3.5 rounded-full transition-all border shadow-sm ${showHostControls ? 'bg-amber-50 border-amber-300 text-amber-600' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                                title="Host Controls"
+                            >
+                                <ShieldCheck size={20} />
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>
 
-            {/* Participants Panel */}
+            {/* ── Participants Panel ── */}
             {showParticipants && (
                 <div className="absolute top-6 right-6 bottom-32 w-80 bg-white border border-gray-200 rounded-2xl shadow-xl z-40 flex flex-col overflow-hidden animate-in slide-in-from-right-8">
                     <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
@@ -508,7 +666,9 @@ const Session = () => {
                                 </div>
                                 <div>
                                     <div className="text-gray-900 font-medium text-sm">{user?.name} (You)</div>
-                                    <div className="text-xs text-gray-500 font-medium">Host</div>
+                                    <div className="text-xs text-gray-500 font-medium">
+                                        {isHost ? 'Host' : 'Participant'}
+                                    </div>
                                 </div>
                             </div>
                             <Mic size={16} className="text-gray-400" />
@@ -521,7 +681,7 @@ const Session = () => {
                                     </div>
                                     <div>
                                         <div className="text-gray-900 font-medium text-sm group-hover:text-primary transition-colors">{p.name}</div>
-                                        <div className="text-xs text-gray-500">Student</div>
+                                        <div className="text-xs text-gray-500">Participant</div>
                                     </div>
                                 </div>
                                 <Mic size={16} className="text-gray-400" />
@@ -531,29 +691,16 @@ const Session = () => {
                 </div>
             )}
 
-            {/* Tool Panels */}
+            {/* ── Tool Panels ── */}
             {activeTool === 'whiteboard' && (
-                <Whiteboard
-                    onClose={() => setActiveTool(null)}
-                    socket={socketInstance}
-                    user={user}
-                />
+                <Whiteboard onClose={() => setActiveTool(null)} socket={socketInstance} user={user} />
             )}
-
             {activeTool === 'quiz' && (
-                <QuizPanel
-                    onClose={() => setActiveTool(null)}
-                    socket={socketInstance}
-                    user={user}
-                />
+                <QuizPanel onClose={() => setActiveTool(null)} socket={socketInstance} user={user} />
             )}
-
             {activeTool === 'media' && (
-                <MediaPanel
-                    onClose={() => setActiveTool(null)}
-                />
+                <MediaPanel onClose={() => setActiveTool(null)} />
             )}
-
             {activeTool === '3d' && (
                 <ScenePanel
                     onClose={() => setActiveTool(null)}
@@ -562,6 +709,38 @@ const Session = () => {
                     onToggleModel={handleToggleModel}
                     onDeleteModel={() => { handleDeleteModel(); setActiveTool(null); }}
                     onUpload={() => scenePanelFileInputRef.current?.click()}
+                    sceneObjects={sceneObjects}
+                    onAddObject={addObject}
+                    onDeleteObject={deleteObject}
+                    onSelectObject={selectObject}
+                    selectedObjectId={selectedId}
+                />
+            )}
+            {activeTool === 'ai' && (
+                <div className="absolute inset-4 md:inset-y-10 md:right-10 md:left-auto md:w-[380px] z-40 animate-in slide-in-from-right duration-200">
+                    <AIAssistant
+                        onClose={() => setActiveTool(null)}
+                        modelName="Session"
+                        sceneObjects={sceneObjects}
+                        participants={aiParticipants}
+                        chatHistory={chatHistory}
+                        meetingStartTime={meetingStartTime}
+                        onSceneCommand={handleAISceneCommand}
+                    />
+                </div>
+            )}
+            {activeTool === 'settings' && (
+                <SettingsPanel onClose={() => setActiveTool(null)} />
+            )}
+
+            {/* ── Host Controls Panel ── */}
+            {isHost && showHostControls && (
+                <HostControls
+                    participants={users}
+                    localName={user?.name || 'Host'}
+                    socket={socketInstance}
+                    onClose={() => setShowHostControls(false)}
+                    onRemoveParticipant={(id) => setUsers(prev => prev.filter(u => (u.id || u.name) !== id))}
                 />
             )}
 
@@ -574,13 +753,7 @@ const Session = () => {
                 className="hidden"
             />
 
-            {activeTool === 'settings' && (
-                <SettingsPanel
-                    onClose={() => setActiveTool(null)}
-                />
-            )}
-
-            {/* Chat Panel */}
+            {/* ── Chat Panel ── */}
             {showChat && (
                 <div className="absolute top-6 right-6 md:right-[350px] bottom-32 w-80 md:w-96 bg-white border border-gray-200 rounded-2xl shadow-xl z-40 flex flex-col overflow-hidden animate-in slide-in-from-right-8">
                     <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
@@ -595,7 +768,7 @@ const Session = () => {
                 </div>
             )}
 
-            {/* Leave Confirmation Modal */}
+            {/* ── Leave Confirmation ── */}
             {showLeaveConfirm && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
                     <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full mx-4 flex flex-col items-center gap-4">
@@ -627,22 +800,15 @@ const Session = () => {
                     from { transform: translateX(2rem); opacity: 0; }
                     to { transform: translateX(0); opacity: 1; }
                 }
-                .animate-in {
-                    animation: slide-in-from-right-8 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+                @keyframes floatUp {
+                    0%   { transform: translateY(0); opacity: 1; }
+                    100% { transform: translateY(-120px); opacity: 0; }
                 }
-                .custom-scrollbar::-webkit-scrollbar {
-                    width: 6px;
-                }
-                .custom-scrollbar::-webkit-scrollbar-track {
-                    background: transparent;
-                }
-                .custom-scrollbar::-webkit-scrollbar-thumb {
-                    background: #DFE2E8;
-                    border-radius: 10px;
-                }
-                .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-                    background: #C0C5CF;
-                }
+                .animate-in { animation: slide-in-from-right-8 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+                .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+                .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+                .custom-scrollbar::-webkit-scrollbar-thumb { background: #DFE2E8; border-radius: 10px; }
+                .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #C0C5CF; }
             `}</style>
         </div>
     );

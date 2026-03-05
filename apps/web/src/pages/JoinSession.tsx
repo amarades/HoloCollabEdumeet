@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Loader2, Users } from 'lucide-react';
+import { ArrowLeft, Loader2, Users, CheckCircle2 } from 'lucide-react';
 import { apiRequest } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
@@ -16,6 +16,35 @@ const JoinSession = () => {
     const [roomCode, setRoomCode] = useState('');
     const [userName, setUserName] = useState('');
     const [error, setError] = useState('');
+    const [participants, setParticipants] = useState<any[]>([]);
+    const [sessionInfo, setSessionInfo] = useState<any>(null);
+    const [isValidating, setIsValidating] = useState(false);
+
+    // Validate room code when it becomes 6 characters
+    useEffect(() => {
+        if (roomCode.length === 6) {
+            validateRoom();
+        } else {
+            setParticipants([]);
+            setSessionInfo(null);
+        }
+    }, [roomCode]);
+
+    const validateRoom = async () => {
+        setIsValidating(true);
+        setError('');
+        try {
+            const data = await apiRequest(`/api/sessions/validate/${roomCode}`);
+            setSessionInfo(data);
+            setParticipants(data.participants || []);
+        } catch (err: any) {
+            setError('Invalid room code or session has ended.');
+            setSessionInfo(null);
+            setParticipants([]);
+        } finally {
+            setIsValidating(false);
+        }
+    };
 
     const handleJoin = async () => {
         if (!roomCode) {
@@ -44,7 +73,11 @@ const JoinSession = () => {
                 loginAsGuest(userName.trim(), 'student');
             }
 
-            navigate(`/session/${data.session_id}`);
+            // Persist room metadata so Session page can display it & know role
+            sessionStorage.setItem('room_code', data.room_code);
+            sessionStorage.setItem('session_role', data.role || 'student');
+            // Navigate to the pre-join lobby instead of directly into the session
+            navigate(`/lobby?session=${data.session_id}&code=${data.room_code}&role=${data.role || 'student'}`);
         } catch (err: any) {
             setError(err.message || 'Failed to join. Please check the room code.');
         } finally {
@@ -109,7 +142,7 @@ const JoinSession = () => {
                         </div>
 
                         {/* Name — only for unauthenticated guests from Home page */}
-                        {isGuest && (
+                        {isGuest && sessionInfo && (
                             <div>
                                 <label className="block text-gray-700 text-sm font-medium mb-1">Your Name</label>
                                 <input
@@ -120,6 +153,38 @@ const JoinSession = () => {
                                     placeholder="What should we call you?"
                                     className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-medium"
                                 />
+                            </div>
+                        )}
+
+                        {/* Session Info & Participants Preview */}
+                        {isValidating ? (
+                            <div className="flex justify-center py-4">
+                                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                            </div>
+                        ) : sessionInfo && (
+                            <div className="bg-gray-50 border border-gray-100 rounded-xl p-4">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <CheckCircle2 className="w-5 h-5 text-green-500" />
+                                    <h3 className="font-semibold text-gray-900">{sessionInfo.session_name}</h3>
+                                </div>
+
+                                <div className="text-sm font-medium text-gray-700 mb-2">
+                                    Participants ({participants.length})
+                                </div>
+                                <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+                                    {participants.length === 0 ? (
+                                        <span className="text-gray-500 text-sm">No one is here yet</span>
+                                    ) : (
+                                        participants.map((p, idx) => (
+                                            <div key={idx} className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-full border border-gray-200 shadow-sm text-sm">
+                                                <div className="w-5 h-5 rounded-full bg-primary/10 text-primary flex justify-center items-center font-semibold text-xs">
+                                                    {p.name?.[0]?.toUpperCase()}
+                                                </div>
+                                                <span className="text-gray-700">{p.name} {p.role === 'instructor' && '(Host)'}</span>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
                             </div>
                         )}
 

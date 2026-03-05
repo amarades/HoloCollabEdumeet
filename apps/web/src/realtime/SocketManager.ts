@@ -30,12 +30,10 @@ export class SocketManager {
     private socket: WebSocket | null = null;
     private connected: boolean = false;
     private reconnectAttempts: number = 0;
-    private maxReconnectAttempts: number = 5;
+    private maxReconnectAttempts: number = 10;
     private reconnectDelay: number = 1000; // Start with 1s
     private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-    private messageQueue: Array<{ eventType: string; payload: any }> = [];
     private intentionalDisconnect: boolean = false;
-    private customListeners: { [event: string]: (data: any) => void } = {};
 
     // Session State
     private roomId: string | null = null;
@@ -49,8 +47,17 @@ export class SocketManager {
     public onQuizUpdate: ((quiz: any) => void) | null = null;
     public onChat: ((message: ChatMessage) => void) | null = null;
 
-    constructor(url: string = (import.meta.env.VITE_WS_URL || 'ws://localhost:8002')) {
-        this.url = url;
+    // Custom event listeners keyed by `event` from server payload
+    private customListeners: Record<string, (data: any) => void> = {};
+
+    constructor(url?: string) {
+        // Default: use Vite's proxy path so we work in both dev and prod
+        if (url) {
+            this.url = url;
+        } else {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            this.url = `${protocol}//${window.location.host}`;
+        }
     }
 
     /**
@@ -86,19 +93,15 @@ export class SocketManager {
         this.socket = new WebSocket(wsUrl);
 
         this.socket.onopen = () => {
-            console.log('[SocketManager] ✅ Connected to WebSocket');
+            console.log('[SocketManager] Connected');
             this.connected = true;
             this.reconnectAttempts = 0;
             this.reconnectDelay = 1000; // Reset delay
-
-            // Send any queued messages
-            this.flushMessageQueue();
         };
 
         this.socket.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
-                console.log('[SocketManager] Received message:', data);
                 this.handleMessage(data);
             } catch (err) {
                 console.error('[SocketManager] Failed to parse message:', err);
@@ -111,17 +114,19 @@ export class SocketManager {
         };
 
         this.socket.onclose = (event) => {
-            console.log(`[SocketManager] Disconnected (Code: ${event.code})`);
             this.connected = false;
             this.socket = null;
 
-            // Only reconnect if not intentionally disconnected
-            if (!this.intentionalDisconnect && this.reconnectAttempts < this.maxReconnectAttempts) {
+            // Don't log or reconnect if user intentionally disconnected
+            if (this.intentionalDisconnect) return;
+
+            console.log(`[SocketManager] Disconnected (Code: ${event.code})`);
+
+            // Attempt reconnect with exponential back-off
+            if (this.reconnectAttempts < this.maxReconnectAttempts) {
                 this.scheduleReconnect();
-            } else if (this.intentionalDisconnect) {
-                console.log('[SocketManager] Intentional disconnect, skipping reconnect.');
             } else {
-                console.error('[SocketManager] Max reconnect attempts reached.');
+                console.error('[SocketManager] Max reconnect attempts reached. Is the Realtime Service (port 8002) running?');
             }
         };
     }
@@ -140,14 +145,10 @@ export class SocketManager {
 
     /**
      * Handles incoming WebSocket messages and dispatches to appropriate callbacks.
+     * Built-in handlers always fire first, then any custom listeners for the same event.
      */
-    public on(event: string, callback: (data: any) => void) {
-        this.customListeners[event] = callback;
-    }
-
     private handleMessage(data: any) {
         const { event, state, users, action, value, message, payload } = data;
-        console.log('[SocketManager] handleMessage event=', event, 'state=', state);
 
         // 1. Scene & State Updates
         if (event === 'MODEL_UPDATE' || event === 'STATE_SYNC') {
@@ -179,59 +180,44 @@ export class SocketManager {
                 this.onDraw(payload || data);
             }
         }
-        // 5. Chat
+        // 5. Chat — fires onChat callback (used by Session.tsx for AI context)
         else if (event === 'CHAT_MESSAGE') {
             if (this.onChat) {
                 this.onChat(message || data);
             }
         }
 
-        // 6. Fire any custom listeners registered via on()
+        // Always also fire any custom listeners registered via socket.on()
+        // This allows components like ChatPanel to listen to CHAT_MESSAGE
+        // independently without overwriting Session.tsx's onChat handler.
         if (event && this.customListeners[event]) {
             this.customListeners[event](data);
         }
     }
 
     /**
-     * Sends a message to the backend.
+     * Adds an event listener for custom events
+     */
+    on(eventType: string, callback: (data: any) => void) {
+        this.customListeners[eventType] = callback;
+    }
+
+    /**
+     * Sends a message to backend.
      */
     emit(eventType: string, payload: any) {
         if (!this.connected || !this.socket || this.socket.readyState !== WebSocket.OPEN) {
-            // Queue the message for later sending
-            this.messageQueue.push({ eventType, payload });
-            console.log(`[SocketManager] ⏸️ Message queued (${eventType}), not connected yet.`);
+            console.warn('[SocketManager] Cannot emit, socket not connected.');
             return;
         }
 
         try {
-            const message = {
+            this.socket.send(JSON.stringify({
                 type: eventType,
                 payload: payload
-            };
-            this.socket.send(JSON.stringify(message));
-            console.log(`[SocketManager] 📤 Sent: ${eventType}`);
+            }));
         } catch (err) {
             console.error('[SocketManager] Failed to emit message:', err);
-        }
-    }
-
-    /**
-     * Flushes queued messages once connection is established.
-     */
-    private flushMessageQueue() {
-        while (this.messageQueue.length > 0 && this.connected && this.socket && this.socket.readyState === WebSocket.OPEN) {
-            const message = this.messageQueue.shift();
-            if (message) {
-                try {
-                    this.socket.send(JSON.stringify({
-                        type: message.eventType,
-                        payload: message.payload
-                    }));
-                    console.log('[SocketManager] Sent queued message:', message.eventType);
-                } catch (err) {
-                    console.error('[SocketManager] Failed to send queued message:', err);
-                }
-            }
         }
     }
 
@@ -239,6 +225,7 @@ export class SocketManager {
      * Gracefully disconnects the socket.
      */
     disconnect() {
+        // Set flag so onclose handler knows not to reconnect
         this.intentionalDisconnect = true;
         if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
 

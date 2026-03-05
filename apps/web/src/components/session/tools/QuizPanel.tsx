@@ -18,7 +18,11 @@ export const QuizPanel: React.FC<QuizPanelProps> = ({ onClose, socket, user }) =
     const [activeQuiz, setActiveQuiz] = useState<any>(null);
     const [selectedOption, setSelectedOption] = useState<number | null>(null);
 
-    const isHost = true; // For now everyone is host for testing. In prod, check user.role
+    // Determine host status from stored session role
+    const sessionRole = (typeof window !== 'undefined' && window.sessionStorage)
+        ? window.sessionStorage.getItem('session_role') || 'student'
+        : 'student';
+    const isHost = sessionRole === 'host';
 
     useEffect(() => {
         if (!socket) return;
@@ -54,7 +58,7 @@ export const QuizPanel: React.FC<QuizPanelProps> = ({ onClose, socket, user }) =
     };
 
     const startQuiz = () => {
-        if (!socket) return;
+        if (!socket || !isHost) return;
         socket.emit('QUIZ_ACTION', {
             sub_action: 'START',
             question,

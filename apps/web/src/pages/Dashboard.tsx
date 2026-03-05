@@ -30,9 +30,10 @@ const Dashboard = () => {
                     topic: 'General',
                 })
             });
-            // Store room code so Session page can display it
+            // Store room metadata so Session page can display it & know role
             sessionStorage.setItem('room_code', data.room_code);
-            navigate(`/session/${data.session_id}`);
+            sessionStorage.setItem('session_role', data.role || 'host');
+            navigate(`/lobby?session=${data.session_id}&code=${data.room_code}&role=${data.role || 'host'}`);
         } catch (err) {
             console.error('Create session failed:', err);
             alert('Failed to create session. Please try again.');

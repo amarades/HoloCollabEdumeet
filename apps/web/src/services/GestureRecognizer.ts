@@ -1,7 +1,7 @@
 import type { NormalizedLandmark } from '@mediapipe/hands';
 
 export interface GestureResult {
-    type: 'none' | 'pointing' | 'open_left' | 'open_right' | 'pinch_in' | 'pinch_out' | 'fist';
+    type: 'none' | 'pointing' | 'open_left' | 'open_right' | 'pinch_in' | 'pinch_out' | 'fist' | 'fist_left' | 'fist_right';
     confidence: number;
     position?: { x: number; y: number; z: number };
     scale?: number;
@@ -30,9 +30,13 @@ export class GestureRecognizer {
 
         // 1. FIST - All fingers closed
         if (extendedCount === 0) {
+            const handCenter = this.calculateHandCenter(landmarks);
+            const rotation = this.detectRotationDirection(handCenter);
+
             gesture = {
-                type: 'fist',
-                confidence: 0.95
+                type: rotation.left ? 'fist_left' : (rotation.right ? 'fist_right' : 'fist'),
+                confidence: 0.95,
+                rotation
             };
         }
 
@@ -173,7 +177,7 @@ export class GestureRecognizer {
             gestureCounts[a] > gestureCounts[b] ? a : b
         );
 
-        const validTypes: GestureResult['type'][] = ['none', 'pointing', 'open_left', 'open_right', 'pinch_in', 'pinch_out', 'fist'];
+        const validTypes: GestureResult['type'][] = ['none', 'pointing', 'open_left', 'open_right', 'pinch_in', 'pinch_out', 'fist', 'fist_left', 'fist_right'];
         const smoothedType: GestureResult['type'] = validTypes.includes(mostCommon as GestureResult['type'])
             ? (mostCommon as GestureResult['type'])
             : 'none';

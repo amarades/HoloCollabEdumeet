@@ -7,20 +7,40 @@ export class VideoManager {
     async start(videoElement: HTMLVideoElement): Promise<MediaStream> {
         this.videoElement = videoElement;
         try {
-            this.localStream = await navigator.mediaDevices.getUserMedia({
-                video: {
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 },
-                    facingMode: 'user'
-                },
-                audio: true
-            });
+            // Stop any existing stream first
+            this.stop();
+
+            let retries = 3;
+            while (retries > 0) {
+                try {
+                    this.localStream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 },
+                            facingMode: 'user'
+                        },
+                        audio: true
+                    });
+                    break;
+                } catch (e) {
+                    retries--;
+                    if (retries === 0) throw e;
+                    console.warn(`Camera access failed, retrying... (${retries} attempts left)`);
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+            }
 
             videoElement.srcObject = this.localStream;
-            await videoElement.play();
+
+            // Wait for the video to be ready to play
+            videoElement.onloadedmetadata = () => {
+                videoElement.play().catch(err => {
+                    console.warn('Video play failed:', err);
+                });
+            };
 
             console.log('✅ Webcam initialized');
-            return this.localStream;
+            return this.localStream!;
 
         } catch (error) {
             console.error('❌ Error accessing webcam:', error);

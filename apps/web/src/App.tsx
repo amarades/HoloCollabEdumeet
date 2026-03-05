@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard';
 import Session from './pages/Session';
 import Home from './pages/Home';
 import JoinSession from './pages/JoinSession';
+import PreJoinLobby from './pages/PreJoinLobby';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }: { children: ReactNode }) => {
@@ -44,6 +45,9 @@ function App() {
               <Session />
             </ProtectedRoute>
           } />
+
+          {/* Pre-join lobby: camera/mic preview before entering room */}
+          <Route path="/lobby" element={<PreJoinLobby />} />
         </Routes>
       </Router>
     </AuthProvider>

@@ -32,7 +32,7 @@ class SessionService:
             hashed_password=None,  # never store hash in session participants
         )
         session = Session(
-            id=str(uuid.uuid4()),
+            id=uuid.uuid4().hex[:8],
             room_code=_generate_room_code(),
             name=name,
             topic=topic,

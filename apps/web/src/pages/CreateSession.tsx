@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, Copy, Check, Play, Video } from 'lucide-react';
+import { ArrowLeft, Loader2, Copy, Check, Video } from 'lucide-react';
 import { apiRequest } from '../services/api';
 
 const CreateSession = () => {
@@ -29,6 +29,9 @@ const CreateSession = () => {
             const code = data.room_code || data.session_id.substring(0, 6).toUpperCase();
             setRoomCode(code);
             setSessionId(data.session_id);
+            // Persist so the Session page can read without props
+            sessionStorage.setItem('room_code', code);
+            sessionStorage.setItem('session_role', data.role || 'host');
             setIsCreating(false);
         } catch (err) {
             console.error("Session creation failed", err);
@@ -46,7 +49,7 @@ const CreateSession = () => {
 
     const joinSession = () => {
         if (sessionId) {
-            navigate(`/session/${sessionId}`);
+            navigate(`/session/${sessionId}`, { state: { role: 'host' } });
         }
     };
 

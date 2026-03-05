@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Smile, Send, MessageSquare } from 'lucide-react';
+import { Smile, Send } from 'lucide-react';
 import { SocketManager } from '../../../realtime/SocketManager';
 import type { ChatMessage } from '../../../realtime/SocketManager';
 
@@ -20,16 +20,26 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ socket, user }) => {
     useEffect(() => {
         if (!socket) return;
 
-        socket.onChat = (data: ChatMessage) => {
+        // Use the custom listener system (socket.on) so we don't overwrite
+        // the Session.tsx onChat handler that captures messages for AI context.
+        const handleChat = (data: any) => {
+            // Backend sends: { event: 'CHAT_MESSAGE', message: { text, sender, timestamp } }
+            const msg = data.message || data;
             const newMessage: Message = {
-                ...data,
-                isOwn: data.sender === user.name
+                id: msg.id || Date.now().toString(),
+                text: msg.text,
+                sender: msg.sender,
+                timestamp: msg.timestamp || Date.now(),
+                isOwn: msg.sender === user?.name
             };
             setMessages(prev => [...prev, newMessage]);
         };
 
+        socket.on('CHAT_MESSAGE', handleChat);
+
         return () => {
-            if (socket) socket.onChat = null;
+            // Remove by registering a no-op — prevents ghost listeners
+            socket.on('CHAT_MESSAGE', () => { });
         };
     }, [socket, user]);
 
@@ -41,15 +51,17 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ socket, user }) => {
         if (!input.trim() || !socket) return;
 
         const msgPayload = {
+            id: Date.now().toString(),
             text: input,
-            sender: user.name,
+            sender: user?.name || 'You',
             timestamp: Date.now()
         };
 
-        // Optimistic update
-        setMessages(prev => [...prev, { ...msgPayload, id: Date.now().toString(), isOwn: true }]);
+        // Optimistic local update (own message shown immediately)
+        setMessages(prev => [...prev, { ...msgPayload, isOwn: true }]);
 
-        socket.emit('CHAT_MESSAGE', msgPayload);
+        // Backend expects type: 'CHAT_SEND'
+        socket.emit('CHAT_SEND', { text: input, sender: user?.name || 'You', timestamp: Date.now() });
         setInput('');
     };
 
@@ -87,8 +99,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ socket, user }) => {
                             </div>
 
                             <div className={`px-4 py-2.5 text-sm ${msg.isOwn
-                                    ? 'bg-primary text-white rounded-l-xl rounded-br-none rounded-tr-xl'
-                                    : 'bg-gray-100 text-gray-900 rounded-r-xl rounded-bl-none rounded-tl-xl border border-gray-200/50'
+                                ? 'bg-primary text-white rounded-l-xl rounded-br-none rounded-tr-xl'
+                                : 'bg-gray-100 text-gray-900 rounded-r-xl rounded-bl-none rounded-tl-xl border border-gray-200/50'
                                 }`}>
                                 <p>{msg.text}</p>
                             </div>

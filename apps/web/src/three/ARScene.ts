@@ -151,8 +151,17 @@ export class ARScene {
         console.log(`📦 Loading model from URL: ${url}`);
         const loader = new GLTFLoader();
 
-        const fullUrl = url.startsWith('http') ? url : `http://localhost:8000${url}`;
-        console.log(`🔗 Full model URL: ${fullUrl}`);
+        // Strip hostname so the request goes through Vite's /api proxy (avoids CORS).
+        // e.g. "http://localhost:8000/api/models/foo.glb" → "/api/models/foo.glb"
+        let fullUrl: string;
+        try {
+            const parsed = new URL(url);
+            fullUrl = parsed.pathname + parsed.search;
+        } catch {
+            // url is already relative (e.g. "/api/models/foo.glb")
+            fullUrl = url.startsWith('/') ? url : `/api/models/${url}`;
+        }
+        console.log(`🔗 Full model URL (proxied): ${fullUrl}`);
 
         return new Promise((resolve, reject) => {
             loader.load(fullUrl, (gltf: any) => {
