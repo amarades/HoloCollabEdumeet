@@ -5,6 +5,14 @@ from typing import Dict, List, Optional
 class RoomManager:
     """Tracks WebSocket connections and users grouped by room code."""
 
+    # Feature 4: Score weights per engagement signal type
+    ENGAGEMENT_WEIGHTS = {
+        'mic_active': 15,
+        'chat_msg': 20,
+        'quiz_answer': 25,
+        'tab_back': 5,
+    }
+
     def __init__(self):
         self.rooms: Dict[str, List[WebSocket]] = {}
         # Maps room_code -> list of {"id": str, "name": str}
@@ -13,6 +21,8 @@ class RoomManager:
         self.room_hosts: Dict[str, str] = {}
         # Maps websocket -> (room_code, user_name)
         self._ws_meta: Dict[WebSocket, tuple] = {}
+        # Feature 4: Maps room_code -> {user_id: engagement_score}
+        self.engagement_scores: Dict[str, Dict[str, int]] = {}
 
     async def connect(self, websocket: WebSocket, room_code: str, user_name: str = "Guest", is_host: bool = False):
         await websocket.accept()
@@ -87,3 +97,31 @@ class RoomManager:
 
     def room_size(self, room_code: str) -> int:
         return len(self.rooms.get(room_code, []))
+
+    # ── Feature 4: Engagement Tracking ──────────────────────────────────────────
+
+    def update_engagement(self, room_code: str, user_id: str, signal_type: str) -> int:
+        """Increment engagement score for a user and return the new score."""
+        scores = self.engagement_scores.setdefault(room_code, {})
+        delta = self.ENGAGEMENT_WEIGHTS.get(signal_type, 0)
+        scores[user_id] = min(100, scores.get(user_id, 0) + delta)
+        return scores[user_id]
+
+    def get_host_ws(self, room_code: str) -> Optional[WebSocket]:
+        """Return the WebSocket of the room host, if present."""
+        host_id = self.room_hosts.get(room_code)
+        if not host_id:
+            return None
+        for ws in self.rooms.get(room_code, []):
+            if str(id(ws)) == host_id:
+                return ws
+        return None
+
+    async def send_to_host(self, message: dict, room_code: str):
+        """Send a message exclusively to the host WebSocket."""
+        host_ws = self.get_host_ws(room_code)
+        if host_ws:
+            try:
+                await host_ws.send_json(message)
+            except Exception:
+                pass
