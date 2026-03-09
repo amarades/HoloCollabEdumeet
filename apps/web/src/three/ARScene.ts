@@ -163,6 +163,54 @@ export class ARScene {
         }
         console.log(`🔗 Full model URL (proxied): ${fullUrl}`);
 
+        // ── Hologram Shader Implementation ──
+        const hologramShader = {
+            uniforms: {
+                uTime: { value: 0 },
+                uColor: { value: new THREE.Color(0x7c3aed) }, // Deep Purple core
+                uGlowColor: { value: new THREE.Color(0x6366f1) }, // Indigo glow
+            },
+            vertexShader: `
+                varying vec3 vNormal;
+                varying vec3 vPosition;
+                varying vec2 vUv;
+                void main() {
+                    vNormal = normalize(normalMatrix * normal);
+                    vPosition = (modelViewMatrix * vec4(position, 1.0)).xyz;
+                    vUv = uv;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform float uTime;
+                uniform vec3 uColor;
+                uniform vec3 uGlowColor;
+                varying vec3 vNormal;
+                varying vec3 vPosition;
+                varying vec2 vUv;
+
+                void main() {
+                    // Fresnel Effect (Rim Glow)
+                    vec3 viewDirection = normalize(-vPosition);
+                    float fresnel = pow(1.0 - max(dot(vNormal, viewDirection), 0.0), 3.0);
+                    
+                    // Animated Scanlines
+                    float scanline = sin(vPosition.y * 20.0 - uTime * 5.0) * 0.1 + 0.9;
+                    
+                    // Flickering
+                    float flicker = sin(uTime * 20.0) * 0.02 + 0.98;
+                    
+                    // Grid Pattern (Subtle)
+                    float grid = (sin(vPosition.x * 40.0) * sin(vPosition.z * 40.0)) * 0.05 + 0.95;
+                    
+                    vec3 finalColor = mix(uColor, uGlowColor, fresnel);
+                    float alpha = (0.4 + fresnel * 0.6) * scanline * flicker * grid;
+                    
+                    gl_FragColor = vec4(finalColor, alpha);
+                }
+            `
+        };
+
         return new Promise((resolve, reject) => {
             loader.load(fullUrl, (gltf: any) => {
                 if (this.currentModel) {
@@ -171,22 +219,18 @@ export class ARScene {
 
                 const model = gltf.scene;
 
-                // ✅ CRITICAL: Ensure all materials are visible
+                // ✅ CRITICAL: Apply Hologram Shader to all meshes
                 model.traverse((child: any) => {
                     if (child instanceof THREE.Mesh) {
-                        if (Array.isArray(child.material)) {
-                            child.material.forEach((mat: any) => {
-                                mat.transparent = false;
-                                mat.opacity = 1;
-                                mat.depthWrite = true;
-                                mat.depthTest = true;
-                            });
-                        } else {
-                            child.material.transparent = false;
-                            child.material.opacity = 1;
-                            child.material.depthWrite = true;
-                            child.material.depthTest = true;
-                        }
+                        child.material = new THREE.ShaderMaterial({
+                            uniforms: THREE.UniformsUtils.clone(hologramShader.uniforms),
+                            vertexShader: hologramShader.vertexShader,
+                            fragmentShader: hologramShader.fragmentShader,
+                            transparent: true,
+                            side: THREE.DoubleSide,
+                            depthWrite: false,
+                            blending: THREE.AdditiveBlending
+                        });
                         child.visible = true;
                         child.frustumCulled = false;
                     }
@@ -224,6 +268,16 @@ export class ARScene {
     private animate() {
         this.animationId = requestAnimationFrame(this.animate.bind(this));
 
+        // Update Shader Uniforms
+        if (this.currentModel) {
+            const time = performance.now() / 1000;
+            this.currentModel.traverse((child: any) => {
+                if (child instanceof THREE.Mesh && child.material instanceof THREE.ShaderMaterial) {
+                    child.material.uniforms.uTime.value = time;
+                }
+            });
+        }
+
         this.renderer.render(this.scene, this.camera);
     }
 
@@ -258,7 +312,7 @@ export class ARScene {
         if (!this.currentModel) return null;
 
         return {
-            model_url: this.currentModelUrl, // Add this line
+            model_url: this.currentModelUrl ?? undefined, // null → undefined to match ModelState type
             rotation: {
                 x: this.currentModel.rotation.x,
                 y: this.currentModel.rotation.y,

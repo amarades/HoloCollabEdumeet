@@ -23,3 +23,19 @@ Thumbs.db
 # Project specific
 uploads/
 *.log
+
+# Build output
+apps/web/dist/
+apps/web/node_modules/
+
+# Test artifacts
+apps/web/playwright-report/
+apps/web/test-results/
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+
+# TypeScript error logs
+tsc_errors*.txt

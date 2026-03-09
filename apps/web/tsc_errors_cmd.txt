@@ -1,6 +1,0 @@
-src/components/AIAssistant.tsx(4,46): error TS1484: 'Participant' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
-src/components/AIAssistant.tsx(4,59): error TS1484: 'ChatMsg' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
-src/components/AIAssistant.tsx(44,12): error TS6133: 'commandsExecuted' is declared but its value is never read.
-src/components/session/layout/ChatPanel.tsx(2,23): error TS6133: 'MessageSquare' is declared but its value is never read.
-src/components/VideoGrid.tsx(26,5): error TS6133: 'localMicOn' is declared but its value is never read.
-src/pages/CreateSession.tsx(3,43): error TS6133: 'Play' is declared but its value is never read.
