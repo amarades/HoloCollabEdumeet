@@ -138,11 +138,56 @@ class PersistenceLayer:
             db_session.participants = db_participants
             await db.commit()
 
-
     async def delete_session(self, session_id: str):
         async with async_session_maker() as db:
             await db.execute(delete(DBSession).where(DBSession.id == session_id))
             await db.commit()
+
+    # ── Attendance ────────────────────────────────────────────────────────────
+
+    async def log_attendance(self, session_id: str, user_name: str, action: str):
+        """Log a join or leave event."""
+        async with async_session_maker() as db:
+            from app.db.schema import DBAttendanceLog
+            import uuid
+            
+            if action == "join":
+                log = DBAttendanceLog(
+                    id=uuid.uuid4().hex[:8],
+                    session_id=session_id,
+                    user_name=user_name,
+                    joined_at=datetime.utcnow(),
+                )
+                db.add(log)
+            else:
+                # Find last join for this user that hasn't left
+                stmt = (
+                    select(DBAttendanceLog)
+                    .where(DBAttendanceLog.session_id == session_id)
+                    .where(DBAttendanceLog.user_name == user_name)
+                    .where(DBAttendanceLog.left_at == None)
+                    .order_by(DBAttendanceLog.joined_at.desc())
+                )
+                result = await db.execute(stmt)
+                log = result.scalars().first()
+                if log:
+                    log.left_at = datetime.utcnow()
+            
+            await db.commit()
+
+    async def list_attendance(self, session_id: str) -> List[dict]:
+        """Return all attendance records for a session."""
+        async with async_session_maker() as db:
+            from app.db.schema import DBAttendanceLog
+            stmt = select(DBAttendanceLog).where(DBAttendanceLog.session_id == session_id)
+            result = await db.execute(stmt)
+            return [
+                {
+                    "user_name": r.user_name,
+                    "joined_at": r.joined_at,
+                    "left_at": r.left_at
+                } for r in result.scalars().all()
+            ]
 
     # ── Users ─────────────────────────────────────────────────────────────────
 

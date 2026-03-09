@@ -143,3 +143,23 @@ async def delete_session(session_id: str, user: dict = Depends(get_current_user_
         return {"message": "Session deleted successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{session_id}/attendance/log")
+async def log_attendance(session_id: str, data: dict):
+    """Internal endpoint for realtime service to log join/leave."""
+    user_name = data.get("user_name")
+    action = data.get("action")  # 'join' or 'leave'
+    if not user_name or not action:
+        raise HTTPException(status_code=400, detail="Missing user_name or action")
+    
+    await db.log_attendance(session_id, user_name, action)
+    return {"status": "success"}
+
+
+@router.get("/{session_id}/attendance")
+async def get_attendance(session_id: str, user: dict = Depends(get_current_user_token)):
+    """Retrieve full attendance log. Only accessible by the host."""
+    await PermissionService.require_host(session_id, user)
+    logs = await db.list_attendance(session_id)
+    return {"attendance": logs}

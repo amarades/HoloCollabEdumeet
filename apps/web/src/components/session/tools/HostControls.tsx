@@ -8,6 +8,7 @@ interface Participant {
     micOn?: boolean;
     cameraOn?: boolean;
     handRaised?: boolean;
+    engagementScore?: number;
 }
 
 interface HostControlsProps {
@@ -15,6 +16,7 @@ interface HostControlsProps {
     localName: string;
     socket: SocketManager | null;
     onClose: () => void;
+    engagementMap?: Record<string, number>;
     onRemoveParticipant?: (id: string) => void;
 }
 
@@ -23,6 +25,7 @@ export const HostControls: React.FC<HostControlsProps> = ({
     localName,
     socket,
     onClose,
+    engagementMap = {},
     onRemoveParticipant,
 }) => {
     const [mutingAll, setMutingAll] = useState(false);
@@ -84,9 +87,21 @@ export const HostControls: React.FC<HostControlsProps> = ({
                             {p.name?.[0]?.toUpperCase()}
                         </div>
                         <div className="flex-1 min-w-0">
-                            <div className="text-gray-900 text-sm font-medium truncate flex items-center gap-1.5">
-                                {p.name}
-                                {p.handRaised && <span title="Hand raised">✋</span>}
+                            <div className="text-gray-900 text-sm font-medium truncate flex items-center justify-between">
+                                <span className="flex items-center gap-1.5">
+                                    {p.name}
+                                    {p.handRaised && <span title="Hand raised">✋</span>}
+                                </span>
+                                {/* Feature 4: Engagement Bar */}
+                                <div className="flex items-center gap-1.5">
+                                    <div className="w-12 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                        <div
+                                            className={`h-full transition-all duration-500 ${(engagementMap[p.id] || 0) > 70 ? 'bg-green-500' : (engagementMap[p.id] || 0) > 40 ? 'bg-amber-400' : 'bg-red-400'}`}
+                                            style={{ width: `${engagementMap[p.id] || 0}%` }}
+                                        />
+                                    </div>
+                                    <span className="text-[10px] font-bold text-gray-400">{(engagementMap[p.id] || 0)}%</span>
+                                </div>
                             </div>
                             <div className="flex items-center gap-2 mt-0.5">
                                 {p.micOn !== false

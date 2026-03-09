@@ -1004,6 +1004,7 @@ const Session = () => {
                     localName={user?.name || 'Host'}
                     socket={socketInstance}
                     onClose={() => setShowHostControls(false)}
+                    engagementMap={engagementMap}
                     onRemoveParticipant={(id) => setUsers(prev => prev.filter(u => (u.id || u.name) !== id))}
                 />
             )}

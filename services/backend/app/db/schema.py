@@ -51,3 +51,13 @@ class DBModelMetadata(Base):
     thumbnail = Column(String, default="📦")
     url = Column(String, nullable=False)
     description = Column(String, default="Custom uploaded model")
+
+
+class DBAttendanceLog(Base):
+    __tablename__ = "attendance"
+
+    id = Column(String, primary_key=True)
+    session_id = Column(String, ForeignKey("sessions.id"), nullable=False, index=True)
+    user_name = Column(String, nullable=False)
+    joined_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    left_at = Column(DateTime, nullable=True)

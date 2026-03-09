@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Eraser, Trash2, X } from 'lucide-react';
+import { Eraser, Trash2, X, Box, Circle, Triangle, Type, MousePointer2, Sparkles, Plus } from 'lucide-react';
 
 interface WhiteboardProps {
     onClose: () => void;
@@ -10,9 +10,13 @@ interface WhiteboardProps {
 export const Whiteboard: React.FC<WhiteboardProps> = ({ onClose, socket, user }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [isDrawing, setIsDrawing] = useState(false);
-    const [color, setColor] = useState('#1a1a1a'); // Default to dark gray instead of white
+    const [color, setColor] = useState('#6366f1'); // Primary indigo
     const [brushSize, setBrushSize] = useState(4);
-    const [tool, setTool] = useState<'pen' | 'eraser'>('pen');
+    const [tool, setTool] = useState<'pen' | 'eraser' | 'text' | 'select'>('pen');
+    const [showShapes, setShowShapes] = useState(false);
+    const [textInput, setTextInput] = useState<{ x: number, y: number } | null>(null);
+    const [currentText, setCurrentText] = useState('');
+    const strokePoints = useRef<{ x: number, y: number }[]>([]);
 
     const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
 
@@ -58,11 +62,16 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({ onClose, socket, user })
         if (socket) {
             socket.onDraw = (data: any) => {
                 if (data.user === user.email) return;
-
                 if (!ctxRef.current) return;
 
-                const { x0, y0, x1, y1, color: strokeColor, width } = data;
+                if (data.type === 'text') {
+                    ctxRef.current.font = `${data.fontSize}px Inter, sans-serif`;
+                    ctxRef.current.fillStyle = data.color;
+                    ctxRef.current.fillText(data.text, data.x, data.y);
+                    return;
+                }
 
+                const { x0, y0, x1, y1, color: strokeColor, width } = data;
                 const prevStyle = ctxRef.current.strokeStyle;
                 const prevWidth = ctxRef.current.lineWidth;
                 const prevComposite = ctxRef.current.globalCompositeOperation;
@@ -70,14 +79,9 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({ onClose, socket, user })
                 ctxRef.current.beginPath();
                 ctxRef.current.moveTo(x0, y0);
                 ctxRef.current.lineTo(x1, y1);
-                ctxRef.current.strokeStyle = strokeColor;
+                ctxRef.current.strokeStyle = strokeColor === 'eraser' ? 'rgba(0,0,0,1)' : strokeColor;
                 ctxRef.current.lineWidth = width;
-                if (strokeColor === 'eraser') {
-                    ctxRef.current.globalCompositeOperation = 'destination-out';
-                    ctxRef.current.strokeStyle = 'rgba(0,0,0,1)';
-                } else {
-                    ctxRef.current.globalCompositeOperation = 'source-over';
-                }
+                ctxRef.current.globalCompositeOperation = strokeColor === 'eraser' ? 'destination-out' : 'source-over';
                 ctxRef.current.stroke();
 
                 ctxRef.current.strokeStyle = prevStyle;
@@ -103,9 +107,15 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({ onClose, socket, user })
 
     const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
         if (!ctxRef.current || !canvasRef.current) return;
-
         const { offsetX, offsetY } = getCoordinates(e);
+
+        if (tool === 'text') {
+            setTextInput({ x: offsetX, y: offsetY });
+            return;
+        }
+
         lastPos.current = { x: offsetX, y: offsetY };
+        strokePoints.current = [{ x: offsetX, y: offsetY }];
         ctxRef.current.beginPath();
         ctxRef.current.moveTo(offsetX, offsetY);
         setIsDrawing(true);
@@ -118,6 +128,8 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({ onClose, socket, user })
 
         ctxRef.current.lineTo(offsetX, offsetY);
         ctxRef.current.stroke();
+
+        strokePoints.current.push({ x: offsetX, y: offsetY });
 
         if (socket) {
             socket.emit('DRAW_STROKE', {
@@ -139,6 +151,60 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({ onClose, socket, user })
         ctxRef.current.closePath();
         setIsDrawing(false);
         lastPos.current = null;
+
+        // Feature 11: Simple Shape Detection
+        if (strokePoints.current.length > 20 && tool === 'pen') {
+            const points = strokePoints.current;
+            const xMin = Math.min(...points.map(p => p.x));
+            const xMax = Math.max(...points.map(p => p.x));
+            const yMin = Math.min(...points.map(p => p.y));
+            const yMax = Math.max(...points.map(p => p.y));
+            const width = xMax - xMin;
+            const height = yMax - yMin;
+            const ratio = width / height;
+
+            // Check if start and end are close
+            const start = points[0];
+            const end = points[points.length - 1];
+            const dist = Math.sqrt((start.x - end.x) ** 2 + (start.y - end.y) ** 2);
+
+            if (dist < 80 && ratio > 0.6 && ratio < 1.4 && width > 40) {
+                // Heuristic: Circular vs Boxy
+                // Average distance from center vs width/2
+                const centerX = (xMin + xMax) / 2;
+                const centerY = (yMin + yMax) / 2;
+                const idealRadius = (width + height) / 4;
+                const variance = points.reduce((acc, p) => acc + Math.abs(Math.sqrt((p.x - centerX) ** 2 + (p.y - centerY) ** 2) - idealRadius), 0) / points.length;
+
+                if (variance < idealRadius * 0.2) {
+                    spawn3DObject('sphere'); // Circle -> Sphere
+                } else {
+                    spawn3DObject('box');    // Boxy -> Cube
+                }
+                clearBoard();
+            }
+        }
+        strokePoints.current = [];
+    };
+
+    const handleTextSubmit = () => {
+        if (!textInput || !currentText.trim() || !ctxRef.current) return;
+
+        ctxRef.current.font = `${brushSize * 4}px Inter, sans-serif`;
+        ctxRef.current.fillStyle = color;
+        ctxRef.current.fillText(currentText, textInput.x, textInput.y);
+
+        socket?.emit('DRAW_STROKE', {
+            type: 'text',
+            text: currentText,
+            x: textInput.x,
+            y: textInput.y,
+            color,
+            fontSize: brushSize * 4
+        });
+
+        setTextInput(null);
+        setCurrentText('');
     };
 
     const getCoordinates = (e: React.MouseEvent | React.TouchEvent) => {
@@ -161,29 +227,57 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({ onClose, socket, user })
     const clearBoard = () => {
         if (!ctxRef.current || !canvasRef.current) return;
         ctxRef.current.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+        socket?.emit('WHITEBOARD_CLEAR', {});
+    };
+
+    // Feature 5: Spawn 3D Object in the main scene
+    const spawn3DObject = (type: string) => {
+        if (!socket) return;
+
+        // Random position in front of user
+        const position = [
+            (Math.random() - 0.5) * 2,
+            1,
+            (Math.random() - 0.5) * 2
+        ];
+
+        socket.emit('OBJECT_ADD', {
+            type,
+            position,
+            color,
+            scale: [0.5, 0.5, 0.5]
+        });
+
+        setShowShapes(false);
     };
 
     return (
-        <div className="absolute inset-4 md:inset-10 bg-white border border-gray-200 shadow-2xl z-40 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 rounded-2xl">
+        <div className="absolute inset-4 md:inset-10 bg-white/90 backdrop-blur-xl border border-white/20 shadow-2xl z-40 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 rounded-3xl">
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-gray-50/80 backdrop-blur-md">
-                <h2 className="text-gray-900 font-semibold text-lg flex items-center gap-2">
-                    Whiteboard
-                </h2>
+            <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-white/50">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
+                        <Sparkles className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                        <h2 className="text-gray-900 font-bold text-lg leading-tight">Interactive Whiteboard</h2>
+                        <p className="text-gray-400 text-xs font-medium">Draw or spawn 3D objects into the scene</p>
+                    </div>
+                </div>
                 <div className="flex items-center gap-2">
-                    <button onClick={clearBoard} className="p-2 bg-white border border-gray-200 hover:bg-red-50 rounded-lg text-gray-500 hover:text-red-600 transition-colors shadow-sm" title="Clear Board">
-                        <Trash2 className="w-4 h-4" />
+                    <button onClick={clearBoard} className="p-2.5 bg-white border border-gray-200 hover:bg-red-50 rounded-xl text-gray-500 hover:text-red-600 transition-all shadow-sm group" title="Clear Board">
+                        <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform" />
                     </button>
-                    <button onClick={onClose} className="p-2 border border-transparent hover:bg-gray-200 rounded-lg text-gray-500 hover:text-gray-900 transition-colors">
+                    <button onClick={onClose} className="p-2.5 bg-white border border-gray-200 hover:bg-gray-100 rounded-xl text-gray-500 hover:text-gray-900 transition-all shadow-sm">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
             </div>
 
             {/* Canvas Area */}
-            <div className="flex-1 relative bg-white cursor-crosshair touch-none">
+            <div className="flex-1 relative bg-white cursor-crosshair touch-none group">
                 {/* Subtle Grid Background */}
-                <div className="absolute inset-0 opacity-[0.4] pointer-events-none" style={{ backgroundImage: 'linear-gradient(#f0f0f0 1px, transparent 1px), linear-gradient(90deg, #f0f0f0 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
+                <div className="absolute inset-0 opacity-[0.3] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '30px 30px' }}></div>
 
                 <canvas
                     ref={canvasRef}
@@ -196,49 +290,112 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({ onClose, socket, user })
                     onTouchMove={draw}
                     onTouchEnd={stopDrawing}
                 />
-            </div>
 
-            {/* Toolbar */}
-            <div className="p-4 border-t border-gray-200 bg-gray-50 backdrop-blur-md flex items-center justify-center gap-6">
-
-                {/* Colors */}
-                <div className="flex items-center gap-3 bg-white border border-gray-200 p-2.5 rounded-full shadow-sm">
-                    {['#1a1a1a', '#e8332a', '#2563eb', '#16a34a', '#d946ef'].map(c => (
-                        <button
-                            key={c}
-                            onClick={() => { setColor(c); setTool('pen'); }}
-                            className={`w-8 h-8 rounded-full transition-all duration-200 ${color === c && tool === 'pen' ? 'scale-110 ring-2 ring-primary ring-offset-2' : 'hover:scale-105 opacity-80 hover:opacity-100 border border-gray-300'}`}
-                            style={{ backgroundColor: c }}
-                            title="Pen Color"
+                {/* Feature 12: Text Input Overlay */}
+                {textInput && (
+                    <div
+                        className="absolute z-50 animate-in fade-in duration-200"
+                        style={{ left: textInput.x, top: textInput.y }}
+                    >
+                        <input
+                            autoFocus
+                            type="text"
+                            value={currentText}
+                            onChange={(e) => setCurrentText(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleTextSubmit();
+                                if (e.key === 'Escape') setTextInput(null);
+                            }}
+                            onBlur={handleTextSubmit}
+                            className="bg-white/90 border-2 border-primary rounded-lg px-2 py-1 text-sm focus:outline-none shadow-xl min-w-[100px]"
+                            placeholder="Type..."
+                            style={{ color, fontSize: brushSize * 2 }}
                         />
-                    ))}
-                </div>
+                    </div>
+                )}
 
-                <div className="w-px h-8 bg-gray-300"></div>
-
-                {/* Tools */}
-                <div className="flex items-center gap-3">
+                {/* Left Side: Tool Selector */}
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 flex flex-col gap-3 p-2 bg-white/80 backdrop-blur-md border border-gray-200 rounded-2xl shadow-xl">
+                    <button
+                        onClick={() => setTool('pen')}
+                        className={`p-3 rounded-xl transition-all ${tool === 'pen' ? 'bg-primary text-white shadow-lg shadow-primary/30' : 'text-gray-500 hover:bg-gray-100'}`}
+                        title="Pen Tool"
+                    >
+                        <MousePointer2 className="w-5 h-5" />
+                    </button>
+                    <button
+                        onClick={() => setTool('text')}
+                        className={`p-3 rounded-xl transition-all ${tool === 'text' ? 'bg-primary text-white shadow-lg shadow-primary/30' : 'text-gray-500 hover:bg-gray-100'}`}
+                        title="Text Tool (Click to type)"
+                    >
+                        <Type className="w-5 h-5" />
+                    </button>
                     <button
                         onClick={() => setTool('eraser')}
-                        className={`p-3 rounded-full transition-all border shadow-sm ${tool === 'eraser' ? 'bg-primary border-primary text-white' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                        className={`p-3 rounded-xl transition-all ${tool === 'eraser' ? 'bg-primary text-white shadow-lg shadow-primary/30' : 'text-gray-500 hover:bg-gray-100'}`}
                         title="Eraser"
                     >
                         <Eraser className="w-5 h-5" />
                     </button>
 
-                    <div className="flex items-center gap-3 px-5 py-2.5 bg-white rounded-full border border-gray-200 shadow-sm">
-                        <div className="w-1.5 h-1.5 rounded-full bg-gray-400"></div>
-                        <input
-                            type="range"
-                            min="2"
-                            max="20"
-                            value={brushSize}
-                            onChange={(e) => setBrushSize(parseInt(e.target.value))}
-                            className="w-24 accent-primary"
-                            title="Brush Size"
-                        />
-                        <div className="w-3 h-3 rounded-full bg-gray-600"></div>
+                    <div className="h-px bg-gray-100 mx-2" />
+
+                    {/* Feature 5: Shape Spawner */}
+                    <div className="relative">
+                        <button
+                            onClick={() => setShowShapes(!showShapes)}
+                            className="p-3 rounded-xl text-primary hover:bg-primary/10 transition-all flex items-center justify-center"
+                            title="Spawn 3D Object"
+                        >
+                            <Plus className="w-5 h-5" />
+                        </button>
+
+                        {showShapes && (
+                            <div className="absolute left-full ml-3 top-0 flex flex-col gap-2 p-2 bg-white border border-gray-200 rounded-2xl shadow-2xl animate-in fade-in slide-in-from-left-2">
+                                <button onClick={() => spawn3DObject('box')} className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg">
+                                    <Box className="w-4 h-4 text-primary" /> Cube
+                                </button>
+                                <button onClick={() => spawn3DObject('sphere')} className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg">
+                                    <Circle className="w-4 h-4 text-blue-500" /> Sphere
+                                </button>
+                                <button onClick={() => spawn3DObject('cone')} className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg">
+                                    <Triangle className="w-4 h-4 text-amber-500" /> Pyramid
+                                </button>
+                            </div>
+                        )}
                     </div>
+                </div>
+            </div>
+
+            {/* Bottom Toolbar */}
+            <div className="p-5 border-t border-gray-100 bg-white/80 backdrop-blur-md flex items-center justify-center gap-8">
+                {/* Colors */}
+                <div className="flex items-center gap-3 px-4 py-2 bg-gray-50 rounded-2xl border border-gray-100">
+                    {['#6366f1', '#f43f5e', '#10b981', '#f59e0b', '#0ea5e9', '#000000'].map(c => (
+                        <button
+                            key={c}
+                            onClick={() => { setColor(c); setTool('pen'); }}
+                            className={`w-7 h-7 rounded-full transition-all duration-200 border-2 ${color === c ? 'scale-110 border-white ring-2 ring-primary shadow-md' : 'border-transparent hover:scale-105 opacity-80'}`}
+                            style={{ backgroundColor: c }}
+                        />
+                    ))}
+                </div>
+
+                {/* Size Slider */}
+                <div className="flex items-center gap-4 bg-gray-50 px-5 py-2.5 rounded-2xl border border-gray-100 min-w-[200px]">
+                    <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Size</span>
+                    <input
+                        type="range"
+                        min="2"
+                        max="30"
+                        value={brushSize}
+                        onChange={(e) => setBrushSize(parseInt(e.target.value))}
+                        className="flex-1 accent-primary h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    />
+                    <div
+                        className="rounded-full bg-primary flex-shrink-0"
+                        style={{ width: Math.max(4, brushSize / 2), height: Math.max(4, brushSize / 2) }}
+                    />
                 </div>
             </div>
         </div>

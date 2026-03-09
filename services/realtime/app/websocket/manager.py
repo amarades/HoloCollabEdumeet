@@ -1,4 +1,5 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+import httpx
 from app.websocket.room_manager import RoomManager
 from app.state.model_state import SceneStateStore
 
@@ -19,6 +20,18 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, user: str = "
 
     # Connect and immediately broadcast USER_UPDATE to all room members
     await room_manager.connect(websocket, room_code, user_name=user, is_host=is_host)
+
+    # Feature 9: Log attendance (background)
+    try:
+        async with httpx.AsyncClient() as client:
+            # We need the actual session_id, but room_code is often used as a proxy
+            # In this architecture, room_code serves as the identifier for realtime
+            await client.post(
+                f"http://127.0.0.1:8000/api/sessions/{room_code}/attendance/log",
+                json={"user_name": user, "action": "join"}
+            )
+    except Exception:
+        pass
 
     try:
         # ... (keep existing state sync logic) ...
@@ -144,10 +157,45 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, user: str = "
 
             # ── Chat messages ──────────────────────────────────────────────
             elif msg_type == "CHAT_SEND":
+                # Feature 4: Update engagement for sender
+                score = room_manager.update_engagement(room_code, user_id, "chat_msg")
+                await room_manager.send_to_host(
+                    {"event": "ENGAGEMENT_UPDATE", "userId": user_id, "score": score},
+                    room_code
+                )
                 await room_manager.broadcast(
                     {"event": "CHAT_MESSAGE", "message": payload},
                     room_code,
                 )
+
+            # ── Engagement signals ─────────────────────────────────────────
+            elif msg_type == "ENGAGEMENT_SIGNAL":
+                signal = payload.get("type")
+                if signal:
+                    score = room_manager.update_engagement(room_code, user_id, signal)
+                    await room_manager.send_to_host(
+                        {"event": "ENGAGEMENT_UPDATE", "userId": user_id, "score": score},
+                        room_code
+                    )
+
+            # ── Feature 3: Topic detection broadcast ───────────────────────
+            elif msg_type == "TOPIC_DETECTED":
+                await room_manager.broadcast(
+                    {"event": "TOPIC_DETECTED", "topic": payload.get("topic")},
+                    room_code,
+                    exclude=websocket
+                )
+
+            # ── Feature 8: Quiz actions ────────────────────────────────────
+            elif msg_type == "QUIZ_ACTION":
+                # Feature 4: Update engagement if answering/voting
+                if payload.get("sub_action") == "VOTE":
+                    score = room_manager.update_engagement(room_code, user_id, "quiz_answer")
+                    await room_manager.send_to_host(
+                        {"event": "ENGAGEMENT_UPDATE", "userId": user_id, "score": score},
+                        room_code
+                    )
+                await room_manager.broadcast(data, room_code, exclude=websocket)
 
             # ── Host controls ──────────────────────────────────────────────
             elif msg_type == "HOST_MUTE_ALL":
@@ -214,6 +262,16 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, user: str = "
 
         # Notify remaining participants of the updated user list
         await room_manager.broadcast_user_update(room_code)
+
+        # Feature 9: Log attendance leave (background)
+        try:
+            async with httpx.AsyncClient() as client:
+                await client.post(
+                    f"http://127.0.0.1:8000/api/sessions/{room_code}/attendance/log",
+                    json={"user_name": user, "action": "leave"}
+                )
+        except Exception:
+            pass
 
         await room_manager.broadcast(
             {"event": "PEER_LEFT", "payload": {"room_code": room_code, "user": user}},
