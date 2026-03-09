@@ -40,6 +40,7 @@ export class SocketManager {
     private roomId: string | null = null;
     private userName: string | null = null;
     private userId: string | null = null;
+    private isHost: boolean = false;
     private scene: any = null; // Pending strict typing for Three.js scene
 
     // Event Callbacks
@@ -69,12 +70,14 @@ export class SocketManager {
         roomId: string,
         scene: any,
         userName: string,
+        isHost: boolean,
         onUserUpdate: (users: User[]) => void,
         onGesture?: (data: GestureData) => void
     ) {
         this.roomId = roomId;
         this.scene = scene;
         this.userName = userName;
+        this.isHost = isHost;
         this.userId = `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`; // Generate unique ID
         this.onUserUpdate = onUserUpdate;
         if (onGesture) this.onGesture = onGesture;
@@ -90,7 +93,7 @@ export class SocketManager {
         if (!this.roomId || !this.userName) return;
 
         // Construct WebSocket URL with query params
-        const wsUrl = `${this.url}/ws/room/${this.roomId}?user=${encodeURIComponent(this.userName)}`;
+        const wsUrl = `${this.url}/ws/room/${this.roomId}?user=${encodeURIComponent(this.userName)}&is_host=${this.isHost}`;
         console.log(`[SocketManager] Connecting to ${wsUrl}...`);
 
         this.socket = new WebSocket(wsUrl);

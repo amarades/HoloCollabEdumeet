@@ -8,24 +8,24 @@ scene_state = SceneStateStore()
 
 
 @router.websocket("/ws/room/{room_code}")
-async def websocket_endpoint(websocket: WebSocket, room_code: str, user: str = "Guest"):
+async def websocket_endpoint(websocket: WebSocket, room_code: str, user: str = "Guest", is_host: bool = False):
     """
     WebSocket endpoint for a room.
     Query params:
       - user: display name of the connecting user
+      - is_host: boolean indicating if the user is the host
     """
     user_id = str(id(websocket))
 
     # Connect and immediately broadcast USER_UPDATE to all room members
-    await room_manager.connect(websocket, room_code, user_name=user)
+    await room_manager.connect(websocket, room_code, user_name=user, is_host=is_host)
 
     try:
-        # ── Send initial state to newly joined client ──────────────────────
+        # ... (keep existing state sync logic) ...
         legacy_state = scene_state.get(room_code)
         if legacy_state:
             await websocket.send_json({"event": "STATE_SYNC", "state": legacy_state})
 
-        # Send full multi-object scene state
         objects = scene_state.get_scene(room_code)
         await websocket.send_json({
             "event": "SCENE_STATE",
@@ -35,8 +35,14 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, user: str = "
         # ── Main message loop ──────────────────────────────────────────────
         while True:
             data = await websocket.receive_json()
-            msg_type = data.get("type")
+            msg_type = data.get("type", "")
             payload = data.get("payload", {})
+
+            # ── Server-Side Host Validation ──────────────────────────────
+            if msg_type.startswith("HOST_"):
+                if not room_manager.is_host(room_code, websocket):
+                    print(f"⚠️ Unauthorized host action attempt: {msg_type} from {user}")
+                    continue
 
             # ── Legacy single-model transform (AR model sync) ─────────────
             if msg_type == "MODEL_TRANSFORM":

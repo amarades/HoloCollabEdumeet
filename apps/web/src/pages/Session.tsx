@@ -143,7 +143,7 @@ const Session = () => {
                     const stream = await videoManager.start(videoRef.current!);
                     if (cancelled) { videoManager.stop(); return; }
                     setLocalStream(stream);
-                    
+
                     // Set local stream for WebRTC after socket is initialized
                     setTimeout(() => {
                         if (webRTCManagerRef.current) {
@@ -192,6 +192,7 @@ const Session = () => {
                     sessionId,
                     scene,
                     user.name,
+                    isHost,
                     (updatedUsers) => {
                         if (!cancelled) setUsers(updatedUsers.filter((u: any) => u.name !== user.name));
                     },
@@ -407,7 +408,7 @@ const Session = () => {
         <div className="relative h-screen w-screen overflow-hidden bg-background">
             {/* ── Participant Approval ── */}
             <ParticipantApproval isHost={true} />
-            
+
             <div className="relative z-10 h-full flex flex-col">
 
                 {/* ── Main Area ── */}
@@ -422,12 +423,12 @@ const Session = () => {
                                 localCameraOn={cameraOn}
                                 localMicOn={micOn}
                                 localIsHost={true} // Current user is host
-                                participants={users.map(u => ({ 
-                                    id: u.id || u.name, 
-                                    name: u.name, 
-                                    cameraOn: true, 
+                                participants={users.map(u => ({
+                                    id: u.id || u.name,
+                                    name: u.name,
+                                    cameraOn: true,
                                     micOn: true,
-                                    isHost: u.isHost || false 
+                                    isHost: u.isHost || false
                                 }))}
                                 remoteStreams={remoteStreams}
                                 compact
@@ -822,7 +823,7 @@ const Session = () => {
                         </button>
                     </div>
                     <div className="flex-1 overflow-hidden relative bg-white pb-4">
-                        <ChatPanel socket={socketInstance} user={user} roomId={sessionId} />
+                        <ChatPanel socket={socketInstance} user={user} roomId={sessionId ?? ''} />
                     </div>
                 </div>
             )}

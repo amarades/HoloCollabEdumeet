@@ -9,17 +9,24 @@ class RoomManager:
         self.rooms: Dict[str, List[WebSocket]] = {}
         # Maps room_code -> list of {"id": str, "name": str}
         self.room_users: Dict[str, List[dict]] = {}
+        # Maps room_code -> host_user_id
+        self.room_hosts: Dict[str, str] = {}
         # Maps websocket -> (room_code, user_name)
         self._ws_meta: Dict[WebSocket, tuple] = {}
 
-    async def connect(self, websocket: WebSocket, room_code: str, user_name: str = "Guest"):
+    async def connect(self, websocket: WebSocket, room_code: str, user_name: str = "Guest", is_host: bool = False):
         await websocket.accept()
+        user_id = str(id(websocket))
+        
         self.rooms.setdefault(room_code, []).append(websocket)
         self.room_users.setdefault(room_code, [])
         self._ws_meta[websocket] = (room_code, user_name)
 
-        # Add user entry (use object id as unique id)
-        user_entry = {"id": str(id(websocket)), "name": user_name}
+        if is_host:
+            self.room_hosts[room_code] = user_id
+
+        # Add user entry
+        user_entry = {"id": user_id, "name": user_name}
         self.room_users[room_code].append(user_entry)
 
         # Broadcast updated user list to everyone in the room (including the new joiner)
@@ -41,6 +48,12 @@ class RoomManager:
         if not room:
             self.rooms.pop(room_code, None)
             self.room_users.pop(room_code, None)
+            self.room_hosts.pop(room_code, None)
+
+    def is_host(self, room_code: str, websocket: WebSocket) -> bool:
+        """Check if the given websocket belongs to the host of the room."""
+        user_id = str(id(websocket))
+        return self.room_hosts.get(room_code) == user_id
 
     def get_users(self, room_code: str) -> List[dict]:
         return self.room_users.get(room_code, [])
