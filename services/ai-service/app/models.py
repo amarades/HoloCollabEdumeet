@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 class AIRequest(BaseModel):
     message: str
@@ -7,8 +7,8 @@ class AIRequest(BaseModel):
 
 class QuizRequest(BaseModel):
     model_name: str
-    difficulty: str
-    question_count: int
+    difficulty: str = "medium"
+    question_count: int = 5
 
 class ExplainRequest(BaseModel):
     concept: str
@@ -17,3 +17,10 @@ class ExplainRequest(BaseModel):
 class LectureNotesRequest(BaseModel):
     topic: str
     model_name: str
+    transcript: Optional[str] = ""
+
+class TopicRequest(BaseModel):
+    transcript: str
+
+class DoubtsRequest(BaseModel):
+    messages: List[str]

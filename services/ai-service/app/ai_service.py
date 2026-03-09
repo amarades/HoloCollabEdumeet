@@ -92,6 +92,14 @@ class MockAIService:
 
 def get_ai_service():
     """Factory: pick the configured AI backend, fall back to Mock."""
+    if settings.ai_service == "ollama":
+        try:
+            from app.ollama_service import ollama_service
+            print("[OK] Using Ollama AI service (local models)")
+            return ollama_service
+        except Exception as e:
+            print(f"[WARNING] Ollama failed: {e} — falling back to Mock")
+
     if settings.ai_service == "openai":
         try:
             from app.openai_service import openai_service

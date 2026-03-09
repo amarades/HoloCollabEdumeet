@@ -13,6 +13,13 @@ export interface ModelState {
     visible?: boolean;
 }
 
+// Slide data type for Feature 10 — 3D Presentation Mode
+export interface SlideData {
+    title: string;
+    body: string;
+    modelKey?: string;
+}
+
 export class ARScene {
     private canvas: HTMLCanvasElement;
     private scene: THREE.Scene;
@@ -24,6 +31,12 @@ export class ARScene {
     private animationId: number | null = null;
     private isDragging: boolean = false;
     private previousMousePosition = { x: 0, y: 0 };
+    private holoPointLight: THREE.PointLight | null = null;
+
+    // Presentation mode state
+    private presentationSlides: THREE.Mesh[] = [];
+    private currentSlideIndex: number = 0;
+    public isPresentationMode: boolean = false;
 
     // Bound listener references for cleanup
     private boundMouseMove: (e: MouseEvent) => void = () => { };
@@ -88,6 +101,11 @@ export class ARScene {
         const directionalLight2 = new THREE.DirectionalLight(0x6366f1, 0.4);
         directionalLight2.position.set(-5, -3, -5);
         this.scene.add(directionalLight2);
+
+        // Holographic PointLight — adds glow depth to models (Feature 1)
+        this.holoPointLight = new THREE.PointLight(0x00d4ff, 2, 10);
+        this.holoPointLight.position.set(0, 2, 3);
+        this.scene.add(this.holoPointLight);
 
         // Controls
         this.setupMouseControls();
@@ -268,9 +286,16 @@ export class ARScene {
     private animate() {
         this.animationId = requestAnimationFrame(this.animate.bind(this));
 
-        // Update Shader Uniforms
-        if (this.currentModel) {
-            const time = performance.now() / 1000;
+        const time = performance.now() / 1000;
+
+        // Feature 1: Float animation + shader uniform update
+        if (this.currentModel && !this.isPresentationMode) {
+            // Gentle sine-wave float
+            this.currentModel.position.y = Math.sin(time * 0.8) * 0.15;
+            // Slow auto-rotate when not dragging
+            if (!this.isDragging) {
+                this.currentModel.rotation.y += 0.003;
+            }
             this.currentModel.traverse((child: any) => {
                 if (child instanceof THREE.Mesh && child.material instanceof THREE.ShaderMaterial) {
                     child.material.uniforms.uTime.value = time;
@@ -278,7 +303,120 @@ export class ARScene {
             });
         }
 
+        // Animate point light intensity for pulsing glow
+        if (this.holoPointLight) {
+            this.holoPointLight.intensity = 1.5 + Math.sin(time * 2) * 0.5;
+        }
+
         this.renderer.render(this.scene, this.camera);
+    }
+
+    // ── Feature 10: 3D Presentation Mode ──────────────────────────────────────
+
+    public startPresentationMode(slides: SlideData[]) {
+        this.isPresentationMode = true;
+        // Clear previous slides
+        this.presentationSlides.forEach(s => this.scene.remove(s));
+        this.presentationSlides = [];
+
+        slides.forEach((slide, index) => {
+            const geometry = new THREE.PlaneGeometry(2.5, 1.8);
+
+            // Render slide text to an offscreen canvas
+            const offscreen = document.createElement('canvas');
+            offscreen.width = 512;
+            offscreen.height = 368;
+            const ctx = offscreen.getContext('2d')!;
+
+            ctx.fillStyle = 'rgba(0, 17, 34, 0.85)';
+            ctx.fillRect(0, 0, 512, 368);
+
+            // Title
+            ctx.fillStyle = '#00d4ff';
+            ctx.font = 'bold 36px monospace';
+            ctx.fillText(slide.title, 24, 60);
+
+            // Divider
+            ctx.strokeStyle = '#00d4ff';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(24, 80);
+            ctx.lineTo(488, 80);
+            ctx.stroke();
+
+            // Body text (word-wrap)
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '22px monospace';
+            const words = slide.body.split(' ');
+            let line = '';
+            let y = 120;
+            for (const word of words) {
+                const test = line + word + ' ';
+                if (ctx.measureText(test).width > 460) {
+                    ctx.fillText(line, 24, y);
+                    line = word + ' ';
+                    y += 30;
+                } else {
+                    line = test;
+                }
+            }
+            ctx.fillText(line, 24, y);
+
+            // Slide index
+            ctx.fillStyle = 'rgba(0, 212, 255, 0.5)';
+            ctx.font = '16px monospace';
+            ctx.fillText(`${index + 1} / ${slides.length}`, 450, 350);
+
+            const texture = new THREE.CanvasTexture(offscreen);
+            const material = new THREE.MeshBasicMaterial({
+                map: texture,
+                transparent: true,
+                opacity: 0.92,
+                side: THREE.DoubleSide,
+            });
+
+            const mesh = new THREE.Mesh(geometry, material);
+
+            // Position in arc formation
+            const angle = ((index - Math.floor(slides.length / 2)) / Math.max(slides.length, 1)) * Math.PI * 0.6;
+            mesh.position.set(Math.sin(angle) * 4, 0, -Math.cos(angle) * 2);
+            mesh.rotation.y = -angle;
+            mesh.visible = index === 0;
+
+            this.scene.add(mesh);
+            this.presentationSlides.push(mesh);
+        });
+
+        this.currentSlideIndex = 0;
+    }
+
+    public nextSlide() {
+        if (this.presentationSlides.length === 0) return;
+        this.presentationSlides[this.currentSlideIndex].visible = false;
+        this.currentSlideIndex = Math.min(this.currentSlideIndex + 1, this.presentationSlides.length - 1);
+        this.presentationSlides[this.currentSlideIndex].visible = true;
+    }
+
+    public prevSlide() {
+        if (this.presentationSlides.length === 0) return;
+        this.presentationSlides[this.currentSlideIndex].visible = false;
+        this.currentSlideIndex = Math.max(this.currentSlideIndex - 1, 0);
+        this.presentationSlides[this.currentSlideIndex].visible = true;
+    }
+
+    public getCurrentSlide() {
+        return this.currentSlideIndex;
+    }
+
+    public stopPresentationMode() {
+        this.isPresentationMode = false;
+        this.presentationSlides.forEach(s => {
+            s.geometry.dispose();
+            (s.material as THREE.MeshBasicMaterial).map?.dispose();
+            (s.material as THREE.MeshBasicMaterial).dispose();
+            this.scene.remove(s);
+        });
+        this.presentationSlides = [];
     }
 
     public clearModel() {
