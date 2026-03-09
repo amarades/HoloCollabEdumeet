@@ -9,7 +9,6 @@ const JoinSession = () => {
     const [searchParams] = useSearchParams();
     const { user, loginAsGuest } = useAuth();
 
-    // If coming from the Home page (?source=home), they are unauthenticated — need a name
     const isGuest = searchParams.get('source') === 'home' || !user;
 
     const [isLoading, setIsLoading] = useState(false);
@@ -20,7 +19,6 @@ const JoinSession = () => {
     const [sessionInfo, setSessionInfo] = useState<any>(null);
     const [isValidating, setIsValidating] = useState(false);
 
-    // Validate room code when it becomes 6 characters
     useEffect(() => {
         if (roomCode.length === 6) {
             validateRoom();
@@ -68,15 +66,12 @@ const JoinSession = () => {
                 body: JSON.stringify(body),
             });
 
-            // For guests, store a temporary auth context so Session.tsx has a user
             if (isGuest) {
                 loginAsGuest(userName.trim(), 'student');
             }
 
-            // Persist room metadata so Session page can display it & know role
             sessionStorage.setItem('room_code', data.room_code);
             sessionStorage.setItem('session_role', data.role || 'student');
-            // Navigate to the pre-join lobby instead of directly into the session
             navigate(`/lobby?session=${data.session_id}&code=${data.room_code}&role=${data.role || 'student'}`);
         } catch (err: any) {
             setError(err.message || 'Failed to join. Please check the room code.');
@@ -85,134 +80,97 @@ const JoinSession = () => {
         }
     };
 
-    const handleKeyPress = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter') handleJoin();
-    };
-
     const backPath = isGuest ? '/' : '/dashboard';
 
     return (
-        <div className="min-h-screen flex flex-col justify-center items-center p-4">
-            <div className="max-w-md w-full">
-                {/* Back Button */}
+        <div className="min-h-screen flex flex-col items-center justify-center p-6">
+            <div className="premium-bg">
+                <div className="tech-grid opacity-30" />
+                <div className="floating-shape circle s1" />
+                <div className="floating-shape square s4" />
+            </div>
+
+            <div className="max-w-md w-full relative z-10">
                 <button
                     onClick={() => navigate(backPath)}
-                    className="mb-6 flex items-center gap-2 text-gray-500 hover:text-gray-900 transition-colors bg-white/50 py-2 px-4 rounded-full border border-gray-200 hover:bg-white shadow-sm w-fit font-medium text-sm"
+                    className="mb-8 flex items-center gap-2 py-3 px-6 rounded-2xl bg-white border border-gray-100 text-gray-500 hover:text-indigo-500 hover:border-indigo-100 transition-all font-bold text-sm shadow-sm"
                 >
-                    <ArrowLeft className="w-4 h-4" />
-                    Back
+                    <ArrowLeft size={18} /> Back
                 </button>
 
-                {/* Card */}
-                <div className="glass-panel p-8">
-                    {/* Header */}
-                    <div className="text-center mb-8">
-                        <div className="bg-primary/10 text-primary p-4 rounded-2xl w-16 h-16 flex items-center justify-center mb-5 mx-auto">
-                            <Users className="w-8 h-8" />
+                <div className="glass-card p-10 rounded-[40px]">
+                    <div className="text-center mb-10">
+                        <div className="w-16 h-16 rounded-2xl bg-indigo-500 flex items-center justify-center mx-auto mb-6 shadow-xl shadow-indigo-100">
+                            <Users className="w-8 h-8 text-white" />
                         </div>
-                        <h1 className="text-2xl font-semibold text-gray-900 mb-2">Join Meeting</h1>
-                        <p className="text-gray-500 text-sm">
-                            Enter the 6-digit code provided by the host
-                        </p>
+                        <h1 className="text-3xl font-black text-gray-900 tracking-tight">Join Session</h1>
+                        <p className="text-gray-400 font-bold mt-2 uppercase tracking-widest text-[10px]">Enter your 6-digit room code</p>
                     </div>
 
-                    {/* Error */}
                     {error && (
-                        <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm flex items-start gap-2">
-                            <div className="w-2 h-2 rounded-full bg-red-500 mt-1.5 shrink-0"></div>
+                        <div className="mb-8 p-4 bg-red-50 border border-red-100 rounded-2xl text-red-600 text-xs font-bold leading-relaxed">
                             {error}
                         </div>
                     )}
 
-                    {/* Form */}
-                    <div className="space-y-5 mb-8">
-                        {/* Room Code — always shown */}
+                    <div className="space-y-6">
                         <div>
-                            <label className="block text-gray-700 text-sm font-medium mb-1">Meeting Code</label>
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3 ml-1">Meeting Code</label>
                             <input
                                 type="text"
                                 value={roomCode}
                                 onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-                                onKeyPress={handleKeyPress}
                                 placeholder="XXXXXX"
                                 maxLength={6}
-                                className="w-full px-4 py-4 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 text-center text-3xl font-mono tracking-[0.5em] uppercase transition-all"
+                                className="w-full py-6 px-4 bg-gray-50/50 border-2 border-gray-100 rounded-2xl text-center text-4xl font-mono font-black tracking-[0.4em] text-gray-900 focus:border-indigo-400 focus:bg-white transition-all outline-none"
                                 autoFocus
                             />
                         </div>
 
-                        {/* Name — only for unauthenticated guests from Home page */}
                         {isGuest && sessionInfo && (
                             <div>
-                                <label className="block text-gray-700 text-sm font-medium mb-1">Your Name</label>
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3 ml-1">Your Name</label>
                                 <input
                                     type="text"
                                     value={userName}
                                     onChange={(e) => setUserName(e.target.value)}
-                                    onKeyPress={handleKeyPress}
-                                    placeholder="What should we call you?"
-                                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-medium"
+                                    placeholder="Enter display name"
+                                    className="w-full p-4 bg-gray-50/50 border-2 border-gray-100 rounded-2xl text-gray-900 font-bold focus:border-indigo-400 focus:bg-white transition-all outline-none"
                                 />
                             </div>
                         )}
 
-                        {/* Session Info & Participants Preview */}
                         {isValidating ? (
-                            <div className="flex justify-center py-4">
-                                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                            <div className="flex justify-center py-6">
+                                <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
                             </div>
                         ) : sessionInfo && (
-                            <div className="bg-gray-50 border border-gray-100 rounded-xl p-4">
-                                <div className="flex items-center gap-2 mb-3">
-                                    <CheckCircle2 className="w-5 h-5 text-green-500" />
-                                    <h3 className="font-semibold text-gray-900">{sessionInfo.session_name}</h3>
+                            <div className="bg-indigo-50/50 border border-indigo-100 rounded-3xl p-6">
+                                <div className="flex items-center gap-3 mb-4">
+                                    <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                                    <h3 className="font-black text-gray-900 text-lg uppercase tracking-tight">{sessionInfo.session_name}</h3>
                                 </div>
-
-                                <div className="text-sm font-medium text-gray-700 mb-2">
-                                    Participants ({participants.length})
-                                </div>
-                                <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+                                <div className="flex flex-wrap gap-2">
                                     {participants.length === 0 ? (
-                                        <span className="text-gray-500 text-sm">No one is here yet</span>
+                                        <span className="text-gray-400 text-xs font-bold italic">Waiting for participants...</span>
                                     ) : (
                                         participants.map((p, idx) => (
-                                            <div key={idx} className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-full border border-gray-200 shadow-sm text-sm">
-                                                <div className="w-5 h-5 rounded-full bg-primary/10 text-primary flex justify-center items-center font-semibold text-xs">
-                                                    {p.name?.[0]?.toUpperCase()}
-                                                </div>
-                                                <span className="text-gray-700">{p.name} {p.role === 'instructor' && '(Host)'}</span>
+                                            <div key={idx} className="bg-white px-3 py-1.5 rounded-xl border border-gray-100 text-[10px] font-black uppercase text-gray-600 shadow-sm flex items-center gap-2">
+                                                <div className="w-4 h-4 rounded-full bg-indigo-500" /> {p.name}
                                             </div>
                                         ))
                                     )}
                                 </div>
                             </div>
                         )}
-
-                        {/* Logged-in user greeting */}
-                        {!isGuest && user && (
-                            <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 rounded-xl border border-gray-100">
-                                <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-semibold text-sm">
-                                    {user.name?.[0]?.toUpperCase()}
-                                </div>
-                                <div>
-                                    <div className="text-gray-900 font-medium text-sm">{user.name}</div>
-                                    <div className="text-xs text-gray-500">Joining as yourself</div>
-                                </div>
-                            </div>
-                        )}
                     </div>
 
-                    {/* Action Button */}
                     <button
                         onClick={handleJoin}
                         disabled={isLoading || !roomCode || (isGuest && !userName.trim())}
-                        className="w-full py-4 bg-primary hover:bg-primary-hover text-white rounded-full font-medium shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        className="w-full py-5 rounded-2xl bg-indigo-500 text-white font-black uppercase tracking-widest text-sm mt-10 transition-all hover:scale-[1.02] active:scale-95 shadow-xl shadow-indigo-100 disabled:opacity-50"
                     >
-                        {isLoading ? (
-                            <><Loader2 className="w-5 h-5 animate-spin" /> Connecting...</>
-                        ) : (
-                            'Join Now'
-                        )}
+                        {isLoading ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : 'Join Now'}
                     </button>
                 </div>
             </div>

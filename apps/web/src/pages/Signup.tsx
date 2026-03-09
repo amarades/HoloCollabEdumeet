@@ -11,7 +11,6 @@ const Signup = () => {
     const [role, setRole] = useState('student');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-
     const navigate = useNavigate();
     const { login } = useAuth();
 
@@ -19,25 +18,12 @@ const Signup = () => {
         e.preventDefault();
         setError('');
         setLoading(true);
-
         try {
             const data = await apiRequest('/api/auth/register', {
                 method: 'POST',
-                body: JSON.stringify({
-                    email,
-                    password,
-                    name,
-                    role
-                }),
+                body: JSON.stringify({ email, password, name, role }),
             });
-
-            // data matches the Token model: { access_token, token_type, user_name, role }
-            login(data.access_token, {
-                email: email,
-                name: data.user_name,
-                role: data.role
-            });
-
+            login(data.access_token, { email, name: data.user_name, role: data.role });
             navigate('/dashboard');
         } catch (err: any) {
             setError(err.message);
@@ -46,96 +32,101 @@ const Signup = () => {
         }
     };
 
-    const inputClass = "w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all outline-none placeholder-gray-400";
-
     return (
-        <div className="min-h-screen flex items-center justify-center p-4">
-            <div className="max-w-md w-full glass-panel p-8">
-                <div className="text-center mb-8">
-                    <div className="w-16 h-16 bg-red-50 text-primary rounded-full flex items-center justify-center mx-auto mb-4">
-                        <UserPlus className="w-8 h-8" />
+        <div className="relative min-h-screen flex items-center justify-center p-4">
+            {/* ── Background Elements ── */}
+            <div className="premium-bg">
+                <div className="tech-grid opacity-50" />
+                <div className="floating-shape square s2" />
+                <div className="floating-shape circle s5" />
+            </div>
+
+            <div className="glass-card w-full max-w-xl p-12 rounded-[40px] relative z-10">
+                <div className="text-center mb-10">
+                    <div className="w-16 h-16 rounded-2xl bg-indigo-500 flex items-center justify-center mx-auto mb-6 shadow-xl shadow-indigo-100">
+                        <UserPlus className="w-8 h-8 text-white" />
                     </div>
-                    <h2 className="text-2xl font-semibold text-gray-900">Create Account</h2>
-                    <p className="text-gray-500 mt-2 text-sm">Join the platform to get started</p>
+                    <h2 className="text-4xl font-black text-gray-900 tracking-tight">Create Profile</h2>
+                    <p className="text-gray-400 font-bold mt-2 uppercase tracking-widest text-xs">Start your spatial journey</p>
                 </div>
 
                 {error && (
-                    <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm mb-6 border border-red-100">
+                    <div className="mb-6 p-4 rounded-2xl bg-red-50 border border-red-100 text-red-600 text-sm font-bold">
                         {error}
                     </div>
                 )}
 
-                <form onSubmit={handleSubmit} className="space-y-5">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                        <input
-                            type="text"
-                            required
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            className={inputClass}
-                            placeholder="John Doe"
-                        />
+                <form onSubmit={handleSubmit} className="space-y-6">
+                    <div className="grid md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                            <label className="text-xs font-black text-gray-400 ml-1 uppercase tracking-widest">Full Name</label>
+                            <input
+                                className="w-full px-5 py-4 bg-gray-50/50 border-2 border-gray-100 rounded-2xl outline-none focus:border-indigo-400 focus:bg-white transition-all text-gray-900 font-bold placeholder:text-gray-300"
+                                type="text"
+                                required
+                                value={name}
+                                onChange={e => setName(e.target.value)}
+                                placeholder="John Doe"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-black text-gray-400 ml-1 uppercase tracking-widest">Email Address</label>
+                            <input
+                                className="w-full px-5 py-4 bg-gray-50/50 border-2 border-gray-100 rounded-2xl outline-none focus:border-indigo-400 focus:bg-white transition-all text-gray-900 font-bold placeholder:text-gray-300"
+                                type="email"
+                                required
+                                value={email}
+                                onChange={e => setEmail(e.target.value)}
+                                placeholder="you@example.com"
+                            />
+                        </div>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                    <div className="space-y-2">
+                        <label className="text-xs font-black text-gray-400 ml-1 uppercase tracking-widest">Password</label>
                         <input
-                            type="email"
-                            required
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            className={inputClass}
-                            placeholder="you@example.com"
-                        />
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                        <input
+                            className="w-full px-5 py-4 bg-gray-50/50 border-2 border-gray-100 rounded-2xl outline-none focus:border-indigo-400 focus:bg-white transition-all text-gray-900 font-bold placeholder:text-gray-300"
                             type="password"
                             required
                             value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            className={inputClass}
-                            placeholder="••••••••"
+                            onChange={e => setPassword(e.target.value)}
+                            placeholder="Minimum 8 characters"
                         />
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
-                        <div className="grid grid-cols-2 gap-3">
-                            <button
-                                type="button"
-                                onClick={() => setRole('student')}
-                                className={`py-3 px-4 rounded-xl border transition-all text-sm font-medium ${role === 'student' ? 'bg-primary/5 border-primary text-primary' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                            >
-                                Student
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setRole('host')}
-                                className={`py-3 px-4 rounded-xl border transition-all text-sm font-medium ${role === 'host' ? 'bg-primary/5 border-primary text-primary' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                            >
-                                Host/Admin
-                            </button>
+                    <div className="space-y-4">
+                        <label className="text-xs font-black text-gray-400 ml-1 uppercase tracking-widest">I am a...</label>
+                        <div className="grid grid-cols-2 gap-4">
+                            {(['student', 'host'] as const).map(r => (
+                                <button
+                                    key={r}
+                                    type="button"
+                                    onClick={() => setRole(r)}
+                                    className={`
+                                        py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all border-2
+                                        ${role === r
+                                            ? 'bg-indigo-500 border-indigo-500 text-white shadow-lg shadow-indigo-100'
+                                            : 'bg-white border-gray-100 text-gray-400 hover:border-indigo-200'}
+                                    `}
+                                >
+                                    {r === 'student' ? 'Student' : 'Educator'}
+                                </button>
+                            ))}
                         </div>
                     </div>
 
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full bg-primary hover:bg-primary-hover text-white font-medium py-3 rounded-full transition-all shadow-md mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="bg-indigo-500 hover:bg-indigo-600 text-white font-black w-full py-5 text-sm mt-4 rounded-2xl shadow-xl shadow-indigo-200 transition-all hover:scale-[1.02] active:scale-98 disabled:opacity-50 tracking-widest"
                     >
-                        {loading ? 'Processing...' : 'Create Account'}
+                        {loading ? 'CREATING...' : 'START LEARNING'}
                     </button>
                 </form>
 
-                <p className="mt-8 text-center text-sm text-gray-500">
-                    Already have an account?{' '}
-                    <Link to="/login" className="font-medium text-primary hover:text-primary-hover transition-colors">
-                        Sign In
-                    </Link>
+                <p className="mt-10 text-center text-sm text-gray-400 font-bold uppercase tracking-tight">
+                    Already registered?{' '}
+                    <Link to="/login" className="text-indigo-500 hover:underline">Sign In</Link>
                 </p>
             </div>
         </div>
