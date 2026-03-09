@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Bot, RefreshCw, X, Sparkles, AlertCircle } from 'lucide-react';
+import { Send, Bot, RefreshCw, X, Sparkles, AlertCircle, FileText } from 'lucide-react';
 import { apiRequest } from '../services/api';
 import { buildAIContext, parseSceneCommands } from '../ai/ContextBuilder';
 import type { Participant, ChatMsg } from '../ai/ContextBuilder';
@@ -15,6 +15,7 @@ interface Msg {
 interface AIAssistantProps {
     onClose?: () => void;
     modelName?: string;
+    detectedTopic?: string;
     // Context props
     sceneObjects?: SceneObject[];
     participants?: Participant[];
@@ -27,6 +28,7 @@ interface AIAssistantProps {
 export const AIAssistant = ({
     onClose,
     modelName = 'General',
+    detectedTopic = '',
     sceneObjects = [],
     participants = [],
     chatHistory = [],
@@ -36,12 +38,13 @@ export const AIAssistant = ({
     const [messages, setMessages] = useState<Msg[]>([
         {
             id: 1,
-            text: "Hi! I'm your AI assistant for this session. I can see the 3D scene, participants, and chat. Ask me anything — or say something like \"add a red cube\"!",
+            text: "Hi! I'm your AI assistant for this session. I can see the 3D scene, participants, and chat. Ask me anything!",
             sender: 'assistant'
         }
     ]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [isSummarizing, setIsSummarizing] = useState(false);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -116,6 +119,32 @@ export const AIAssistant = ({
         }
     };
 
+    const handleSummarize = async () => {
+        setIsSummarizing(true);
+        try {
+            const transcript = chatHistory.slice(-20).map((m: any) => `${m.sender}: ${m.text}`).join('\n');
+            const data = await apiRequest('/api/ai/lecture-notes', {
+                method: 'POST',
+                body: JSON.stringify({
+                    topic: detectedTopic || modelName,
+                    model_name: modelName,
+                    transcript,
+                }),
+            });
+            const summaryText = [
+                `📋 **Session Summary**\n`,
+                data.summary || '',
+                data.key_points?.length ? `\n**Key Points:**\n${data.key_points.map((p: string) => `• ${p}`).join('\n')}` : '',
+                data.follow_up_questions?.length ? `\n**Follow-up:** ${data.follow_up_questions[0]}` : '',
+            ].filter(Boolean).join('\n');
+            setMessages(prev => [...prev, { id: Date.now(), text: summaryText, sender: 'assistant' }]);
+        } catch {
+            setMessages(prev => [...prev, { id: Date.now(), text: 'Could not generate summary. Is the AI service running?', sender: 'assistant' }]);
+        } finally {
+            setIsSummarizing(false);
+        }
+    };
+
     const contextSummary = `${participants.length + 1} participant${participants.length !== 0 ? 's' : ''} · ${sceneObjects.length} object${sceneObjects.length !== 1 ? 's' : ''} in scene`;
 
     return (
@@ -183,6 +212,18 @@ export const AIAssistant = ({
                 <span className="text-xs text-primary/70">Context-aware: sees scene & participants</span>
             </div>
 
+            {/* Feature 6: Summarize button */}
+            <div className="px-3 pb-2 bg-white border-t border-gray-100">
+                <button
+                    onClick={handleSummarize}
+                    disabled={isSummarizing}
+                    className="w-full flex items-center justify-center gap-2 py-2 text-xs font-semibold text-violet-700 bg-violet-50 hover:bg-violet-100 rounded-xl transition-all disabled:opacity-50"
+                >
+                    <FileText className="w-3.5 h-3.5" />
+                    {isSummarizing ? 'Summarizing…' : '📋 Summarize Session'}
+                </button>
+            </div>
+
             {/* Input */}
             <div className="p-3 border-t border-gray-100 bg-white">
                 <div className="flex gap-2 items-end">
@@ -191,7 +232,7 @@ export const AIAssistant = ({
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
-                        placeholder='Ask anything, or "add a red cube"…'
+                        placeholder='Ask anything…'
                         className="flex-1 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10 bg-gray-50 resize-none"
                         disabled={isLoading}
                     />

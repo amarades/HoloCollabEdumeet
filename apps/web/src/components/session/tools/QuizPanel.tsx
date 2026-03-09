@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { X, BarChart2, Play } from 'lucide-react';
+import { X, BarChart2, Play, Sparkles } from 'lucide-react';
 import { SocketManager } from '../../../realtime/SocketManager';
+import { apiRequest } from '../../../services/api';
 
 interface QuizPanelProps {
     onClose: () => void;
     socket: SocketManager | null;
     user: any;
+    topic?: string;
 }
 
-export const QuizPanel: React.FC<QuizPanelProps> = ({ onClose, socket, user }) => {
+export const QuizPanel: React.FC<QuizPanelProps> = ({ onClose, socket, user, topic = '' }) => {
     // Mode: 'CREATE', 'LIVE', 'VOTE'
     const [mode, setMode] = useState<'CREATE' | 'LIVE' | 'VOTE'>('CREATE');
 
@@ -17,6 +19,7 @@ export const QuizPanel: React.FC<QuizPanelProps> = ({ onClose, socket, user }) =
     const [options, setOptions] = useState<string[]>(['', '']);
     const [activeQuiz, setActiveQuiz] = useState<any>(null);
     const [selectedOption, setSelectedOption] = useState<number | null>(null);
+    const [isGenerating, setIsGenerating] = useState(false);
 
     // Determine host status from stored session role
     const sessionRole = (typeof window !== 'undefined' && window.sessionStorage)
@@ -72,6 +75,30 @@ export const QuizPanel: React.FC<QuizPanelProps> = ({ onClose, socket, user }) =
         socket.emit('QUIZ_ACTION', { sub_action: 'END' });
         setMode('CREATE');
         setActiveQuiz(null);
+    };
+
+    // Feature 8: AI-generate quiz from detected topic
+    const handleAIGenerate = async () => {
+        if (!topic.trim()) {
+            alert('No topic detected yet. Use Voice Detect Topic first!');
+            return;
+        }
+        setIsGenerating(true);
+        try {
+            const data = await apiRequest('/api/ai/quiz', {
+                method: 'POST',
+                body: JSON.stringify({ model_name: topic, difficulty: 'medium', question_count: 5 }),
+            });
+            if (data.questions && data.questions.length > 0) {
+                const first = data.questions[0];
+                setQuestion(first.question);
+                setOptions(first.options || ['', '', '', '']);
+            }
+        } catch {
+            alert('Quiz generation failed. Is the AI service running?');
+        } finally {
+            setIsGenerating(false);
+        }
     };
 
     const submitVote = (index: number) => {
@@ -143,6 +170,18 @@ export const QuizPanel: React.FC<QuizPanelProps> = ({ onClose, socket, user }) =
                                 + Add another option
                             </button>
                         </div>
+
+                        {/* Feature 8: AI Generate button */}
+                        {isHost && (
+                            <button
+                                onClick={handleAIGenerate}
+                                disabled={isGenerating}
+                                className="flex items-center gap-2 w-full justify-center py-2.5 px-4 rounded-xl border border-violet-200 bg-violet-50 hover:bg-violet-100 text-violet-700 font-semibold text-sm transition-all disabled:opacity-50"
+                            >
+                                <Sparkles className="w-4 h-4" />
+                                {isGenerating ? 'Generating…' : '🤖 AI Generate Quiz'}
+                            </button>
+                        )}
 
                         <button
                             onClick={startQuiz}

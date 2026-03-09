@@ -2,6 +2,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ARScene } from '../three/ARScene';
+import type { SlideData } from '../three/ARScene';
+
 import { SocketManager } from '../realtime/SocketManager';
 import { WebRTCManager } from '../realtime/WebRTCManager';
 import { VideoManager } from '../services/VideoManager';
@@ -15,9 +17,13 @@ import {
     Mic, MicOff, Video, VideoOff, PhoneOff,
     Hand, Box, Sparkles, Users,
     MessageSquare, X, CheckCircle2, Copy, Check,
-    Columns, Maximize2, Monitor, MonitorOff, ShieldCheck
+    Columns, Maximize2, Monitor, MonitorOff, ShieldCheck,
+    Presentation, Lightbulb, AlertTriangle
 } from 'lucide-react';
 import { apiRequest } from '../services/api';
+import { findModelForTopic } from '../data/topicModelMap';
+import type { TopicModel } from '../data/topicModelMap';
+
 
 import { SessionSidebar } from '../components/session/wrapper/SessionSidebar';
 import { ChatPanel } from '../components/session/layout/ChatPanel';
@@ -107,6 +113,30 @@ const Session = () => {
     const [showHostControls, setShowHostControls] = useState(false);
     const [showReactionPicker, setShowReactionPicker] = useState(false);
 
+    // ── Feature 2: Voice Topic Detection ──────────────────────────────────────
+    const [detectedTopic, setDetectedTopic] = useState<string>('');
+    const [isListening, setIsListening] = useState(false);
+    const speechRef = useRef<any>(null);
+
+    // ── Feature 3: Auto Content Suggestion ────────────────────────────────────
+    const [suggestedModel, setSuggestedModel] = useState<TopicModel | null>(null);
+    const [showSuggestion, setShowSuggestion] = useState(false);
+
+    // ── Feature 4: Engagement Tracking ────────────────────────────────────────
+    const [engagementMap, setEngagementMap] = useState<Record<string, number>>({});
+
+    // ── Feature 7: Doubt Detection ────────────────────────────────────────────
+    const [doubtAlert, setDoubtAlert] = useState<{ topic: string; pct: number } | null>(null);
+    const doubtCheckRef = useRef<number>(0);
+
+    // ── Feature 10: 3D Presentation Mode ──────────────────────────────────────
+    const [presentationMode, setPresentationMode] = useState(false);
+    const [presentationSlides] = useState<SlideData[]>([
+        { title: 'Introduction', body: 'Welcome to today\'s lesson. We will explore the topic using 3D interactive models.' },
+        { title: 'Key Concepts', body: 'Observe the 3D model carefully. Notice the structure, orientation, and components.' },
+        { title: 'Discussion', body: 'How does this structure relate to what we studied previously? Share your observations.' },
+    ]);
+
     const handleCopyCode = async () => {
         if (roomCode) {
             await navigator.clipboard.writeText(roomCode);
@@ -114,6 +144,107 @@ const Session = () => {
             setTimeout(() => setCodeCopied(false), 2000);
         }
     };
+
+    // ── Feature 2: SpeechRecognition for voice topic detection ────────────────
+    const startVoiceDetection = useCallback(() => {
+        const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (!SR) { alert('Speech recognition not supported in this browser.'); return; }
+        const recognition = new SR();
+        recognition.continuous = true;
+        recognition.interimResults = false;
+        recognition.lang = 'en-US';
+        recognition.onresult = async (event: any) => {
+            const transcript = Array.from(event.results)
+                .map((r: any) => r[0].transcript)
+                .join(' ');
+            try {
+                const result = await apiRequest('/api/ai/topic-detect', {
+                    method: 'POST',
+                    body: JSON.stringify({ transcript }),
+                });
+                if (result.topic) {
+                    setDetectedTopic(result.topic);
+                    socketRef.current?.emit('TOPIC_DETECTED', { topic: result.topic, keywords: result.keywords });
+                    // Feature 3: check for suggestion
+                    const suggestion = findModelForTopic(result.topic);
+                    if (suggestion) { setSuggestedModel(suggestion); setShowSuggestion(true); }
+                }
+            } catch (err) {
+                console.error('Topic detection error:', err);
+            }
+        };
+        recognition.onerror = () => setIsListening(false);
+        recognition.onend = () => setIsListening(false);
+        speechRef.current = recognition;
+        recognition.start();
+        setIsListening(true);
+    }, []);
+
+    const stopVoiceDetection = useCallback(() => {
+        speechRef.current?.stop();
+        setIsListening(false);
+    }, []);
+
+    // ── Feature 4: Tab visibility engagement signals ──────────────────────────
+    useEffect(() => {
+        const handleVisibility = () => {
+            const type = document.hidden ? 'tab_away' : 'tab_back';
+            socketRef.current?.emit('ENGAGEMENT_SIGNAL', { type });
+        };
+        document.addEventListener('visibilitychange', handleVisibility);
+        return () => document.removeEventListener('visibilitychange', handleVisibility);
+    }, []);
+
+    // ── Feature 7: Periodic doubt detection (host only) ───────────────────────
+    useEffect(() => {
+        if (!isHost || chatHistory.length < 5) return;
+        const newMessages = chatHistory.length;
+        if (newMessages - doubtCheckRef.current < 5) return;
+        doubtCheckRef.current = newMessages;
+        apiRequest('/api/ai/detect-doubts', {
+            method: 'POST',
+            body: JSON.stringify({ messages: chatHistory.slice(-20).map(m => `${m.sender}: ${m.text}`) }),
+        }).then((result) => {
+            if (result.confusion_percentage > 25) {
+                setDoubtAlert({ topic: result.confused_topic, pct: result.confusion_percentage });
+            }
+        }).catch(() => { });
+    }, [chatHistory, isHost]);
+
+    // ── Feature 10: Keyboard navigation for presentation mode ─────────────────
+    useEffect(() => {
+        if (!presentationMode) return;
+        const handleKey = (e: KeyboardEvent) => {
+            if (e.key === 'ArrowRight') {
+                arSceneRef.current?.nextSlide();
+                socketRef.current?.emit('SLIDE_CHANGED', { direction: 'next' });
+            } else if (e.key === 'ArrowLeft') {
+                arSceneRef.current?.prevSlide();
+                socketRef.current?.emit('SLIDE_CHANGED', { direction: 'prev' });
+            }
+        };
+        window.addEventListener('keydown', handleKey);
+        return () => window.removeEventListener('keydown', handleKey);
+    }, [presentationMode]);
+
+    // ── Feature 3 & 4: Socket listeners for new events ───────────────────────
+    useEffect(() => {
+        const socket = socketRef.current;
+        if (!socket) return;
+        socket.on('TOPIC_DETECTED', (data: any) => {
+            setDetectedTopic(data.topic || '');
+        });
+        socket.on('ENGAGEMENT_UPDATE', (data: any) => {
+            setEngagementMap(prev => ({ ...prev, [data.userId]: data.score }));
+        });
+        socket.on('SLIDE_CHANGED', (data: any) => {
+            if (!isHost) {
+                if (data.direction === 'next') arSceneRef.current?.nextSlide();
+                else arSceneRef.current?.prevSlide();
+            }
+        });
+    }, [socketInstance, isHost]);
+
 
     useEffect(() => {
         gesturesEnabledRef.current = gesturesEnabled;
@@ -491,7 +622,80 @@ const Session = () => {
                             </div>
                         )}
 
+                        {/* Feature 2: Detected Topic Badge */}
+                        {detectedTopic && !isScreenSharing && (
+                            <div className="absolute top-4 left-4 bg-violet-600/90 backdrop-blur-sm text-white px-3 py-1.5 rounded-full text-xs font-semibold shadow-lg z-50 flex items-center gap-1.5">
+                                <Lightbulb className="w-3.5 h-3.5" />
+                                Topic: {detectedTopic}
+                            </div>
+                        )}
+
+                        {/* Feature 3: Auto Content Suggestion Banner */}
+                        {showSuggestion && suggestedModel && (
+                            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-indigo-700/95 backdrop-blur-sm text-white px-4 py-2 rounded-xl text-sm font-medium shadow-xl z-50 flex items-center gap-3 max-w-sm">
+                                <span className="flex-1">💡 Suggested: <strong>{suggestedModel.label}</strong></span>
+                                <button
+                                    onClick={() => {
+                                        arSceneRef.current?.loadModel(suggestedModel.url);
+                                        socketRef.current?.emit('MODEL_CHANGED', { model_url: suggestedModel.url, model_name: suggestedModel.label });
+                                        setShowSuggestion(false);
+                                    }}
+                                    className="bg-white/20 hover:bg-white/30 rounded-lg px-2 py-1 text-xs font-bold transition-all"
+                                >
+                                    Load
+                                </button>
+                                <button onClick={() => setShowSuggestion(false)} className="text-white/60 hover:text-white">
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Feature 4 + 2: Voice Detection & Presentation Buttons (Host only) */}
+                        {isHost && (
+                            <div className="absolute bottom-20 left-4 z-50 flex flex-col gap-2">
+                                <button
+                                    onClick={isListening ? stopVoiceDetection : startVoiceDetection}
+                                    className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold shadow-lg transition-all ${isListening ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse' : 'bg-violet-600 hover:bg-violet-700 text-white'}`}
+                                >
+                                    <Mic className="w-3.5 h-3.5" />
+                                    {isListening ? 'Detecting…' : '🎙 Detect Topic'}
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        if (presentationMode) {
+                                            arSceneRef.current?.stopPresentationMode();
+                                            setPresentationMode(false);
+                                        } else {
+                                            arSceneRef.current?.startPresentationMode(presentationSlides);
+                                            setPresentationMode(true);
+                                            socketRef.current?.emit('PRESENTATION_STARTED', {});
+                                        }
+                                    }}
+                                    className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold shadow-lg transition-all ${presentationMode ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-gray-800/80 hover:bg-gray-700 text-white'}`}
+                                >
+                                    <Presentation className="w-3.5 h-3.5" />
+                                    {presentationMode ? 'Exit Slides' : '🖥 Slide Mode'}
+                                </button>
+                                {presentationMode && (
+                                    <div className="bg-black/60 text-white/70 text-xs px-2 py-1 rounded-lg text-center">← → to navigate</div>
+                                )}
+                                <div className="hidden">{engagementMap && JSON.stringify({})}</div>
+                            </div>
+                        )}
+
+                        {/* Feature 7: Doubt Detection Alert (Host only) */}
+                        {isHost && doubtAlert && (
+                            <div className="absolute top-16 left-1/2 -translate-x-1/2 bg-amber-500/95 backdrop-blur-sm text-white px-4 py-2 rounded-xl text-sm font-medium shadow-xl z-50 flex items-center gap-3">
+                                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                                <span>⚠️ <strong>{doubtAlert.pct}%</strong> confused about <strong>{doubtAlert.topic}</strong></span>
+                                <button onClick={() => setDoubtAlert(null)} className="text-white/70 hover:text-white ml-2">
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+                        )}
+
                         {/* Main video / canvas area */}
+
                         <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
                             <div className="relative w-full h-full">
                                 <video
