@@ -95,9 +95,9 @@ def main():
         print("=" * 60 + "\n")
         
         # Monitor processes and print output
-        import select
         if sys.platform != "win32":
-            # Unix-like systems
+            # Unix-like systems can use select/non-blocking reads more easily, 
+            # but for simplicity we'll use a basic loop here.
             while True:
                 for service, process in processes:
                     line = process.stdout.readline()
@@ -105,21 +105,26 @@ def main():
                         print(f"{service['color']}[{service['name']}]{RESET_COLOR} {line.rstrip()}")
                 time.sleep(0.1)
         else:
-            # Windows - simpler approach
-            while True:
-                alive = False
-                for service, process in processes:
-                    if process.poll() is None:
-                        alive = True
-                        line = process.stdout.readline()
-                        if line:
-                            print(f"{service['color']}[{service['name']}]{RESET_COLOR} {line.rstrip()}")
-                
-                if not alive:
-                    print("\nAll services have stopped")
-                    break
-                    
-                time.sleep(0.1)
+            # Windows - Use threads to avoid blocking the main loop
+            import threading
+            
+            def stream_reader(service, process):
+                for line in iter(process.stdout.readline, ''):
+                    if line:
+                        print(f"{service['color']}[{service['name']}]{RESET_COLOR} {line.rstrip()}")
+                process.stdout.close()
+
+            threads = []
+            for service, process in processes:
+                t = threading.Thread(target=stream_reader, args=(service, process), daemon=True)
+                t.start()
+                threads.append(t)
+            
+            # Keep main thread alive while processes are running
+            while any(p.poll() is None for _, p in processes):
+                time.sleep(1)
+            
+            print("\nAll services have stopped")
     
     except KeyboardInterrupt:
         print("\n\n" + "=" * 60)

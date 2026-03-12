@@ -3,8 +3,10 @@
 /* ── Global Base ── */
 @layer base {
   :root {
-    --primary: #6366f1;
-    --primary-hover: #4f46e5;
+    --primary: #9333ea;
+    --primary-hover: #7e22ce;
+    --neon-glow: rgba(168, 85, 247, 0.7);
+    --neon-border: rgba(168, 85, 247, 0.5);
     --text-dark: #111827;
     --text-gray: #4b5563;
     --text-light: #9ca3af;
@@ -31,72 +33,32 @@
   height: 100vh;
   z-index: -1;
   background:
-    radial-gradient(circle at 15% 30%, rgba(147, 51, 234, 0.15), transparent 45%),
-    radial-gradient(circle at 85% 70%, rgba(147, 51, 234, 0.15), transparent 45%),
-    radial-gradient(circle at 50% 50%, rgba(147, 51, 234, 0.08), transparent 60%),
-    var(--bg-white);
+    radial-gradient(circle at 15% 25%, rgba(147, 51, 234, 0.35), transparent 40%),
+    radial-gradient(circle at 85% 75%, rgba(109, 40, 217, 0.35), transparent 40%),
+    radial-gradient(circle at 50% 50%, rgba(168, 85, 247, 0.15), transparent 60%),
+    #0d0a1a;
   overflow: hidden;
 }
 
-.tech-grid {
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background-image:
-    linear-gradient(rgba(147, 51, 234, 0.1) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(147, 51, 234, 0.1) 1px, transparent 1px);
-  background-size: 50px 50px;
-  animation: gridPan 25s linear infinite;
-}
-
-@keyframes gridPan {
-  0% {
-    transform: translate(0, 0);
-  }
-
-  100% {
-    transform: translate(50px, 50px);
-  }
-}
-
-/* ── Floating Shapes ── */
+/* ── Floating Neon Shapes ── */
 .floating-shape {
   position: absolute;
-  border: 2px solid rgba(147, 51, 234, 0.4);
-  box-shadow: 0 0 20px rgba(147, 51, 234, 0.3);
-  background: transparent;
-  animation: floatShape linear infinite;
-  pointer-events: none;
-}
-
-.floating-shape.circle {
+  border: 1.5px solid var(--neon-border);
   border-radius: 50%;
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.06), rgba(109, 40, 217, 0.03));
+  box-shadow: 0 0 18px rgba(168, 85, 247, 0.25), inset 0 0 10px rgba(168, 85, 247, 0.08);
+  animation: floatShape linear infinite;
+  will-change: transform, opacity;
 }
 
 .floating-shape.square {
-  border-radius: 12%;
+  border-radius: 16px;
 }
 
 @keyframes floatShape {
-  0% {
-    transform: translateY(0) rotate(0deg);
-    opacity: 0;
-  }
-
-  10% {
-    opacity: 0.8;
-  }
-
-  90% {
-    opacity: 0.8;
-  }
-
-  100% {
-    transform: translateY(-110vh) rotate(360deg);
-    opacity: 0;
-  }
+  0%   { transform: translateY(0)   rotate(0deg);   opacity: 0.6; }
+  50%  { transform: translateY(-60px) rotate(180deg); opacity: 0.9; }
+  100% { transform: translateY(-140vh) rotate(360deg); opacity: 0; }
 }
 
 .s1 {
@@ -161,24 +123,42 @@
   animation-delay: -12s;
 }
 
+.s8 {
+  width: 120px;
+  height: 120px;
+  left: 40%;
+  bottom: -200px;
+  animation-duration: 45s;
+  animation-delay: -18s;
+}
+
+.s9 {
+  width: 50px;
+  height: 50px;
+  left: 95%;
+  bottom: -80px;
+  animation-duration: 22s;
+  animation-delay: -4s;
+}
+
 /* ── Premium Glassmorphism & UI ── */
 @layer utilities {
   .glass-card {
-    @apply bg-white/80 backdrop-blur-xl border border-white/40 shadow-2xl;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.05), inset 0 2px 4px rgba(255, 255, 255, 0.5);
+    @apply bg-white/5 backdrop-blur-xl border border-purple-500/20 shadow-2xl;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(147, 51, 234, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   }
 
   .btn-premium-primary {
-    @apply bg-indigo-500 text-white font-medium px-6 py-3 rounded-lg shadow-lg hover:bg-indigo-600 transition-all active:scale-95;
-    box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.4);
+    @apply bg-purple-600 text-white font-medium px-6 py-3 rounded-lg shadow-lg hover:bg-purple-500 transition-all active:scale-95;
+    box-shadow: 0 4px 20px -1px rgba(147, 51, 234, 0.6), 0 0 40px rgba(168, 85, 247, 0.2);
   }
 
   .btn-premium-text {
-    @apply text-gray-900 font-medium px-4 py-2 hover:bg-gray-100 transition-all rounded-lg;
+    @apply text-white/80 font-medium px-4 py-2 hover:bg-white/10 hover:text-white transition-all rounded-lg;
   }
 
   .text-glow-purple {
-    text-shadow: 0 0 20px rgba(147, 51, 234, 0.4);
+    text-shadow: 0 0 30px rgba(168, 85, 247, 0.8), 0 0 60px rgba(147, 51, 234, 0.4);
   }
 }
 

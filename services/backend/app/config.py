@@ -24,15 +24,15 @@ class Settings(BaseSettings):
     upload_dir: str = "./uploads"
     max_file_size: int = 52428800  # 50MB
 
-    # Database — must be set in .env, no default
-    database_url: str
+    # Database — should be set in .env
+    database_url: str = "postgresql+asyncpg://holo_user:holopassword@localhost:5432/holocollab"
 
-    # Session — must be set in .env, no default
-    session_secret: str
+    # Session — should be set in .env
+    session_secret: str = "ac4b123d51ebdc28e7"
     session_timeout: int = 3600
 
-    # JWT Auth — must be set in .env, no default
-    secret_key: str
+    # JWT Auth — should be set in .env
+    secret_key: str = "24c8b2a8d132a22cc37aebd3d9d30c5e7ae2a32c2d2e1329a997ec22c262c5eb"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
 

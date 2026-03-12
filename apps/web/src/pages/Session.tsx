@@ -66,6 +66,8 @@ const Session = () => {
     const [modelVisible, setModelVisible] = useState(true);
     const [currentGesture, setCurrentGesture] = useState<string>('None');
     const [modelLoaded, setModelLoaded] = useState(false);
+    const [visualFilter, setVisualFilter] = useState<'realistic' | 'blue_glow' | 'red_glow'>('realistic');
+    const [autoOscillate, setAutoOscillate] = useState(false);
     const gesturesEnabledRef = useRef(false);
 
     // Layout state
@@ -85,6 +87,7 @@ const Session = () => {
         return navState.role || sessionStorage.getItem('session_role') || 'student';
     });
     const isHost = sessionRole === 'host';
+    const [isApproved, setIsApproved] = useState(isHost); // Host approved by default
     const [codeCopied, setCodeCopied] = useState(false);
 
     // Meeting timer
@@ -231,19 +234,78 @@ const Session = () => {
     useEffect(() => {
         const socket = socketRef.current;
         if (!socket) return;
-        socket.on('TOPIC_DETECTED', (data: any) => {
+
+        const unsubTopic = socket.on('TOPIC_DETECTED', (data: any) => {
             setDetectedTopic(data.topic || '');
         });
-        socket.on('ENGAGEMENT_UPDATE', (data: any) => {
+        const unsubEngagement = socket.on('ENGAGEMENT_UPDATE', (data: any) => {
             setEngagementMap(prev => ({ ...prev, [data.userId]: data.score }));
         });
-        socket.on('SLIDE_CHANGED', (data: any) => {
+        const unsubSlide = socket.on('SLIDE_CHANGED', (data: any) => {
             if (!isHost) {
                 if (data.direction === 'next') arSceneRef.current?.nextSlide();
                 else arSceneRef.current?.prevSlide();
             }
         });
+
+        const unsubModelUpdate = socket.on('MODEL_UPDATE', (data: any) => {
+            const state = data.state;
+            if (!isHost && state) {
+                if (state.visual_filter) setVisualFilter(state.visual_filter);
+                if (state.auto_oscillate !== undefined) setAutoOscillate(state.auto_oscillate);
+            }
+        });
+
+        return () => {
+            unsubTopic();
+            unsubEngagement();
+            unsubSlide();
+            unsubModelUpdate();
+        };
     }, [socketInstance, isHost]);
+
+    // ── 3D Scene Sync listeners ───────────────────────────────────────────────
+    useEffect(() => {
+        const socket = socketRef.current;
+        if (!socket) return;
+
+        // Full scene snapshot sent to a new joiner immediately on connect
+        const unsubScene = socket.on('SCENE_STATE', (data: any) => {
+            const objects = data.objects ?? data.payload?.objects ?? [];
+            if (arSceneRef.current && objects.length > 0) {
+                arSceneRef.current.applySceneState(objects);
+            }
+        });
+
+        // Real-time delta events
+        const unsubAdded = socket.on('OBJECT_ADDED', (data: any) => {
+            const obj = data.object ?? data.payload ?? data;
+            if (arSceneRef.current && obj?.id) {
+                arSceneRef.current.addSceneObject(obj);
+            }
+        });
+
+        const unsubUpdated = socket.on('OBJECT_UPDATED', (data: any) => {
+            const obj = data.object ?? data.payload ?? data;
+            if (arSceneRef.current && obj?.id) {
+                arSceneRef.current.updateSceneObject(obj);
+            }
+        });
+
+        const unsubDeleted = socket.on('OBJECT_DELETED', (data: any) => {
+            const id = data.id ?? data.payload?.id;
+            if (arSceneRef.current && id) {
+                arSceneRef.current.deleteSceneObject(id);
+            }
+        });
+
+        return () => {
+            unsubScene();
+            unsubAdded();
+            unsubUpdated();
+            unsubDeleted();
+        };
+    }, [socketInstance]);
 
 
     useEffect(() => {
@@ -345,9 +407,24 @@ const Session = () => {
 
                 if (!cancelled) setSocketInstance(socket);
 
+                // ── Handle Join Approval (for students) ─────────────────────
+                if (!isHost) {
+                    window.addEventListener('joinApproved', () => {
+                        console.log('[Session] Join approved by host!');
+                        setIsApproved(true);
+                    });
+                    
+                    window.addEventListener('joinRejected', (e: any) => {
+                        alert(`Join request rejected: ${e.detail?.reason || 'Access denied'}`);
+                        navigate('/dashboard');
+                    });
+                } else {
+                    setIsApproved(true); // Host is always approved
+                }
+
                 // ── Permissions Service ───────────────────────────────────────
                 const permissionsService = PermissionsService.getInstance();
-                permissionsService.initialize(socket, true); // Current user is host
+                permissionsService.initialize(socket, isHost);
 
                 // ── Gesture Tracking ─────────────────────────────────────────
                 gestureService = new GestureService();
@@ -518,7 +595,13 @@ const Session = () => {
     };
 
     const handleLeave = () => setShowLeaveConfirm(true);
-    const confirmLeave = () => navigate('/dashboard');
+    const confirmLeave = () => {
+        if (isHost && sessionId) {
+            navigate(`/session/${sessionId}/report`);
+        } else {
+            navigate('/dashboard');
+        }
+    };
 
     // ── AI scene command handler ────────────────────────────────────────────
     const handleAISceneCommand = useCallback((action: string, payload: any) => {
@@ -538,7 +621,7 @@ const Session = () => {
     return (
         <div className="relative h-screen w-screen overflow-hidden bg-background">
             {/* ── Participant Approval ── */}
-            <ParticipantApproval isHost={true} />
+            <ParticipantApproval isHost={isHost} />
 
             <div className="relative z-10 h-full flex flex-col">
 
@@ -632,7 +715,7 @@ const Session = () => {
 
                         {/* Feature 3: Auto Content Suggestion Banner */}
                         {showSuggestion && suggestedModel && (
-                            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-indigo-700/95 backdrop-blur-sm text-white px-4 py-2 rounded-xl text-sm font-medium shadow-xl z-50 flex items-center gap-3 max-w-sm">
+                            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-purple-700/95 backdrop-blur-sm text-white px-4 py-2 rounded-xl text-sm font-medium shadow-xl z-50 flex items-center gap-3 max-w-sm">
                                 <span className="flex-1">💡 Suggested: <strong>{suggestedModel.label}</strong></span>
                                 <button
                                     onClick={() => {
@@ -827,7 +910,7 @@ const Session = () => {
 
                         <button
                             onClick={() => { setFullscreen3D(v => !v); setSplitView(false); }}
-                            className={`p-4 rounded-full transition-all shadow-sm border ${fullscreen3D ? 'bg-violet-50 border-violet-200 text-violet-600 hover:bg-violet-100' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+                            className={`p-4 rounded-full transition-all shadow-sm border ${fullscreen3D ? 'bg-purple-50 border-purple-200 text-purple-600 hover:bg-purple-100' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'}`}
                             title="Fullscreen 3D"
                         >
                             <Maximize2 size={22} />
@@ -940,7 +1023,7 @@ const Session = () => {
                         {users.map((p, idx) => (
                             <div key={idx} className="p-3 rounded-xl flex items-center justify-between hover:bg-gray-50 transition-colors cursor-pointer group">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-semibold text-lg">
+                                    <div className="w-10 h-10 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-semibold text-lg">
                                         {p.name?.[0]?.toUpperCase() || 'U'}
                                     </div>
                                     <div>
@@ -978,6 +1061,16 @@ const Session = () => {
                     onDeleteObject={deleteObject}
                     onSelectObject={selectObject}
                     selectedObjectId={selectedId}
+                    visualFilter={visualFilter}
+                    onSetVisualFilter={(filter) => {
+                        setVisualFilter(filter);
+                        arSceneRef.current?.setVisualFilter(filter);
+                    }}
+                    autoOscillate={autoOscillate}
+                    onSetAutoOscillate={(enabled) => {
+                        setAutoOscillate(enabled);
+                        arSceneRef.current?.setAutoOscillate(enabled);
+                    }}
                 />
             )}
             {activeTool === 'ai' && (
@@ -1056,6 +1149,40 @@ const Session = () => {
                                 Leave
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Waiting for Approval Overlay ── */}
+            {!isApproved && (
+                <div className="fixed inset-0 z-[100] bg-gray-950 flex flex-col items-center justify-center p-6 text-center">
+                    <div className="premium-bg">
+                        <div className="floating-shape circle s3" />
+                        <div className="floating-shape square s5" />
+                    </div>
+                    
+                    <div className="max-w-md w-full glass-card p-10 rounded-[40px] relative z-10 border-white/5">
+                        <div className="w-20 h-20 rounded-3xl bg-purple-500/20 flex items-center justify-center mx-auto mb-8 animate-pulse shadow-2xl shadow-purple-500/20">
+                            <Users className="w-10 h-10 text-purple-400" />
+                        </div>
+                        
+                        <h2 className="text-3xl font-black text-white tracking-tight mb-4">Waiting for Host</h2>
+                        <p className="text-gray-400 font-medium leading-relaxed mb-8">
+                            The session host has been notified. Please wait a moment while they review your request to join <strong>{roomCode}</strong>.
+                        </p>
+                        
+                        <div className="flex items-center justify-center gap-2 mb-8">
+                            <div className="w-2 h-2 rounded-full bg-purple-500 animate-bounce" />
+                            <div className="w-2 h-2 rounded-full bg-purple-500 animate-bounce [animation-delay:0.2s]" />
+                            <div className="w-2 h-2 rounded-full bg-purple-500 animate-bounce [animation-delay:0.4s]" />
+                        </div>
+                        
+                        <button
+                            onClick={() => navigate('/dashboard')}
+                            className="w-full py-4 rounded-2xl bg-white/5 border border-white/10 text-white font-bold hover:bg-white/10 transition-all uppercase tracking-widest text-xs"
+                        >
+                            Cancel Request
+                        </button>
                     </div>
                 </div>
             )}

@@ -11,17 +11,21 @@ export interface GestureResult {
 export class GestureRecognizer {
     private previousHandPosition: { x: number; y: number; z: number } | null = null;
     private gestureHistory: GestureResult[] = [];
-    private readonly HISTORY_SIZE = 5;
+    private readonly HISTORY_SIZE = 10;
 
     private previousTime = Date.now();
 
     recognize(landmarks: NormalizedLandmark[]): GestureResult {
         // Landmark indices
-        // Landmark indices from MediaPipe. We use some directly, others are mapped in calculateFingerExtensions.
         const indexTip = landmarks[8];
         const thumbTip = landmarks[4];
 
-        // Calculate distances for finger extension
+        // Calculate hand size for relative thresholds
+        const wrist = landmarks[0];
+        const middleMCP = landmarks[9];
+        const handSize = this.calculateDistance(wrist, middleMCP);
+
+        // Calculate finger extension
         const fingerExtended = this.calculateFingerExtensions(landmarks);
         const extendedCount = fingerExtended.filter(Boolean).length;
 
@@ -54,24 +58,24 @@ export class GestureRecognizer {
             };
         }
 
-        // 3. PINCH - Thumb and index close/far
-        else if (fingerExtended[0] && fingerExtended[1]) {
+        // 3. PINCH - Check distance between thumb tip and index tip relative to hand size
+        else if (fingerExtended[1]) {
             const pinchDistance = this.calculateDistance(thumbTip, indexTip);
-            const isPinching = pinchDistance < 0.08;
+            // Pinch is active if tips are very close (less than 15% of hand size)
+            const isPinching = pinchDistance < handSize * 0.15;
 
-            // Zoom in when pinching (fingers close), zoom out when fingers far apart
-            const scaleMultiplier = isPinching ? 0.8 : 1.2; // Gradual zoom
-
-            gesture = {
-                type: isPinching ? 'pinch_in' : 'pinch_out',
-                confidence: 0.85,
-                scale: scaleMultiplier
-            };
+            if (isPinching || extendedCount <= 2) {
+                const scaleMultiplier = isPinching ? 0.95 : 1.05; 
+                gesture = {
+                    type: isPinching ? 'pinch_in' : 'pinch_out',
+                    confidence: 0.85,
+                    scale: scaleMultiplier
+                };
+            }
         }
 
-        // 4. OPEN HAND - All fingers extended (4 or 5 fingers)
-        else if (extendedCount >= 4) {
-            // Determine rotation direction based on hand movement
+        // 4. OPEN HAND - All fingers extended
+        if (gesture.type === 'none' && extendedCount >= 4) {
             const handCenter = this.calculateHandCenter(landmarks);
             const rotation = this.detectRotationDirection(handCenter);
 
@@ -87,32 +91,37 @@ export class GestureRecognizer {
     }
 
     private calculateFingerExtensions(landmarks: NormalizedLandmark[]): boolean[] {
-        // More robust finger extension detection
         const fingerConfigs = [
-            { tip: 4, pip: 3, mcp: 2 },    // Thumb (special case)
-            { tip: 8, pip: 6, mcp: 5 },    // Index
-            { tip: 12, pip: 10, mcp: 9 },  // Middle
-            { tip: 16, pip: 14, mcp: 13 }, // Ring
-            { tip: 20, pip: 18, mcp: 17 }  // Pinky
+            { tip: 4, pip: 3, mcp: 2, wrist: 0 },    // Thumb
+            { tip: 8, pip: 6, mcp: 5 },             // Index
+            { tip: 12, pip: 10, mcp: 9 },           // Middle
+            { tip: 16, pip: 14, mcp: 13 },          // Ring
+            { tip: 20, pip: 18, mcp: 17 }           // Pinky
         ];
 
         return fingerConfigs.map((config, index) => {
             const tip = landmarks[config.tip];
-            const pip = landmarks[config.pip];
             const mcp = landmarks[config.mcp];
 
             if (index === 0) {
-                // Thumb: check X distance (thumb extends sideways)
-                const thumbDist = Math.abs(tip.x - mcp.x);
-                return thumbDist > 0.1;
+                // Thumb: Compare distance from tip to pinky MCP vs IP to pinky MCP
+                // This checks if the thumb is "tucked in"
+                const pinkyMCP = landmarks[17];
+                const tipDist = this.calculateDistance(tip, pinkyMCP);
+                const ipDist = this.calculateDistance(landmarks[config.pip], pinkyMCP);
+                return tipDist > ipDist * 1.2;
             } else {
-                // Other fingers: check if tip is significantly above pip (finger is straight)
-                const tipToPipDist = this.calculateDistance(tip, pip);
-                const pipToMcpDist = this.calculateDistance(pip, mcp);
-
-                // Finger is extended if tip-to-pip distance is greater than pip-to-mcp
-                // AND tip is above pip in Y coordinate (screen space)
-                return tipToPipDist > pipToMcpDist * 0.8 && tip.y < pip.y;
+                // Other fingers: Use the "pseudo-angle" (tip-to-mcp distance)
+                // Normalize by the length of the hand (wrist to middle MCP)
+                const wrist = landmarks[0];
+                const middleMCP = landmarks[9];
+                const handSize = this.calculateDistance(wrist, middleMCP);
+                
+                const tipToMcpDist = this.calculateDistance(tip, mcp);
+                
+                // If tip-to-mcp distance is > 70% of hand size, finger is extended
+                // This is much more reliable than simple Y-coordinate checks
+                return tipToMcpDist > handSize * 0.7;
             }
         });
     }

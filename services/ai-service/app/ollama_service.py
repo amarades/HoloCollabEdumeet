@@ -10,8 +10,8 @@ from typing import Dict, List, Optional, Any
 
 
 OLLAMA_BASE = "http://localhost:11434/api/generate"
-MODEL_FAST = "llama3.2"
-MODEL_SMART = "mistral"
+MODEL_FAST = "llama3.2:1b"
+MODEL_SMART = "llama3.2:1b"  # User has :1b installed, and it's much faster
 
 
 async def _ollama(model: str, prompt: str, timeout: float = 30.0) -> str:

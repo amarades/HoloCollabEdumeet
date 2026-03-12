@@ -53,6 +53,41 @@ async def generate_lecture_notes(request: LectureNotesRequest):
         raise HTTPException(status_code=500, detail=f"Lecture notes generation error: {str(e)}")
 
 
+# ── /generate-notes: used by CreateSession speech section ─────────────────────
+@router.post("/generate-notes")
+async def generate_notes_from_speech(body: dict):
+    """
+    Generate structured lecture notes from a spoken transcript and/or topic.
+    Uses the fast model. Falls back gracefully if Ollama is unavailable.
+    """
+    topic = body.get("topic", "").strip()
+    transcript = body.get("transcript", "").strip()
+
+    if not topic and not transcript:
+        raise HTTPException(status_code=400, detail="Provide 'topic' or 'transcript'")
+
+    subject = topic or transcript[:100]
+    try:
+        notes = await ai_service.generate_lecture_notes(
+            topic=subject,
+            model_name="",
+            transcript=transcript,
+        )
+        # Ensure important_terms field exists
+        if "important_terms" not in notes:
+            notes["important_terms"] = [w for w in subject.split() if len(w) > 4][:6]
+        return notes
+    except Exception as e:
+        # Hard fallback — never fail the user
+        return {
+            "summary": f"Session about {subject}.",
+            "key_points": [f"Introduction to {subject}", "Core concepts", "Practical applications"],
+            "important_terms": [w for w in subject.split() if len(w) > 4][:6],
+            "follow_up_questions": [f"What are the key principles of {subject}?", f"How is {subject} applied?"],
+            "error": str(e),
+        }
+
+
 # ── Feature 2: Voice Topic Detection ──────────────────────────────────────────
 
 @router.post("/topic-detect")

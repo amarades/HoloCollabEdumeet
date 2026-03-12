@@ -6,6 +6,14 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
+      '/api/ai': {
+        target: 'http://127.0.0.1:8003',
+        changeOrigin: true,
+      },
+      '/api/gestures': {
+        target: 'http://127.0.0.1:8001',
+        changeOrigin: true,
+      },
       '/api': {
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,

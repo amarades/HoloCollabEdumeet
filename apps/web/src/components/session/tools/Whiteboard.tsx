@@ -20,7 +20,7 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({ onClose, socket, user })
 
     const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
 
-    // Initialize Canvas
+    // Initialize Canvas (only once)
     useEffect(() => {
         if (!canvasRef.current) return;
         const canvas = canvasRef.current;
@@ -58,43 +58,62 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({ onClose, socket, user })
 
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
+        return () => window.removeEventListener('resize', resizeCanvas);
+    }, []);
 
-        if (socket) {
-            socket.onDraw = (data: any) => {
-                if (data.user === user.email) return;
-                if (!ctxRef.current) return;
+    // Bind socket listener separately so it re-runs when socket changes
+    useEffect(() => {
+        if (!socket) return;
 
-                if (data.type === 'text') {
-                    ctxRef.current.font = `${data.fontSize}px Inter, sans-serif`;
-                    ctxRef.current.fillStyle = data.color;
-                    ctxRef.current.fillText(data.text, data.x, data.y);
-                    return;
-                }
+        const handleRemoteDraw = (data: any) => {
+            // data could be wrapped: { event, payload } or flat
+            const d = data.payload || data;
+            
+            // Ignore own events echoed back from server
+            const localUserId = socket.getUserId ? socket.getUserId() : null;
+            if (d.senderId === localUserId || (d.user && d.user === user?.email)) return;
+            if (!ctxRef.current) return;
 
-                const { x0, y0, x1, y1, color: strokeColor, width } = data;
-                const prevStyle = ctxRef.current.strokeStyle;
-                const prevWidth = ctxRef.current.lineWidth;
-                const prevComposite = ctxRef.current.globalCompositeOperation;
+            if (d.type === 'text') {
+                ctxRef.current.font = `${d.fontSize}px Inter, sans-serif`;
+                ctxRef.current.fillStyle = d.color;
+                ctxRef.current.fillText(d.text, d.x, d.y);
+                return;
+            }
 
-                ctxRef.current.beginPath();
-                ctxRef.current.moveTo(x0, y0);
-                ctxRef.current.lineTo(x1, y1);
-                ctxRef.current.strokeStyle = strokeColor === 'eraser' ? 'rgba(0,0,0,1)' : strokeColor;
-                ctxRef.current.lineWidth = width;
-                ctxRef.current.globalCompositeOperation = strokeColor === 'eraser' ? 'destination-out' : 'source-over';
-                ctxRef.current.stroke();
+            const { x0, y0, x1, y1, color: strokeColor, width } = d;
+            const prevStyle = ctxRef.current.strokeStyle;
+            const prevWidth = ctxRef.current.lineWidth;
+            const prevComposite = ctxRef.current.globalCompositeOperation;
 
-                ctxRef.current.strokeStyle = prevStyle;
-                ctxRef.current.lineWidth = prevWidth;
-                ctxRef.current.globalCompositeOperation = prevComposite;
-            };
-        }
+            ctxRef.current.beginPath();
+            ctxRef.current.moveTo(x0, y0);
+            ctxRef.current.lineTo(x1, y1);
+            ctxRef.current.strokeStyle = strokeColor === 'eraser' ? 'rgba(0,0,0,1)' : strokeColor;
+            ctxRef.current.lineWidth = width;
+            ctxRef.current.globalCompositeOperation = strokeColor === 'eraser' ? 'destination-out' : 'source-over';
+            ctxRef.current.stroke();
+
+            ctxRef.current.strokeStyle = prevStyle;
+            ctxRef.current.lineWidth = prevWidth;
+            ctxRef.current.globalCompositeOperation = prevComposite;
+        };
+
+        const handleClear = () => {
+            if (ctxRef.current && canvasRef.current) {
+                ctxRef.current.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+            }
+        };
+
+        // Both stroke and clear sync
+        const unsubDraw = socket.on('DRAW_STROKE', handleRemoteDraw);
+        const unsubClear = socket.on('WHITEBOARD_CLEAR', handleClear);
 
         return () => {
-            window.removeEventListener('resize', resizeCanvas);
-            if (socket) socket.onDraw = null;
+            unsubDraw();
+            unsubClear();
         };
-    }, []);
+    }, [socket, user]);
 
     useEffect(() => {
         if (!ctxRef.current) return;
@@ -139,7 +158,8 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({ onClose, socket, user })
                 y1: offsetY,
                 color: tool === 'eraser' ? 'eraser' : color,
                 width: brushSize,
-                user: user.email
+                user: user?.email,
+                senderId: socket.getUserId ? socket.getUserId() : null
             });
         }
 
@@ -252,36 +272,37 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({ onClose, socket, user })
     };
 
     return (
-        <div className="absolute inset-4 md:inset-10 bg-white/90 backdrop-blur-xl border border-white/20 shadow-2xl z-40 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 rounded-3xl">
+        <div className="absolute inset-0 z-40 flex flex-col overflow-hidden animate-in fade-in duration-200" style={{ background: 'transparent' }}>
             {/* Header */}
-            <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-white/50">
+            <div className="flex items-center justify-between p-4 bg-black/30 backdrop-blur-md border-b border-white/10">
                 <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
                         <Sparkles className="w-5 h-5 text-primary" />
                     </div>
                     <div>
-                        <h2 className="text-gray-900 font-bold text-lg leading-tight">Interactive Whiteboard</h2>
-                        <p className="text-gray-400 text-xs font-medium">Draw or spawn 3D objects into the scene</p>
+                        <h2 className="text-white font-bold text-base leading-tight">✏️ Draw on Screen</h2>
+                        <p className="text-white/50 text-xs font-medium">Drawing directly over the 3D scene</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <button onClick={clearBoard} className="p-2.5 bg-white border border-gray-200 hover:bg-red-50 rounded-xl text-gray-500 hover:text-red-600 transition-all shadow-sm group" title="Clear Board">
+                    <button onClick={clearBoard} className="p-2.5 bg-white/10 border border-white/20 hover:bg-red-500/30 rounded-xl text-white/70 hover:text-white transition-all group" title="Clear Board">
                         <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform" />
                     </button>
-                    <button onClick={onClose} className="p-2.5 bg-white border border-gray-200 hover:bg-gray-100 rounded-xl text-gray-500 hover:text-gray-900 transition-all shadow-sm">
+                    <button onClick={onClose} className="p-2.5 bg-white/10 border border-white/20 hover:bg-white/20 rounded-xl text-white/70 hover:text-white transition-all">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
             </div>
 
-            {/* Canvas Area */}
-            <div className="flex-1 relative bg-white cursor-crosshair touch-none group">
-                {/* Subtle Grid Background */}
-                <div className="absolute inset-0 opacity-[0.3] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#cbd5e1 1px, transparent 1px)', backgroundSize: '30px 30px' }}></div>
+            {/* Canvas Area — fully transparent so the 3D scene shows through */}
+            <div className="flex-1 relative cursor-crosshair touch-none">
+                {/* Faint dot grid for drawing reference */}
+                <div className="absolute inset-0 opacity-[0.08] pointer-events-none" style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.8) 1px, transparent 1px)', backgroundSize: '30px 30px' }}></div>
 
                 <canvas
                     ref={canvasRef}
-                    className="absolute inset-0 w-full h-full mix-blend-multiply"
+                    className="absolute inset-0 w-full h-full"
+                    style={{ mixBlendMode: 'normal', background: 'transparent' }}
                     onMouseDown={startDrawing}
                     onMouseMove={draw}
                     onMouseUp={stopDrawing}
@@ -315,30 +336,30 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({ onClose, socket, user })
                 )}
 
                 {/* Left Side: Tool Selector */}
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 flex flex-col gap-3 p-2 bg-white/80 backdrop-blur-md border border-gray-200 rounded-2xl shadow-xl">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 flex flex-col gap-3 p-2 bg-black/30 backdrop-blur-md border border-white/20 rounded-2xl shadow-xl">
                     <button
                         onClick={() => setTool('pen')}
-                        className={`p-3 rounded-xl transition-all ${tool === 'pen' ? 'bg-primary text-white shadow-lg shadow-primary/30' : 'text-gray-500 hover:bg-gray-100'}`}
+                        className={`p-3 rounded-xl transition-all ${tool === 'pen' ? 'bg-primary text-white shadow-lg shadow-primary/30' : 'text-white/60 hover:bg-white/20 hover:text-white'}`}
                         title="Pen Tool"
                     >
                         <MousePointer2 className="w-5 h-5" />
                     </button>
                     <button
                         onClick={() => setTool('text')}
-                        className={`p-3 rounded-xl transition-all ${tool === 'text' ? 'bg-primary text-white shadow-lg shadow-primary/30' : 'text-gray-500 hover:bg-gray-100'}`}
+                        className={`p-3 rounded-xl transition-all ${tool === 'text' ? 'bg-primary text-white shadow-lg shadow-primary/30' : 'text-white/60 hover:bg-white/20 hover:text-white'}`}
                         title="Text Tool (Click to type)"
                     >
                         <Type className="w-5 h-5" />
                     </button>
                     <button
                         onClick={() => setTool('eraser')}
-                        className={`p-3 rounded-xl transition-all ${tool === 'eraser' ? 'bg-primary text-white shadow-lg shadow-primary/30' : 'text-gray-500 hover:bg-gray-100'}`}
+                        className={`p-3 rounded-xl transition-all ${tool === 'eraser' ? 'bg-primary text-white shadow-lg shadow-primary/30' : 'text-white/60 hover:bg-white/20 hover:text-white'}`}
                         title="Eraser"
                     >
                         <Eraser className="w-5 h-5" />
                     </button>
 
-                    <div className="h-px bg-gray-100 mx-2" />
+                    <div className="h-px bg-white/20 mx-2" />
 
                     {/* Feature 5: Shape Spawner */}
                     <div className="relative">
@@ -368,9 +389,9 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({ onClose, socket, user })
             </div>
 
             {/* Bottom Toolbar */}
-            <div className="p-5 border-t border-gray-100 bg-white/80 backdrop-blur-md flex items-center justify-center gap-8">
+            <div className="p-4 border-t border-white/10 bg-black/30 backdrop-blur-md flex items-center justify-center gap-6">
                 {/* Colors */}
-                <div className="flex items-center gap-3 px-4 py-2 bg-gray-50 rounded-2xl border border-gray-100">
+                <div className="flex items-center gap-3 px-4 py-2 bg-white/10 rounded-2xl border border-white/20">
                     {['#6366f1', '#f43f5e', '#10b981', '#f59e0b', '#0ea5e9', '#000000'].map(c => (
                         <button
                             key={c}
@@ -382,8 +403,8 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({ onClose, socket, user })
                 </div>
 
                 {/* Size Slider */}
-                <div className="flex items-center gap-4 bg-gray-50 px-5 py-2.5 rounded-2xl border border-gray-100 min-w-[200px]">
-                    <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Size</span>
+                <div className="flex items-center gap-4 bg-white/10 px-5 py-2.5 rounded-2xl border border-white/20 min-w-[180px]">
+                    <span className="text-xs font-semibold text-white/50 uppercase tracking-wider">Size</span>
                     <input
                         type="range"
                         min="2"

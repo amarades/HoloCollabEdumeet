@@ -87,13 +87,14 @@ class RoomManager:
                     pass
 
     async def send_to_peer(self, message: dict, room_code: str, peer_id: str):
-        """Send a message to a specific peer (used for WebRTC signaling)."""
+        """Send a message to a specific peer (e.g. signal or approval)."""
         for ws in self.rooms.get(room_code, []):
-            try:
-                await ws.send_json(message)
-                return
-            except Exception:
-                pass
+            if str(id(ws)) == peer_id:
+                try:
+                    await ws.send_json(message)
+                    return
+                except Exception:
+                    pass
 
     def room_size(self, room_code: str) -> int:
         return len(self.rooms.get(room_code, []))

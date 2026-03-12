@@ -4,13 +4,16 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 
 // Define State Interface
 export interface ModelState {
-    model_url?: string; // Add model_url field
+    model_url?: string;
     rotation?: { x: number; y: number; z: number };
     scale?: number;
     position?: { x: number; y: number; z: number };
     camera?: { position: { x: number; y: number; z: number } };
     selected_part?: string | null;
     visible?: boolean;
+    // New visual & motion properties
+    visual_filter?: 'realistic' | 'blue_glow' | 'red_glow';
+    auto_oscillate?: boolean;
 }
 
 // Slide data type for Feature 10 — 3D Presentation Mode
@@ -37,6 +40,10 @@ export class ARScene {
     private presentationSlides: THREE.Mesh[] = [];
     private currentSlideIndex: number = 0;
     public isPresentationMode: boolean = false;
+
+    // Visual & Motion state
+    private visualFilter: 'realistic' | 'blue_glow' | 'red_glow' = 'realistic';
+    private autoOscillate: boolean = false;
 
     // Bound listener references for cleanup
     private boundMouseMove: (e: MouseEvent) => void = () => { };
@@ -98,12 +105,13 @@ export class ARScene {
         directionalLight1.position.set(5, 5, 5);
         this.scene.add(directionalLight1);
 
-        const directionalLight2 = new THREE.DirectionalLight(0x6366f1, 0.4);
+        // Neutral secondary directional light
+        const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.3);
         directionalLight2.position.set(-5, -3, -5);
         this.scene.add(directionalLight2);
 
-        // Holographic PointLight — adds glow depth to models (Feature 1)
-        this.holoPointLight = new THREE.PointLight(0x00d4ff, 2, 10);
+        // PointLight — helps with depth, neutral by default
+        this.holoPointLight = new THREE.PointLight(0xffffff, 1, 10);
         this.holoPointLight.position.set(0, 2, 3);
         this.scene.add(this.holoPointLight);
 
@@ -187,6 +195,8 @@ export class ARScene {
                 uTime: { value: 0 },
                 uColor: { value: new THREE.Color(0x7c3aed) }, // Deep Purple core
                 uGlowColor: { value: new THREE.Color(0x6366f1) }, // Indigo glow
+                uOpacity: { value: 0.8 },
+                uFilterMode: { value: 0.0 }, // 0: Blue, 1: Red, 2: Realistic
             },
             vertexShader: `
                 varying vec3 vNormal;
@@ -203,11 +213,23 @@ export class ARScene {
                 uniform float uTime;
                 uniform vec3 uColor;
                 uniform vec3 uGlowColor;
+                uniform float uOpacity;
+                uniform float uFilterMode;
                 varying vec3 vNormal;
                 varying vec3 vPosition;
                 varying vec2 vUv;
 
                 void main() {
+                    // Glow colors based on mode
+
+                    // Glow colors based on mode
+                    vec3 coreColor = uColor;
+                    vec3 glowColor = uGlowColor;
+                    if (uFilterMode > 0.5) {
+                        coreColor = vec3(0.8, 0.1, 0.1); // Red
+                        glowColor = vec3(1.0, 0.3, 0.3);
+                    }
+
                     // Fresnel Effect (Rim Glow)
                     vec3 viewDirection = normalize(-vPosition);
                     float fresnel = pow(1.0 - max(dot(vNormal, viewDirection), 0.0), 3.0);
@@ -221,8 +243,8 @@ export class ARScene {
                     // Grid Pattern (Subtle)
                     float grid = (sin(vPosition.x * 40.0) * sin(vPosition.z * 40.0)) * 0.05 + 0.95;
                     
-                    vec3 finalColor = mix(uColor, uGlowColor, fresnel);
-                    float alpha = (0.4 + fresnel * 0.6) * scanline * flicker * grid;
+                    vec3 finalColor = mix(coreColor, glowColor, fresnel);
+                    float alpha = (uOpacity * 0.5 + fresnel * 0.5) * scanline * flicker * grid;
                     
                     gl_FragColor = vec4(finalColor, alpha);
                 }
@@ -237,10 +259,16 @@ export class ARScene {
 
                 const model = gltf.scene;
 
-                // ✅ CRITICAL: Apply Hologram Shader to all meshes
+                // ✅ CRITICAL: Apply Hologram Shader to all meshes and preserve original
                 model.traverse((child: any) => {
                     if (child instanceof THREE.Mesh) {
-                        child.material = new THREE.ShaderMaterial({
+                        // Store original material if not already stored
+                        if (!child.userData.originalMaterial) {
+                            child.userData.originalMaterial = child.material;
+                        }
+                        
+                        // Create and store hologram material
+                        child.userData.hologramMaterial = new THREE.ShaderMaterial({
                             uniforms: THREE.UniformsUtils.clone(hologramShader.uniforms),
                             vertexShader: hologramShader.vertexShader,
                             fragmentShader: hologramShader.fragmentShader,
@@ -249,6 +277,10 @@ export class ARScene {
                             depthWrite: false,
                             blending: THREE.AdditiveBlending
                         });
+
+                        // Initialize with current filter (swaps material if needed)
+                        this.applyFilterToMesh(child);
+                        
                         child.visible = true;
                         child.frustumCulled = false;
                     }
@@ -292,10 +324,17 @@ export class ARScene {
         if (this.currentModel && !this.isPresentationMode) {
             // Gentle sine-wave float
             this.currentModel.position.y = Math.sin(time * 0.8) * 0.15;
-            // Slow auto-rotate when not dragging
-            if (!this.isDragging) {
+            
+            // 180-degree oscillation (sine wave between -90 and 90 degrees)
+            if (this.autoOscillate && !this.isDragging) {
+                // Math.sin(time) gives -1 to 1. PI/2 is 90 degrees.
+                const angle = Math.sin(time * 0.5) * (Math.PI / 2);
+                this.currentModel.rotation.y = angle;
+            } else if (!this.isDragging) {
+                // Fallback slow rotate
                 this.currentModel.rotation.y += 0.003;
             }
+
             this.currentModel.traverse((child: any) => {
                 if (child instanceof THREE.Mesh && child.material instanceof THREE.ShaderMaterial) {
                     child.material.uniforms.uTime.value = time;
@@ -469,8 +508,76 @@ export class ARScene {
                     z: this.camera.position.z
                 }
             },
-            selected_part: this.selectedPart ? this.selectedPart.name : null
+            selected_part: this.selectedPart ? this.selectedPart.name : null,
+            visual_filter: this.visualFilter,
+            auto_oscillate: this.autoOscillate
         };
+    }
+
+    public setVisualFilter(filter: 'realistic' | 'blue_glow' | 'red_glow') {
+        this.visualFilter = filter;
+        this.updateMeshFilters();
+        
+        // Update scene lighting based on filter
+        if (this.holoPointLight) {
+            switch (filter) {
+                case 'blue_glow':
+                    this.holoPointLight.color.set(0x00d4ff);
+                    this.holoPointLight.intensity = 2;
+                    break;
+                case 'red_glow':
+                    this.holoPointLight.color.set(0xff4444);
+                    this.holoPointLight.intensity = 2;
+                    break;
+                case 'realistic':
+                default:
+                    this.holoPointLight.color.set(0xffffff);
+                    this.holoPointLight.intensity = 1;
+                    break;
+            }
+        }
+
+        this.notifyStateChange();
+    }
+
+    public setAutoOscillate(enabled: boolean) {
+        this.autoOscillate = enabled;
+        this.notifyStateChange();
+    }
+
+    private updateMeshFilters() {
+        if (this.currentModel) {
+            this.currentModel.traverse((child: any) => {
+                if (child instanceof THREE.Mesh) {
+                    this.applyFilterToMesh(child);
+                }
+            });
+        }
+    }
+
+    private applyFilterToMesh(mesh: THREE.Mesh) {
+        if (this.visualFilter === 'realistic') {
+            // Restore original material with standard rendering properties
+            if (mesh.userData.originalMaterial) {
+                mesh.material = mesh.userData.originalMaterial;
+            }
+        } else {
+            // Apply hologram material with additive blending
+            if (mesh.userData.hologramMaterial) {
+                mesh.material = mesh.userData.hologramMaterial;
+                const uniforms = (mesh.material as THREE.ShaderMaterial).uniforms;
+                
+                switch (this.visualFilter) {
+                    case 'red_glow':
+                        uniforms.uFilterMode.value = 1.0;
+                        break;
+                    case 'blue_glow':
+                    default:
+                        uniforms.uFilterMode.value = 0.0;
+                        break;
+                }
+            }
+        }
     }
 
     public applyState(state: ModelState) {
@@ -509,6 +616,15 @@ export class ARScene {
         // Apply visibility
         if (state.visible !== undefined && this.currentModel) {
             this.currentModel.visible = state.visible;
+        }
+
+        // Apply filter & oscillation without notifying
+        if (state.visual_filter && state.visual_filter !== this.visualFilter) {
+            this.visualFilter = state.visual_filter;
+            this.updateMeshFilters();
+        }
+        if (state.auto_oscillate !== undefined) {
+            this.autoOscillate = state.auto_oscillate;
         }
     }
 
@@ -549,6 +665,109 @@ export class ARScene {
         if (this.onStateChange) {
             const state = this.getState();
             if (state) this.onStateChange(state);
+        }
+    }
+
+    // ── Multi-object Scene Management ─────────────────────────────────────────
+    // Maps server-assigned object id → Three.js mesh
+    private sceneObjects: Map<string, THREE.Object3D> = new Map();
+
+    private makeObjectMesh(type: string, color: string): THREE.Mesh {
+        let geometry: THREE.BufferGeometry;
+        switch (type) {
+            case 'sphere':   geometry = new THREE.SphereGeometry(0.4, 32, 32); break;
+            case 'cone':
+            case 'pyramid':  geometry = new THREE.ConeGeometry(0.4, 0.8, 4); break;
+            case 'cylinder': geometry = new THREE.CylinderGeometry(0.3, 0.3, 0.8, 32); break;
+            default:         geometry = new THREE.BoxGeometry(0.7, 0.7, 0.7); break; // box / cube
+        }
+        const colorHex = parseInt(color.replace('#', ''), 16);
+        const material = new THREE.MeshStandardMaterial({
+            color: new THREE.Color(colorHex || 0x6366f1),
+            emissive: new THREE.Color(colorHex || 0x6366f1),
+            emissiveIntensity: 0.35,
+            metalness: 0.3,
+            roughness: 0.4,
+            transparent: true,
+            opacity: 0.88,
+        });
+        return new THREE.Mesh(geometry, material);
+    }
+
+    /**
+     * Add a networked object to the scene.
+     * Called when OBJECT_ADDED arrives from the server.
+     */
+    public addSceneObject(obj: { id: string; type: string; position: number[]; color: string; scale?: number[] }) {
+        if (this.sceneObjects.has(obj.id)) return; // already present
+
+        const mesh = this.makeObjectMesh(obj.type, obj.color);
+        const [px, py, pz] = obj.position ?? [0, 0, 0];
+        mesh.position.set(px, py, pz);
+        if (obj.scale) {
+            const [sx, sy, sz] = obj.scale;
+            mesh.scale.set(sx, sy, sz);
+        }
+        mesh.userData = { id: obj.id, type: obj.type };
+        this.scene.add(mesh);
+        this.sceneObjects.set(obj.id, mesh);
+    }
+
+    /**
+     * Update position/rotation/scale of an existing networked object.
+     * Called when OBJECT_UPDATED arrives from the server.
+     */
+    public updateSceneObject(obj: { id: string; position?: number[]; rotation?: number[]; scale?: number[] }) {
+        const mesh = this.sceneObjects.get(obj.id);
+        if (!mesh) return;
+
+        if (obj.position) {
+            const [px, py, pz] = obj.position;
+            mesh.position.set(px, py, pz);
+        }
+        if (obj.rotation) {
+            const [rx, ry, rz] = obj.rotation;
+            mesh.rotation.set(rx, ry, rz);
+        }
+        if (obj.scale) {
+            const [sx, sy, sz] = obj.scale;
+            mesh.scale.set(sx, sy, sz);
+        }
+    }
+
+    /**
+     * Remove a networked object from the scene.
+     * Called when OBJECT_DELETED arrives from the server.
+     */
+    public deleteSceneObject(id: string) {
+        const mesh = this.sceneObjects.get(id);
+        if (!mesh) return;
+        this.scene.remove(mesh);
+        (mesh as THREE.Mesh).geometry?.dispose();
+        const mat = (mesh as THREE.Mesh).material;
+        if (mat) {
+            if (Array.isArray(mat)) mat.forEach(m => m.dispose());
+            else (mat as THREE.Material).dispose();
+        }
+        this.sceneObjects.delete(id);
+    }
+
+    /**
+     * Apply a full scene snapshot from the server (SCENE_STATE on join).
+     */
+    public applySceneState(objects: Array<{ id: string; type: string; position: number[]; color: string; scale?: number[] }>) {
+        // Remove objects no longer in state
+        const incoming = new Set(objects.map(o => o.id));
+        for (const [id] of this.sceneObjects) {
+            if (!incoming.has(id)) this.deleteSceneObject(id);
+        }
+        // Add or update
+        for (const obj of objects) {
+            if (this.sceneObjects.has(obj.id)) {
+                this.updateSceneObject(obj as any);
+            } else {
+                this.addSceneObject(obj);
+            }
         }
     }
 

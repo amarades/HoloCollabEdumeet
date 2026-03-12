@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Eye, EyeOff, RotateCcw, Upload, Box, Trash2, Plus, Circle, Cylinder, Lock } from 'lucide-react';
+import { X, Eye, EyeOff, RotateCcw, Upload, Box, Trash2, Plus, Circle, Cylinder, Lock, Sparkles, MoveHorizontal, Palette } from 'lucide-react';
 import type { SceneObject } from '../../../3d/SceneSync';
 
 interface ScenePanelProps {
@@ -15,6 +15,11 @@ interface ScenePanelProps {
     onDeleteObject?: (id: string) => void;
     onSelectObject?: (id: string | null) => void;
     selectedObjectId?: string | null;
+    // Visual & Motion props
+    visualFilter?: 'realistic' | 'blue_glow' | 'red_glow';
+    onSetVisualFilter?: (filter: 'realistic' | 'blue_glow' | 'red_glow') => void;
+    autoOscillate?: boolean;
+    onSetAutoOscillate?: (enabled: boolean) => void;
 }
 
 const SHAPE_COLORS = [
@@ -34,6 +39,10 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
     onDeleteObject,
     onSelectObject,
     selectedObjectId,
+    visualFilter = 'blue_glow',
+    onSetVisualFilter,
+    autoOscillate = true,
+    onSetAutoOscillate,
 }) => {
     const [selectedColor, setSelectedColor] = useState('#6366f1');
     const [activeTab, setActiveTab] = useState<'objects' | 'model'>('objects');
@@ -240,6 +249,61 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
                                         <div className="text-left">
                                             <div className="text-red-600 font-medium text-sm">Remove Model</div>
                                             <div className="text-red-400 text-xs">Clear the 3D scene</div>
+                                        </div>
+                                    </button>
+                                </div>
+
+                                {/* Visual Filters */}
+                                <div className="p-4 bg-gray-50/50 border border-gray-100 rounded-2xl">
+                                    <h3 className="text-gray-700 font-semibold text-xs mb-3 flex items-center gap-2 uppercase tracking-wider">
+                                        <Palette className="w-3.5 h-3.5 text-primary" />
+                                        Visual Filters
+                                    </h3>
+                                    <div className="grid grid-cols-1 gap-2">
+                                        {[
+                                            { id: 'realistic', label: 'Realistic', color: 'bg-gray-400' },
+                                            { id: 'blue_glow', label: 'Blue Glow', color: 'bg-blue-500' },
+                                            { id: 'red_glow', label: 'Red Glow', color: 'bg-red-500' },
+                                        ].map((filter) => (
+                                            <button
+                                                key={filter.id}
+                                                onClick={() => onSetVisualFilter?.(filter.id as any)}
+                                                className={`flex items-center justify-between p-3 rounded-xl border transition-all
+                                                    ${visualFilter === filter.id
+                                                        ? 'bg-white border-primary shadow-sm ring-1 ring-primary/20'
+                                                        : 'bg-gray-50 border-gray-100 hover:bg-white hover:border-gray-200'
+                                                    }`}
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-3 h-3 rounded-full ${filter.color} shadow-sm`} />
+                                                    <span className={`text-sm font-medium ${visualFilter === filter.id ? 'text-primary' : 'text-gray-600'}`}>{filter.label}</span>
+                                                </div>
+                                                {visualFilter === filter.id && <Sparkles className="w-4 h-4 text-primary animate-pulse" />}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Movement Controls */}
+                                <div className="p-4 bg-gray-50/50 border border-gray-100 rounded-2xl">
+                                    <h3 className="text-gray-700 font-semibold text-xs mb-3 flex items-center gap-2 uppercase tracking-wider">
+                                        <MoveHorizontal className="w-3.5 h-3.5 text-primary" />
+                                        Movement
+                                    </h3>
+                                    <button
+                                        onClick={() => onSetAutoOscillate?.(!autoOscillate)}
+                                        className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all
+                                            ${autoOscillate
+                                                ? 'bg-white border-primary shadow-sm ring-1 ring-primary/20'
+                                                : 'bg-gray-50 border-gray-100 hover:bg-white hover:border-gray-200'
+                                            }`}
+                                    >
+                                        <div className="flex flex-col text-left">
+                                            <span className={`text-sm font-medium ${autoOscillate ? 'text-primary' : 'text-gray-600'}`}>180° Oscillation</span>
+                                            <span className="text-[10px] text-gray-400">Left-to-right smooth motion</span>
+                                        </div>
+                                        <div className={`relative w-10 h-5 rounded-full transition-colors ${autoOscillate ? 'bg-primary' : 'bg-gray-200'}`}>
+                                            <div className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-transform ${autoOscillate ? 'translate-x-5' : 'translate-x-0'}`} />
                                         </div>
                                     </button>
                                 </div>

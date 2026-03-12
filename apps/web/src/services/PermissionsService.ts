@@ -37,6 +37,9 @@ export class PermissionsService {
             this.setupHostListeners();
         } else {
             this.setupParticipantListeners();
+            // Wait for socket to be connected before requesting join
+            // The socket connection is async, so we poll until it's ready
+            this.requestJoinWhenReady();
         }
     }
 
@@ -149,10 +152,34 @@ export class PermissionsService {
     }
 
     // Participant methods
+    private requestJoinWhenReady(attempts = 0) {
+        if (this.isHost || !this.socket) return;
+        
+        if (this.socket.isConnected()) {
+            console.log('[PermissionsService] Socket ready — sending join request.');
+            this.socket.emit('PARTICIPANT_JOIN_REQUEST', {
+                userId: this.socket.getUserId(),
+                userName: localStorage.getItem('user_name') || 'Guest',
+                requestedAt: Date.now()
+            });
+        } else if (attempts < 20) {
+            // Retry every 500ms for up to 10 seconds
+            console.log(`[PermissionsService] Waiting for socket connection... (attempt ${attempts + 1})`);
+            setTimeout(() => this.requestJoinWhenReady(attempts + 1), 500);
+        } else {
+            console.error('[PermissionsService] Timed out waiting for socket — join request not sent.');
+        }
+    }
+
+    requestJoin() {
+        if (this.isHost || !this.socket) return;
+        this.requestJoinWhenReady();
+    }
+
     requestPermission(permission: keyof UserPermissions) {
         if (this.isHost || !this.socket) return;
 
-        this.socket.emit('REQUEST_PERMISSION', {
+        this.socket.emit('PERMISSION_REQUEST', {
             permission
         });
     }

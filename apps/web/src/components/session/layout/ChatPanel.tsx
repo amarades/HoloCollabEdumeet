@@ -58,12 +58,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ socket, user, roomId }) =>
             setMessages(prev => [...prev, newMessage]);
         };
 
-        socket.on('CHAT_MESSAGE', handleChat);
-
-        return () => {
-            // Remove by registering a no-op — prevents ghost listeners
-            socket.on('CHAT_MESSAGE', () => { });
-        };
+        // on() now returns an unsubscribe function — use it for proper cleanup
+        const unsubscribe = socket.on('CHAT_MESSAGE', handleChat);
+        return () => unsubscribe();
     }, [socket, user, roomId]);
 
     useEffect(() => {

@@ -1,4 +1,5 @@
 from typing import Optional, List
+from datetime import datetime
 from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
 from app.db.models import Session as PydanticSession, User as PydanticUser, ModelMetadata as PydanticModelMetadata

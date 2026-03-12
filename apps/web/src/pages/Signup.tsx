@@ -36,18 +36,18 @@ const Signup = () => {
         <div className="relative min-h-screen flex items-center justify-center p-4">
             {/* ── Background Elements ── */}
             <div className="premium-bg">
-                <div className="tech-grid opacity-50" />
-                <div className="floating-shape square s2" />
-                <div className="floating-shape circle s5" />
+                <div className="floating-shape circle s3" />
+                <div className="floating-shape square s6" />
+                <div className="floating-shape circle s1" />
             </div>
 
             <div className="glass-card w-full max-w-xl p-12 rounded-[40px] relative z-10">
                 <div className="text-center mb-10">
-                    <div className="w-16 h-16 rounded-2xl bg-indigo-500 flex items-center justify-center mx-auto mb-6 shadow-xl shadow-indigo-100">
+                    <div className="w-16 h-16 rounded-2xl bg-purple-500 flex items-center justify-center mx-auto mb-6 shadow-xl shadow-purple-500/40">
                         <UserPlus className="w-8 h-8 text-white" />
                     </div>
-                    <h2 className="text-4xl font-black text-gray-900 tracking-tight">Create Profile</h2>
-                    <p className="text-gray-400 font-bold mt-2 uppercase tracking-widest text-xs">Start your spatial journey</p>
+                    <h2 className="text-4xl font-black text-white tracking-tight">Create Profile</h2>
+                    <p className="text-purple-300/60 font-bold mt-2 uppercase tracking-widest text-xs">Start your spatial journey</p>
                 </div>
 
                 {error && (
@@ -59,9 +59,9 @@ const Signup = () => {
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div className="grid md:grid-cols-2 gap-6">
                         <div className="space-y-2">
-                            <label className="text-xs font-black text-gray-400 ml-1 uppercase tracking-widest">Full Name</label>
+                            <label className="text-xs font-black text-purple-300/70 ml-1 uppercase tracking-widest">Full Name</label>
                             <input
-                                className="w-full px-5 py-4 bg-gray-50/50 border-2 border-gray-100 rounded-2xl outline-none focus:border-indigo-400 focus:bg-white transition-all text-gray-900 font-bold placeholder:text-gray-300"
+                                className="w-full px-5 py-4 bg-white/5 border-2 border-white/10 rounded-2xl outline-none focus:border-purple-500 focus:bg-white/10 transition-all text-white font-bold placeholder:text-white/20"
                                 type="text"
                                 required
                                 value={name}
@@ -70,9 +70,9 @@ const Signup = () => {
                             />
                         </div>
                         <div className="space-y-2">
-                            <label className="text-xs font-black text-gray-400 ml-1 uppercase tracking-widest">Email Address</label>
+                            <label className="text-xs font-black text-purple-300/70 ml-1 uppercase tracking-widest">Email Address</label>
                             <input
-                                className="w-full px-5 py-4 bg-gray-50/50 border-2 border-gray-100 rounded-2xl outline-none focus:border-indigo-400 focus:bg-white transition-all text-gray-900 font-bold placeholder:text-gray-300"
+                                className="w-full px-5 py-4 bg-white/5 border-2 border-white/10 rounded-2xl outline-none focus:border-purple-500 focus:bg-white/10 transition-all text-white font-bold placeholder:text-white/20"
                                 type="email"
                                 required
                                 value={email}
@@ -83,9 +83,9 @@ const Signup = () => {
                     </div>
 
                     <div className="space-y-2">
-                        <label className="text-xs font-black text-gray-400 ml-1 uppercase tracking-widest">Password</label>
+                        <label className="text-xs font-black text-purple-300/70 ml-1 uppercase tracking-widest">Password</label>
                         <input
-                            className="w-full px-5 py-4 bg-gray-50/50 border-2 border-gray-100 rounded-2xl outline-none focus:border-indigo-400 focus:bg-white transition-all text-gray-900 font-bold placeholder:text-gray-300"
+                            className="w-full px-5 py-4 bg-white/5 border-2 border-white/10 rounded-2xl outline-none focus:border-purple-500 focus:bg-white/10 transition-all text-white font-bold placeholder:text-white/20"
                             type="password"
                             required
                             value={password}
@@ -95,7 +95,7 @@ const Signup = () => {
                     </div>
 
                     <div className="space-y-4">
-                        <label className="text-xs font-black text-gray-400 ml-1 uppercase tracking-widest">I am a...</label>
+                        <label className="text-xs font-black text-purple-300/70 ml-1 uppercase tracking-widest">I am a...</label>
                         <div className="grid grid-cols-2 gap-4">
                             {(['student', 'host'] as const).map(r => (
                                 <button
@@ -105,8 +105,8 @@ const Signup = () => {
                                     className={`
                                         py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all border-2
                                         ${role === r
-                                            ? 'bg-indigo-500 border-indigo-500 text-white shadow-lg shadow-indigo-100'
-                                            : 'bg-white border-gray-100 text-gray-400 hover:border-indigo-200'}
+                                            ? 'bg-purple-600 border-purple-500 text-white shadow-lg shadow-purple-500/30'
+                                            : 'bg-white/5 border-white/10 text-white/40 hover:border-purple-500/40 hover:text-white/70'}
                                     `}
                                 >
                                     {r === 'student' ? 'Student' : 'Educator'}
@@ -118,15 +118,15 @@ const Signup = () => {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="bg-indigo-500 hover:bg-indigo-600 text-white font-black w-full py-5 text-sm mt-4 rounded-2xl shadow-xl shadow-indigo-200 transition-all hover:scale-[1.02] active:scale-98 disabled:opacity-50 tracking-widest"
+                        className="bg-purple-500 hover:bg-purple-600 text-white font-black w-full py-5 text-sm mt-4 rounded-2xl shadow-xl shadow-purple-200 transition-all hover:scale-[1.02] active:scale-98 disabled:opacity-50 tracking-widest"
                     >
                         {loading ? 'CREATING...' : 'START LEARNING'}
                     </button>
                 </form>
 
-                <p className="mt-10 text-center text-sm text-gray-400 font-bold uppercase tracking-tight">
+                <p className="mt-10 text-center text-sm text-white/40 font-bold uppercase tracking-tight">
                     Already registered?{' '}
-                    <Link to="/login" className="text-indigo-500 hover:underline">Sign In</Link>
+                    <Link to="/login" className="text-purple-400 hover:text-purple-300 hover:underline transition-colors">Sign In</Link>
                 </p>
             </div>
         </div>

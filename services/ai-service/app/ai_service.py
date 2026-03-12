@@ -69,24 +69,38 @@ class MockAIService:
             'relatedTopics': ['Structure', 'Function', 'Importance'],
         }
 
-    async def generate_lecture_notes(self, topic: str, model_name: str) -> Dict:
-        await asyncio.sleep(1.2)
+    async def detect_topic(self, transcript: str) -> Dict:
+        await asyncio.sleep(0.5)
+        # Simple extraction for mock
+        words = transcript.split()
+        topic = " ".join(words[:3]) if words else "General Education"
         return {
-            'topic': topic,
-            'model_name': model_name,
-            'notes': (
-                f"# Lecture Notes: {topic}\n\n"
-                f"## Introduction to {model_name}\n"
-                f"This session explores the {model_name}, a key component in understanding {topic}.\n\n"
-                f"## Key Concepts\n"
-                f"1. **Structure**: Detailed examination of the {model_name}'s anatomy.\n"
-                f"2. **Function**: How the {model_name} operates within the larger system.\n"
-                f"3. **Clinical Significance**: Common conditions and treatments related to {model_name}.\n\n"
-                f"## Discussion Questions\n"
-                f"- How does the structure of {model_name} support its function?\n"
-                f"- What are the primary features visible in the 3D model?\n"
-                f"- Compare normal vs. pathological states of {model_name}.\n"
-            ),
+            "topic": topic,
+            "keywords": [w for w in words if len(w) > 4][:5]
+        }
+
+    async def generate_lecture_notes(self, topic: str, model_name: str, transcript: str = "") -> Dict:
+        await asyncio.sleep(1.0)
+        return {
+            "summary": f"This lecture covers {topic}, focusing on its core principles and relationship with {model_name}.",
+            "key_points": [
+                f"Introduction to {topic}",
+                f"Understanding {model_name} in context",
+                "Practical applications and modern research"
+            ],
+            "important_terms": [topic, model_name, "Analysis", "Synthesis"],
+            "follow_up_questions": [
+                f"How does {topic} impact our understanding of {model_name}?",
+                "What are the three most important takeaways?"
+            ]
+        }
+
+    async def detect_doubts(self, messages: List[str]) -> Dict:
+        await asyncio.sleep(0.5)
+        return {
+            "confused_topic": "None",
+            "confusion_percentage": 0,
+            "sample_questions": []
         }
 
 
@@ -99,33 +113,6 @@ def get_ai_service():
             return ollama_service
         except Exception as e:
             print(f"[WARNING] Ollama failed: {e} — falling back to Mock")
-
-    if settings.ai_service == "openai":
-        try:
-            from app.openai_service import openai_service
-            if openai_service:
-                print("[OK] Using OpenAI service")
-                return openai_service
-        except Exception as e:
-            print(f"[WARNING] OpenAI failed: {e} — falling back to Mock")
-
-    elif settings.ai_service == "gemini":
-        try:
-            from app.gemini_service import gemini_service
-            if gemini_service:
-                print("[OK] Using Gemini service")
-                return gemini_service
-        except Exception as e:
-            print(f"[WARNING] Gemini failed: {e} — falling back to Mock")
-
-    elif settings.ai_service == "deepseek":
-        try:
-            from app.deepseek_service import deepseek_service
-            if deepseek_service:
-                print("[OK] Using DeepSeek service")
-                return deepseek_service
-        except Exception as e:
-            print(f"[WARNING] DeepSeek failed: {e} — falling back to Mock")
 
     print("[INFO] Using Mock AI service")
     return MockAIService()

@@ -5,9 +5,12 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
 import Session from './pages/Session';
+import SessionReport from './pages/SessionReport';
 import Home from './pages/Home';
 import JoinSession from './pages/JoinSession';
 import PreJoinLobby from './pages/PreJoinLobby';
+import CreateSession from './pages/CreateSession';
+import TopicPrep from './pages/TopicPrep';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }: { children: ReactNode }) => {
@@ -48,6 +51,9 @@ function App() {
 
           {/* Pre-join lobby: camera/mic preview before entering room */}
           <Route path="/lobby" element={<PreJoinLobby />} />
+          <Route path="/create-session" element={<ProtectedRoute><CreateSession /></ProtectedRoute>} />
+          <Route path="/topic-prep" element={<ProtectedRoute><TopicPrep /></ProtectedRoute>} />
+          <Route path="/session/:sessionId/report" element={<ProtectedRoute><SessionReport /></ProtectedRoute>} />
         </Routes>
       </Router>
     </AuthProvider>

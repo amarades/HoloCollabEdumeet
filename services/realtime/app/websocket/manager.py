@@ -242,7 +242,43 @@ async def websocket_endpoint(websocket: WebSocket, room_code: str, user: str = "
                     exclude=websocket,
                 )
 
-            # ── Screen share ───────────────────────────────────────────────
+            # ── Participant Join Flow (Approval) ───────────────────────────
+            elif msg_type == "PARTICIPANT_JOIN_REQUEST":
+                # Forward to the host
+                await room_manager.send_to_host(
+                    {
+                        "event": "PARTICIPANT_JOIN_REQUEST",
+                        "userId": user_id,
+                        "userName": user,
+                        "requestedAt": payload.get("requestedAt")
+                    },
+                    room_code
+                )
+
+            elif msg_type == "APPROVE_PARTICIPANT":
+                target_id = payload.get("userId")
+                await room_manager.send_to_peer(
+                    {
+                        "event": "JOIN_APPROVED",
+                        "userId": target_id,
+                        "permissions": payload.get("permissions")
+                    },
+                    room_code,
+                    target_id
+                )
+
+            elif msg_type == "REJECT_PARTICIPANT":
+                target_id = payload.get("userId")
+                await room_manager.send_to_peer(
+                    {
+                        "event": "JOIN_REJECTED",
+                        "userId": target_id,
+                        "reason": payload.get("reason")
+                    },
+                    room_code,
+                    target_id
+                )
+
             elif msg_type in ("SCREEN_SHARE_START", "SCREEN_SHARE_STOP"):
                 await room_manager.broadcast(
                     {"event": msg_type, "userId": user_id, "userName": user},

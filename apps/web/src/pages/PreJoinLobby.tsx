@@ -79,7 +79,11 @@ const PreJoinLobby = () => {
 
         // Give the OS a moment to fully release the hardware
         setTimeout(() => {
-            navigate(`/session/${sessionId}`, { state: { displayName: displayName.trim(), roomCode, role } });
+            if (role === 'host') {
+                navigate('/topic-prep', { state: { sessionId } });
+            } else {
+                navigate(`/session/${sessionId}`, { state: { displayName: displayName.trim(), roomCode, role } });
+            }
         }, 500);
     };
 

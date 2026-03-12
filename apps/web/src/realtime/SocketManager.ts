@@ -50,8 +50,12 @@ export class SocketManager {
     public onQuizUpdate: ((quiz: any) => void) | null = null;
     public onChat: ((message: ChatMessage) => void) | null = null;
 
-    // Custom event listeners keyed by `event` from server payload
-    private customListeners: Record<string, (data: any) => void> = {};
+    // Multi-listener custom event system (replaces single-listener map)
+    private customListeners: Record<string, Array<(data: any) => void>> = {};
+    // Buffer for events that arrived before a listener was registered
+    private eventBuffer: Record<string, any[]> = {};
+    // Events that should be buffered if no listener is registered yet
+    private static BUFFERED_EVENTS = ['PARTICIPANT_JOIN_REQUEST'];
 
     constructor(url?: string) {
         // Default: use Vite's proxy path so we work in both dev and prod
@@ -154,10 +158,13 @@ export class SocketManager {
      * Built-in handlers always fire first, then any custom listeners for the same event.
      */
     private handleMessage(data: any) {
-        const { event, state, users, action, value, message, payload } = data;
+        // Backend sends either { event: 'FOO', ... } (server-originated) or
+        // { type: 'FOO', payload: ... } (echo of client message). Support both.
+        const eventName: string = data.event ?? data.type ?? '';
+        const { state, users, action, value, message, payload } = data;
 
         // 1. Scene & State Updates
-        if (event === 'MODEL_UPDATE' || event === 'STATE_SYNC') {
+        if (eventName === 'MODEL_UPDATE' || eventName === 'STATE_SYNC') {
             if (this.scene && typeof this.scene.applyState === 'function' && state) {
                 this.scene.applyState(state);
             }
@@ -169,43 +176,84 @@ export class SocketManager {
             }
         }
         // 2. User List Updates
-        else if (event === 'USER_UPDATE') {
+        else if (eventName === 'USER_UPDATE') {
             if (this.onUserUpdate && users) {
                 this.onUserUpdate(users as User[]);
             }
         }
         // 3. Gestures
-        else if (event === 'GESTURE_DETECTED') {
+        else if (eventName === 'GESTURE_DETECTED') {
             if (this.onGesture) {
                 this.onGesture(data as GestureData);
             }
         }
-        // 4. Whiteboard Drawing
-        else if (event === 'DRAW_STROKE') {
+        // 4. Whiteboard Drawing — fires both the onDraw callback AND custom listeners
+        else if (eventName === 'DRAW_STROKE') {
             if (this.onDraw) {
                 this.onDraw(payload || data);
             }
         }
         // 5. Chat — fires onChat callback (used by Session.tsx for AI context)
-        else if (event === 'CHAT_MESSAGE') {
+        else if (eventName === 'CHAT_MESSAGE') {
             if (this.onChat) {
                 this.onChat(message || data);
             }
         }
 
         // Always also fire any custom listeners registered via socket.on()
-        // This allows components like ChatPanel to listen to CHAT_MESSAGE
-        // independently without overwriting Session.tsx's onChat handler.
-        if (event && this.customListeners[event]) {
-            this.customListeners[event](data);
+        this._fireListeners(eventName, data);
+    }
+
+    private _fireListeners(event: string, data: any) {
+        if (!event) return;
+        const listeners = this.customListeners[event];
+        if (listeners && listeners.length > 0) {
+            listeners.forEach(cb => {
+                try { cb(data); } catch (e) { console.error(`[SocketManager] Error in listener for '${event}':`, e); }
+            });
+        } else if (SocketManager.BUFFERED_EVENTS.includes(event)) {
+            // Buffer critical events that arrived before a listener was registered
+            if (!this.eventBuffer[event]) this.eventBuffer[event] = [];
+            if (this.eventBuffer[event].length < 20) {
+                console.log(`[SocketManager] Buffering event '${event}' (no listener yet)`);
+                this.eventBuffer[event].push(data);
+            }
         }
     }
 
     /**
-     * Adds an event listener for custom events
+     * Adds an event listener. Supports multiple listeners per event type.
+     * Returns an unsubscribe function — call it in your useEffect cleanup.
+     * Replays any buffered events that arrived before this listener was registered.
      */
-    on(eventType: string, callback: (data: any) => void) {
-        this.customListeners[eventType] = callback;
+    on(eventType: string, callback: (data: any) => void): () => void {
+        if (!this.customListeners[eventType]) {
+            this.customListeners[eventType] = [];
+        }
+        this.customListeners[eventType].push(callback);
+
+        // Replay any buffered events for this listener
+        if (this.eventBuffer[eventType]?.length) {
+            console.log(`[SocketManager] Replaying ${this.eventBuffer[eventType].length} buffered '${eventType}' event(s)`);
+            const buffered = [...this.eventBuffer[eventType]];
+            this.eventBuffer[eventType] = [];
+            buffered.forEach(d => {
+                try { callback(d); } catch (e) { console.error(e); }
+            });
+        }
+
+        // Return an unsubscribe function
+        return () => this.off(eventType, callback);
+    }
+
+    /**
+     * Removes a specific listener for an event.
+     */
+    off(eventType: string, callback: (data: any) => void) {
+        const listeners = this.customListeners[eventType];
+        if (listeners) {
+            this.customListeners[eventType] = listeners.filter(cb => cb !== callback);
+        }
     }
 
     /**
