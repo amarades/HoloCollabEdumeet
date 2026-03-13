@@ -18,11 +18,15 @@ import {
     Hand, Box, Sparkles, Users,
     MessageSquare, X, CheckCircle2, Copy, Check,
     Columns, Maximize2, Monitor, MonitorOff, ShieldCheck,
-    Presentation, Lightbulb, AlertTriangle
+    Presentation, AlertTriangle, FileUp
 } from 'lucide-react';
+import * as pdfjsLib from 'pdfjs-dist';
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
+
+// Configure PDF.js worker using local Vite asset
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
+
 import { apiRequest } from '../services/api';
-import { findModelForTopic } from '../data/topicModelMap';
-import type { TopicModel } from '../data/topicModelMap';
 
 
 import { SessionSidebar } from '../components/session/wrapper/SessionSidebar';
@@ -116,15 +120,6 @@ const Session = () => {
     const [showHostControls, setShowHostControls] = useState(false);
     const [showReactionPicker, setShowReactionPicker] = useState(false);
 
-    // ── Feature 2: Voice Topic Detection ──────────────────────────────────────
-    const [detectedTopic, setDetectedTopic] = useState<string>('');
-    const [isListening, setIsListening] = useState(false);
-    const speechRef = useRef<any>(null);
-
-    // ── Feature 3: Auto Content Suggestion ────────────────────────────────────
-    const [suggestedModel, setSuggestedModel] = useState<TopicModel | null>(null);
-    const [showSuggestion, setShowSuggestion] = useState(false);
-
     // ── Feature 4: Engagement Tracking ────────────────────────────────────────
     const [engagementMap, setEngagementMap] = useState<Record<string, number>>({});
 
@@ -134,11 +129,63 @@ const Session = () => {
 
     // ── Feature 10: 3D Presentation Mode ──────────────────────────────────────
     const [presentationMode, setPresentationMode] = useState(false);
-    const [presentationSlides] = useState<SlideData[]>([
+    const [currentSlides, setCurrentSlides] = useState<SlideData[]>([
         { title: 'Introduction', body: 'Welcome to today\'s lesson. We will explore the topic using 3D interactive models.' },
         { title: 'Key Concepts', body: 'Observe the 3D model carefully. Notice the structure, orientation, and components.' },
         { title: 'Discussion', body: 'How does this structure relate to what we studied previously? Share your observations.' },
     ]);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [isConverting, setIsConverting] = useState(false);
+
+    const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file || file.type !== 'application/pdf') return;
+
+        setIsConverting(true);
+        try {
+            console.log('[PDF] Starting conversion for:', file.name);
+            const arrayBuffer = await file.arrayBuffer();
+            const loadingTask = pdfjsLib.getDocument({ 
+                data: arrayBuffer,
+                useWorkerFetch: true,
+                isEvalSupported: false,
+            });
+            
+            const pdf = await loadingTask.promise;
+            console.log('[PDF] Document loaded, pages:', pdf.numPages);
+            const newSlides: SlideData[] = [];
+
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                // Scale up for high quality (Vite dev mode might be slow but it's okay for host)
+                const viewport = page.getViewport({ scale: 2.0 });
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d')!;
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+
+                await page.render({ canvasContext: context, viewport } as any).promise;
+                newSlides.push({
+                    title: `Page ${i}`,
+                    body: `Visual content from ${file.name}`,
+                    imageUrl: canvas.toDataURL('image/jpeg', 0.8)
+                });
+                console.log(`[PDF] Rendered page ${i}/${pdf.numPages}`);
+            }
+
+            setCurrentSlides(newSlides);
+            if (presentationMode) {
+                arSceneRef.current?.startPresentationMode(newSlides);
+                socketRef.current?.emit('PRESENTATION_STARTED', { slides: newSlides });
+            }
+            console.log('[PDF] Conversion complete');
+        } catch (error: any) {
+            console.error('PDF Conversion error details:', error);
+            alert(`Failed to process PDF: ${error.message || 'Unknown error'}`);
+        } finally {
+            setIsConverting(false);
+        }
+    };
 
     const handleCopyCode = async () => {
         if (roomCode) {
@@ -148,45 +195,6 @@ const Session = () => {
         }
     };
 
-    // ── Feature 2: SpeechRecognition for voice topic detection ────────────────
-    const startVoiceDetection = useCallback(() => {
-        const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-        if (!SR) { alert('Speech recognition not supported in this browser.'); return; }
-        const recognition = new SR();
-        recognition.continuous = true;
-        recognition.interimResults = false;
-        recognition.lang = 'en-US';
-        recognition.onresult = async (event: any) => {
-            const transcript = Array.from(event.results)
-                .map((r: any) => r[0].transcript)
-                .join(' ');
-            try {
-                const result = await apiRequest('/api/ai/topic-detect', {
-                    method: 'POST',
-                    body: JSON.stringify({ transcript }),
-                });
-                if (result.topic) {
-                    setDetectedTopic(result.topic);
-                    socketRef.current?.emit('TOPIC_DETECTED', { topic: result.topic, keywords: result.keywords });
-                    // Feature 3: check for suggestion
-                    const suggestion = findModelForTopic(result.topic);
-                    if (suggestion) { setSuggestedModel(suggestion); setShowSuggestion(true); }
-                }
-            } catch (err) {
-                console.error('Topic detection error:', err);
-            }
-        };
-        recognition.onerror = () => setIsListening(false);
-        recognition.onend = () => setIsListening(false);
-        speechRef.current = recognition;
-        recognition.start();
-        setIsListening(true);
-    }, []);
-
-    const stopVoiceDetection = useCallback(() => {
-        speechRef.current?.stop();
-        setIsListening(false);
-    }, []);
 
     // ── Feature 4: Tab visibility engagement signals ──────────────────────────
     useEffect(() => {
@@ -235,8 +243,8 @@ const Session = () => {
         const socket = socketRef.current;
         if (!socket) return;
 
-        const unsubTopic = socket.on('TOPIC_DETECTED', (data: any) => {
-            setDetectedTopic(data.topic || '');
+        const unsubTopic = socket.on('TOPIC_DETECTED', (_data: any) => {
+            // Topic detection logic removed
         });
         const unsubEngagement = socket.on('ENGAGEMENT_UPDATE', (data: any) => {
             setEngagementMap(prev => ({ ...prev, [data.userId]: data.score }));
@@ -256,11 +264,29 @@ const Session = () => {
             }
         });
 
+        const unsubPresentationStart = socket.on('PRESENTATION_STARTED', (data: any) => {
+            if (!isHost) {
+                const slidesToUse = data.slides || currentSlides;
+                setCurrentSlides(slidesToUse);
+                arSceneRef.current?.startPresentationMode(slidesToUse);
+                setPresentationMode(true);
+            }
+        });
+
+        const unsubPresentationStop = socket.on('PRESENTATION_STOPPED', () => {
+            if (!isHost) {
+                arSceneRef.current?.stopPresentationMode();
+                setPresentationMode(false);
+            }
+        });
+
         return () => {
             unsubTopic();
             unsubEngagement();
             unsubSlide();
             unsubModelUpdate();
+            unsubPresentationStart();
+            unsubPresentationStop();
         };
     }, [socketInstance, isHost]);
 
@@ -381,6 +407,12 @@ const Session = () => {
                     socketRef.current?.emit('MODEL_TRANSFORM', state);
                 };
 
+                scene.onSlideFullscreen = (isFullscreen) => {
+                    if (isHost) {
+                        socketRef.current?.emit('SLIDE_FULLSCREEN', { isFullscreen });
+                    }
+                };
+
                 socket.connect(
                     sessionId,
                     scene,
@@ -393,6 +425,11 @@ const Session = () => {
                         console.log('Gesture Detected', gestureEvent);
                     }
                 );
+
+                socket.on('SLIDE_FULLSCREEN', (data: { isFullscreen: boolean }) => {
+                    console.log('Remote fullscreen toggle:', data);
+                    arSceneRef.current?.setSlideFullscreen(data.isFullscreen);
+                });
 
                 socket.on('MODEL_CHANGED', (data) => {
                     console.log('Remote user changed model:', data);
@@ -448,19 +485,20 @@ const Session = () => {
                                 if (scene?.currentModel && gesture.confidence > 0.7) {
                                     switch (gesture.type) {
                                         case 'fist':
-                                            scene.currentModel.rotation.set(0, 0, 0);
-                                            scene.currentModel.scale.setScalar(1);
-                                            scene.currentModel.position.set(0, 0, 0);
-                                            scene.camera.position.set(0, 0, 5);
-                                            setCurrentGesture('Fist - Reset');
-                                            break;
                                         case 'fist_left':
-                                            scene.currentModel.rotation.y -= 0.05;
-                                            setCurrentGesture('Fist - Rotate Left');
-                                            break;
                                         case 'fist_right':
-                                            scene.currentModel.rotation.y += 0.05;
-                                            setCurrentGesture('Fist - Rotate Right');
+                                            // Feature: Any stable fist (no significant movement) resets. 
+                                            // Using the dedicated resetTransform method for reliability.
+                                            if (gesture.type === 'fist') {
+                                                scene.resetTransform();
+                                                setCurrentGesture('Fist - Reset');
+                                            } else if (gesture.type === 'fist_left') {
+                                                scene.currentModel.rotation.y -= 0.05;
+                                                setCurrentGesture('Fist - Rotate Left');
+                                            } else {
+                                                scene.currentModel.rotation.y += 0.05;
+                                                setCurrentGesture('Fist - Rotate Right');
+                                            }
                                             break;
                                         case 'pointing':
                                             if (gesture.position) {
@@ -481,14 +519,14 @@ const Session = () => {
                                                 const s = Math.max(0.5, scene.currentModel.scale.x * gesture.scale);
                                                 scene.currentModel.scale.setScalar(s);
                                             }
-                                            setCurrentGesture('Pinch Close - Zoom In');
+                                            setCurrentGesture('Pinch - Shrink');
                                             break;
                                         case 'pinch_out':
                                             if (gesture.scale) {
                                                 const s = Math.min(3, scene.currentModel.scale.x * gesture.scale);
                                                 scene.currentModel.scale.setScalar(s);
                                             }
-                                            setCurrentGesture('Pinch Far - Zoom Out');
+                                            setCurrentGesture('Pinch - Expand');
                                             break;
                                         default:
                                             setCurrentGesture('Tracking Active');
@@ -705,53 +743,24 @@ const Session = () => {
                             </div>
                         )}
 
-                        {/* Feature 2: Detected Topic Badge */}
-                        {detectedTopic && !isScreenSharing && (
-                            <div className="absolute top-4 left-4 bg-violet-600/90 backdrop-blur-sm text-white px-3 py-1.5 rounded-full text-xs font-semibold shadow-lg z-50 flex items-center gap-1.5">
-                                <Lightbulb className="w-3.5 h-3.5" />
-                                Topic: {detectedTopic}
-                            </div>
-                        )}
+                        {/* Topic detection logic removed */}
 
-                        {/* Feature 3: Auto Content Suggestion Banner */}
-                        {showSuggestion && suggestedModel && (
-                            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-purple-700/95 backdrop-blur-sm text-white px-4 py-2 rounded-xl text-sm font-medium shadow-xl z-50 flex items-center gap-3 max-w-sm">
-                                <span className="flex-1">💡 Suggested: <strong>{suggestedModel.label}</strong></span>
-                                <button
-                                    onClick={() => {
-                                        arSceneRef.current?.loadModel(suggestedModel.url);
-                                        socketRef.current?.emit('MODEL_CHANGED', { model_url: suggestedModel.url, model_name: suggestedModel.label });
-                                        setShowSuggestion(false);
-                                    }}
-                                    className="bg-white/20 hover:bg-white/30 rounded-lg px-2 py-1 text-xs font-bold transition-all"
-                                >
-                                    Load
-                                </button>
-                                <button onClick={() => setShowSuggestion(false)} className="text-white/60 hover:text-white">
-                                    <X className="w-4 h-4" />
-                                </button>
-                            </div>
-                        )}
+                        {/* Auto Content Suggestion Banner removed */}
 
                         {/* Feature 4 + 2: Voice Detection & Presentation Buttons (Host only) */}
                         {isHost && (
                             <div className="absolute bottom-20 left-4 z-50 flex flex-col gap-2">
-                                <button
-                                    onClick={isListening ? stopVoiceDetection : startVoiceDetection}
-                                    className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold shadow-lg transition-all ${isListening ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse' : 'bg-violet-600 hover:bg-violet-700 text-white'}`}
-                                >
-                                    <Mic className="w-3.5 h-3.5" />
-                                    {isListening ? 'Detecting…' : '🎙 Detect Topic'}
-                                </button>
+                                {/* Topic detection button removed */}
                                 <button
                                     onClick={() => {
                                         if (presentationMode) {
                                             arSceneRef.current?.stopPresentationMode();
                                             setPresentationMode(false);
+                                            socketRef.current?.emit('PRESENTATION_STOPPED', {});
                                         } else {
-                                            arSceneRef.current?.startPresentationMode(presentationSlides);
+                                            arSceneRef.current?.startPresentationMode(currentSlides);
                                             setPresentationMode(true);
-                                            socketRef.current?.emit('PRESENTATION_STARTED', {});
+                                            socketRef.current?.emit('PRESENTATION_STARTED', { slides: currentSlides });
                                         }
                                     }}
                                     className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold shadow-lg transition-all ${presentationMode ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-gray-800/80 hover:bg-gray-700 text-white'}`}
@@ -759,6 +768,27 @@ const Session = () => {
                                     <Presentation className="w-3.5 h-3.5" />
                                     {presentationMode ? 'Exit Slides' : '🖥 Slide Mode'}
                                 </button>
+                                
+                                {isHost && (
+                                    <>
+                                        <input
+                                            type="file"
+                                            ref={fileInputRef}
+                                            onChange={handleFileUpload}
+                                            accept="application/pdf"
+                                            className="hidden"
+                                        />
+                                        <button
+                                            onClick={() => fileInputRef.current?.click()}
+                                            disabled={isConverting}
+                                            className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold shadow-lg transition-all bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50"
+                                        >
+                                            <FileUp className="w-3.5 h-3.5" />
+                                            {isConverting ? 'Processing...' : 'Upload PDF'}
+                                        </button>
+                                    </>
+                                )}
+
                                 {presentationMode && (
                                     <div className="bg-black/60 text-white/70 text-xs px-2 py-1 rounded-lg text-center">← → to navigate</div>
                                 )}

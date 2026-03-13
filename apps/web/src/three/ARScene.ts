@@ -21,6 +21,7 @@ export interface SlideData {
     title: string;
     body: string;
     modelKey?: string;
+    imageUrl?: string; // New field for PDF/Image slides
 }
 
 export class ARScene {
@@ -37,9 +38,15 @@ export class ARScene {
     private holoPointLight: THREE.PointLight | null = null;
 
     // Presentation mode state
-    private presentationSlides: THREE.Mesh[] = [];
+    private presentationSlides: THREE.Object3D[] = [];
     private currentSlideIndex: number = 0;
     public isPresentationMode: boolean = false;
+
+    // Interaction state
+    private raycaster = new THREE.Raycaster();
+    private mouse = new THREE.Vector2();
+    private isSlideFullscreen: boolean = false;
+    private slideOriginalState: { position: THREE.Vector3, scale: THREE.Vector3, rotation: THREE.Euler } | null = null;
 
     // Visual & Motion state
     private visualFilter: 'realistic' | 'blue_glow' | 'red_glow' = 'realistic';
@@ -49,10 +56,12 @@ export class ARScene {
     private boundMouseMove: (e: MouseEvent) => void = () => { };
     private boundMouseUp: () => void = () => { };
     private boundResize: () => void = () => { };
+    private boundCanvasClick: (e: MouseEvent) => void = () => { };
 
     // Callbacks for events
     public onStateChange?: (state: ModelState) => void;
     public onPartSelected?: (partName: string) => void;
+    public onSlideFullscreen?: (isFullscreen: boolean) => void;
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -121,6 +130,60 @@ export class ARScene {
         // Resize handler
         this.boundResize = this.onWindowResize.bind(this);
         window.addEventListener('resize', this.boundResize);
+
+        // Interaction listeners
+        this.boundCanvasClick = this.onCanvasClick.bind(this);
+        this.canvas.addEventListener('click', this.boundCanvasClick);
+    }
+
+    private onCanvasClick(event: MouseEvent) {
+        const rect = this.canvas.getBoundingClientRect();
+        this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+        this.raycaster.setFromCamera(this.mouse, this.camera);
+
+        if (this.isPresentationMode && this.presentationSlides.length > 0) {
+            const currentSlide = this.presentationSlides[this.currentSlideIndex];
+            const intersects = this.raycaster.intersectObject(currentSlide, true);
+
+            if (intersects.length > 0) {
+                this.toggleFullscreenSlide();
+            }
+        }
+    }
+
+    private toggleFullscreenSlide() {
+        if (this.presentationSlides.length === 0) return;
+        const currentSlide = this.presentationSlides[this.currentSlideIndex];
+
+        if (!this.isSlideFullscreen) {
+            this.slideOriginalState = {
+                position: currentSlide.position.clone(),
+                scale: currentSlide.scale.clone(),
+                rotation: currentSlide.rotation.clone()
+            };
+
+            // Animate to fullscreen (Front and Center)
+            currentSlide.position.set(0, 0, -3.5);
+            currentSlide.rotation.set(0, 0, 0);
+            currentSlide.scale.setScalar(1.4);
+            this.isSlideFullscreen = true;
+        } else {
+            if (this.slideOriginalState) {
+                currentSlide.position.copy(this.slideOriginalState.position);
+                currentSlide.scale.copy(this.slideOriginalState.scale);
+                currentSlide.rotation.copy(this.slideOriginalState.rotation);
+            }
+            this.isSlideFullscreen = false;
+        }
+
+        if (this.onSlideFullscreen) this.onSlideFullscreen(this.isSlideFullscreen);
+    }
+
+    public setSlideFullscreen(isFullscreen: boolean) {
+        if (this.isSlideFullscreen === isFullscreen) return;
+        this.toggleFullscreenSlide();
     }
 
     private setupMouseControls() {
@@ -359,54 +422,67 @@ export class ARScene {
         this.presentationSlides = [];
 
         slides.forEach((slide, index) => {
-            const geometry = new THREE.PlaneGeometry(2.5, 1.8);
+            const geometry = new THREE.PlaneGeometry(7.2, 5.2); // Tall cinematic slides
 
-            // Render slide text to an offscreen canvas
-            const offscreen = document.createElement('canvas');
-            offscreen.width = 512;
-            offscreen.height = 368;
-            const ctx = offscreen.getContext('2d')!;
+            let texture: THREE.Texture;
 
-            ctx.fillStyle = 'rgba(0, 17, 34, 0.85)';
-            ctx.fillRect(0, 0, 512, 368);
+            if (slide.imageUrl) {
+                // Use provided image/dataURL
+                const img = new Image();
+                img.src = slide.imageUrl;
+                texture = new THREE.Texture(img);
+                img.onload = () => {
+                    texture.needsUpdate = true;
+                };
+            } else {
+                // Render slide text to an offscreen canvas
+                const offscreen = document.createElement('canvas');
+                offscreen.width = 1024; // High resolution for massive slides
+                offscreen.height = 736;
+                const ctx = offscreen.getContext('2d')!;
 
-            // Title
-            ctx.fillStyle = '#00d4ff';
-            ctx.font = 'bold 36px monospace';
-            ctx.fillText(slide.title, 24, 60);
+                ctx.fillStyle = 'rgba(0, 17, 34, 0.9)';
+                ctx.fillRect(0, 0, 1024, 736);
 
-            // Divider
-            ctx.strokeStyle = '#00d4ff';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(24, 80);
-            ctx.lineTo(488, 80);
-            ctx.stroke();
+                // Title
+                ctx.fillStyle = '#00d4ff';
+                ctx.font = 'bold 72px monospace';
+                ctx.fillText(slide.title, 48, 120);
 
-            // Body text (word-wrap)
-            ctx.fillStyle = '#ffffff';
-            ctx.font = '22px monospace';
-            const words = slide.body.split(' ');
-            let line = '';
-            let y = 120;
-            for (const word of words) {
-                const test = line + word + ' ';
-                if (ctx.measureText(test).width > 460) {
-                    ctx.fillText(line, 24, y);
-                    line = word + ' ';
-                    y += 30;
-                } else {
-                    line = test;
+                // Divider
+                ctx.strokeStyle = '#00d4ff';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(48, 160);
+                ctx.lineTo(976, 160);
+                ctx.stroke();
+
+                // Body text (word-wrap) - Adjusted for higher resolution
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '44px monospace';
+                const words = slide.body.split(' ');
+                let line = '';
+                let y = 240;
+                for (const word of words) {
+                    const test = line + word + ' ';
+                    if (ctx.measureText(test).width > 920) {
+                        ctx.fillText(line, 48, y);
+                        line = word + ' ';
+                        y += 60;
+                    } else {
+                        line = test;
+                    }
                 }
+                ctx.fillText(line, 48, y);
+
+                // Slide index
+                ctx.fillStyle = 'rgba(0, 212, 255, 0.5)';
+                ctx.font = '32px monospace';
+                ctx.fillText(`${index + 1} / ${slides.length}`, 900, 700);
+
+                texture = new THREE.CanvasTexture(offscreen);
             }
-            ctx.fillText(line, 24, y);
 
-            // Slide index
-            ctx.fillStyle = 'rgba(0, 212, 255, 0.5)';
-            ctx.font = '16px monospace';
-            ctx.fillText(`${index + 1} / ${slides.length}`, 450, 350);
-
-            const texture = new THREE.CanvasTexture(offscreen);
             const material = new THREE.MeshBasicMaterial({
                 map: texture,
                 transparent: true,
@@ -414,16 +490,40 @@ export class ARScene {
                 side: THREE.DoubleSide,
             });
 
-            const mesh = new THREE.Mesh(geometry, material);
+            // TV Style Frame / Card Background
+            const frameGeometry = new THREE.PlaneGeometry(7.3, 5.3);
+            const frameMaterial = new THREE.MeshBasicMaterial({
+                color: 0x111111,
+                transparent: true,
+                opacity: 0.95,
+            });
+            const frame = new THREE.Mesh(frameGeometry, frameMaterial);
+            
+            // Bezel / Border (slightly larger)
+            const bezelGeometry = new THREE.PlaneGeometry(7.4, 5.4);
+            const bezelMaterial = new THREE.MeshBasicMaterial({
+                color: 0x444444, // Dark metallic gray
+                transparent: true,
+                opacity: 0.8,
+            });
+            const bezel = new THREE.Mesh(bezelGeometry, bezelMaterial);
+            bezel.position.z = -0.01; // Slightly behind frame
 
-            // Position in arc formation
-            const angle = ((index - Math.floor(slides.length / 2)) / Math.max(slides.length, 1)) * Math.PI * 0.6;
-            mesh.position.set(Math.sin(angle) * 4, 0, -Math.cos(angle) * 2);
-            mesh.rotation.y = -angle;
-            mesh.visible = index === 0;
+            const contentMesh = new THREE.Mesh(geometry, material);
+            contentMesh.position.z = 0.01; // Slightly in front of frame
 
-            this.scene.add(mesh);
-            this.presentationSlides.push(mesh);
+            const slideGroup = new THREE.Group();
+            slideGroup.add(bezel);
+            slideGroup.add(frame);
+            slideGroup.add(contentMesh);
+            
+            // Position: Pushed further right to clear speaker and fill vertical space
+            slideGroup.position.set(4.8, 0.5, -4.5);
+            slideGroup.rotation.y = 0; // Facing students straight
+            slideGroup.visible = index === 0;
+
+            this.scene.add(slideGroup);
+            this.presentationSlides.push(slideGroup as any);
         });
 
         this.currentSlideIndex = 0;
@@ -431,15 +531,17 @@ export class ARScene {
 
     public nextSlide() {
         if (this.presentationSlides.length === 0) return;
+        if (this.isSlideFullscreen) this.toggleFullscreenSlide();
         this.presentationSlides[this.currentSlideIndex].visible = false;
-        this.currentSlideIndex = Math.min(this.currentSlideIndex + 1, this.presentationSlides.length - 1);
+        this.currentSlideIndex = (this.currentSlideIndex + 1) % this.presentationSlides.length;
         this.presentationSlides[this.currentSlideIndex].visible = true;
     }
 
     public prevSlide() {
         if (this.presentationSlides.length === 0) return;
+        if (this.isSlideFullscreen) this.toggleFullscreenSlide();
         this.presentationSlides[this.currentSlideIndex].visible = false;
-        this.currentSlideIndex = Math.max(this.currentSlideIndex - 1, 0);
+        this.currentSlideIndex = (this.currentSlideIndex - 1 + this.presentationSlides.length) % this.presentationSlides.length;
         this.presentationSlides[this.currentSlideIndex].visible = true;
     }
 
@@ -450,9 +552,16 @@ export class ARScene {
     public stopPresentationMode() {
         this.isPresentationMode = false;
         this.presentationSlides.forEach(s => {
-            s.geometry.dispose();
-            (s.material as THREE.MeshBasicMaterial).map?.dispose();
-            (s.material as THREE.MeshBasicMaterial).dispose();
+            s.traverse((obj: any) => {
+                if (obj.geometry) obj.geometry.dispose();
+                if (obj.material) {
+                    if (Array.isArray(obj.material)) {
+                        obj.material.forEach((m: any) => m.dispose());
+                    } else {
+                        obj.material.dispose();
+                    }
+                }
+            });
             this.scene.remove(s);
         });
         this.presentationSlides = [];
@@ -535,7 +644,8 @@ export class ARScene {
                     this.holoPointLight.intensity = 1;
                     break;
             }
-        }
+        this.canvas.removeEventListener('click', this.boundCanvasClick);
+    }
 
         this.notifyStateChange();
     }
@@ -659,6 +769,15 @@ export class ARScene {
 
     public setMode(_mode: 'student' | 'instructor') {
         // mode is currently unused by the class logic internally
+    }
+
+    public resetTransform() {
+        if (!this.currentModel) return;
+        this.currentModel.position.set(0, 0, 0);
+        this.currentModel.rotation.set(0, 0, 0);
+        this.currentModel.scale.setScalar(1);
+        this.camera.position.set(0, 0, 5);
+        this.notifyStateChange();
     }
 
     public notifyStateChange() {
@@ -791,6 +910,7 @@ export class ARScene {
         window.removeEventListener('mousemove', this.boundMouseMove);
         window.removeEventListener('mouseup', this.boundMouseUp);
         window.removeEventListener('resize', this.boundResize);
+        this.canvas.removeEventListener('click', this.boundCanvasClick);
 
         // Dispose all geometries and materials to free GPU memory
         this.scene.traverse((obj: any) => {

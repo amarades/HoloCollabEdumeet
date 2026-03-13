@@ -10,8 +10,9 @@ export interface GestureResult {
 
 export class GestureRecognizer {
     private previousHandPosition: { x: number; y: number; z: number } | null = null;
+    private previousPinchDistance: number | null = null;
     private gestureHistory: GestureResult[] = [];
-    private readonly HISTORY_SIZE = 10;
+    private readonly HISTORY_SIZE = 15;
 
     private previousTime = Date.now();
 
@@ -19,11 +20,6 @@ export class GestureRecognizer {
         // Landmark indices
         const indexTip = landmarks[8];
         const thumbTip = landmarks[4];
-
-        // Calculate hand size for relative thresholds
-        const wrist = landmarks[0];
-        const middleMCP = landmarks[9];
-        const handSize = this.calculateDistance(wrist, middleMCP);
 
         // Calculate finger extension
         const fingerExtended = this.calculateFingerExtensions(landmarks);
@@ -47,7 +43,7 @@ export class GestureRecognizer {
         // 2. POINTING - Only index finger extended
         else if (extendedCount === 1 && fingerExtended[1]) {
             const position = {
-                x: (indexTip.x - 0.5) * 10,
+                x: (0.5 - indexTip.x) * 10, // Inverted: indexTip.x - 0.5 -> 0.5 - indexTip.x
                 y: (0.5 - indexTip.y) * 10,
                 z: -indexTip.z * 10
             };
@@ -58,20 +54,26 @@ export class GestureRecognizer {
             };
         }
 
-        // 3. PINCH - Check distance between thumb tip and index tip relative to hand size
-        else if (fingerExtended[1]) {
+        // 3. PINCH - Dynamic bidirectional scaling
+        else if (fingerExtended[1] && fingerExtended[0]) {
             const pinchDistance = this.calculateDistance(thumbTip, indexTip);
-            // Pinch is active if tips are very close (less than 15% of hand size)
-            const isPinching = pinchDistance < handSize * 0.15;
-
-            if (isPinching || extendedCount <= 2) {
-                const scaleMultiplier = isPinching ? 0.95 : 1.05; 
-                gesture = {
-                    type: isPinching ? 'pinch_in' : 'pinch_out',
-                    confidence: 0.85,
-                    scale: scaleMultiplier
-                };
+            
+            if (this.previousPinchDistance !== null) {
+                const ratio = pinchDistance / this.previousPinchDistance;
+                // Deadzone to prevent jitter
+                const isSignificant = Math.abs(1 - ratio) > 0.01;
+                
+                if (isSignificant) {
+                    gesture = {
+                        type: ratio < 1 ? 'pinch_in' : 'pinch_out',
+                        confidence: 0.9,
+                        scale: ratio
+                    };
+                }
             }
+            this.previousPinchDistance = pinchDistance;
+        } else {
+            this.previousPinchDistance = null;
         }
 
         // 4. OPEN HAND - All fingers extended
@@ -165,8 +167,8 @@ export class GestureRecognizer {
         const threshold = 0.3;
 
         return {
-            left: velocity < -threshold,
-            right: velocity > threshold
+            left: velocity < -threshold, 
+            right: velocity > threshold 
         };
     }
 
@@ -196,6 +198,7 @@ export class GestureRecognizer {
 
     reset() {
         this.previousHandPosition = null;
+        this.previousPinchDistance = null;
         this.gestureHistory = [];
     }
 }
