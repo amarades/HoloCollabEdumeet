@@ -85,22 +85,26 @@ if settings.environment.lower() == "production":
         raise RuntimeError("INTERNAL_API_KEY must be configured in production.")
 
 # Diagnostic: Verify if DATABASE_URL is actually coming from ENV
-if "DATABASE_URL" in os.environ:
-    val = os.environ["DATABASE_URL"]
-    print(f"✅ Configuration: DATABASE_URL is set in environment (Length: {len(val)})")
-    if val.startswith("localhost") or "127.0.0.1" in val:
+db_env_val = os.environ.get("DATABASE_URL")
+if db_env_val:
+    print(f"✅ Configuration: DATABASE_URL is set in environment (Length: {len(db_env_val)})")
+    if db_env_val.startswith("localhost") or "127.0.0.1" in db_env_val:
          print("⚠️ WARNING: DATABASE_URL contains 'localhost' or '127.0.0.1' - this will fail on Render!")
 else:
-    print("⚠️ Configuration: DATABASE_URL NOT found in environment, using default.")
+    print("⚠️ Configuration: DATABASE_URL NOT found in environment. Scanning for alternatives...")
     # List keys that DO exist to help debug
-    db_keys = [k for k in os.environ.keys() if "DB" in k.upper() or "POSTGRES" in k.upper()]
+    all_keys = list(os.environ.keys())
+    db_keys = [k for k in all_keys if any(x in k.upper() for x in ["DB", "POSTGRES", "URL", "CONNECT"])]
     if db_keys:
         print(f"DEBUG: Found these related env keys: {db_keys}")
+    else:
+        print(f"DEBUG: No database-related environment variables found. Full key list: {all_keys}")
 
 # Secure directory creation - Render's filesystem is read-only unless a disk is mounted.
 # We wrap this to prevent startup crashes when persistent storage isn't attached.
 try:
-    os.makedirs(settings.upload_dir, exist_ok=True)
-    os.makedirs(os.path.join(settings.upload_dir, "models"), exist_ok=True)
+    if not os.path.exists(settings.upload_dir):
+        os.makedirs(settings.upload_dir, exist_ok=True)
+        os.makedirs(os.path.join(settings.upload_dir, "models"), exist_ok=True)
 except Exception as e:
-    print(f"Note: Could not create upload directories ({e}). This is expected on some read-only environments.")
+    print(f"Note: Could not create upload directories ({e}). This is expected on read-only environments.")

@@ -35,7 +35,11 @@ def _redact_query(query: str) -> str:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: create DB tables
-    await init_db()
+    try:
+        await init_db()
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+        # We don't re-raise here so the app can at least start and provide health checks/docs
     yield
     # Shutdown: nothing to clean up
 
@@ -61,8 +65,7 @@ app.include_router(models.router)
 app.include_router(observability.router)
 app.include_router(livekit.router, prefix="/api/livekit", tags=["livekit"])
 
-# Serve uploaded files
-os.makedirs(settings.upload_dir, exist_ok=True)
+# Serve uploaded files - directory creation is already handled in config.py
 app.mount("/uploads", StaticFiles(directory=settings.upload_dir), name="uploads")
 
 
