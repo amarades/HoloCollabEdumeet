@@ -16,6 +16,12 @@ async_session_maker = async_sessionmaker(
 )
 
 
+async def get_db():
+    """Dependency for getting async database sessions."""
+    async with async_session_maker() as session:
+        yield session
+
+
 async def init_db():
     """Create all tables on startup (development only unless explicitly enabled)."""
     if not settings.auto_create_tables:

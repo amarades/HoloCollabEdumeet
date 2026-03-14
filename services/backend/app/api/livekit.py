@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 import logging
 
-from app.core.auth import get_current_user
-from app.core.database import get_db
+from app.api.auth import get_current_user_token as get_current_user
+from app.db.engine import get_db
 from app.config import settings
 
 logger = logging.getLogger(__name__)
