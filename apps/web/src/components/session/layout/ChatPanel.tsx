@@ -15,21 +15,15 @@ interface Message extends ChatMessage {
 }
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({ socket, user, roomId }) => {
-    const [messages, setMessages] = useState<Message[]>([]);
+    const [messages, setMessages] = useState<Message[]>(() => {
+        if (!roomId) return [];
+        return ChatStorage.getMessages(roomId).map(msg => ({
+            ...msg,
+            isOwn: msg.sender === user?.name,
+        }));
+    });
     const [input, setInput] = useState('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
-
-    // Load messages from storage on component mount
-    useEffect(() => {
-        if (!roomId) return;
-        
-        const storedMessages = ChatStorage.getMessages(roomId);
-        const formattedMessages: Message[] = storedMessages.map(msg => ({
-            ...msg,
-            isOwn: msg.sender === user?.name
-        }));
-        setMessages(formattedMessages);
-    }, [roomId, user?.name]);
 
     useEffect(() => {
         if (!socket) return;

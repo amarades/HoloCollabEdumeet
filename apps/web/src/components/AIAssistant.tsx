@@ -157,7 +157,7 @@ export const AIAssistant = ({
                     </div>
                     <div>
                         <h3 className="font-bold text-gray-900 text-sm leading-tight">AI Assistant</h3>
-                        <p className="text-gray-400 text-xs">{contextSummary}</p>
+                        <p className="text-gray-600 text-xs">{contextSummary}</p>
                     </div>
                 </div>
                 {onClose && (
@@ -209,7 +209,7 @@ export const AIAssistant = ({
             {/* Context indicator */}
             <div className="flex items-center gap-1.5 px-4 py-2 bg-primary/5 border-t border-primary/10">
                 <AlertCircle className="w-3 h-3 text-primary/60" />
-                <span className="text-xs text-primary/70">Context-aware: sees scene & participants</span>
+                <span className="text-xs text-primary">Context-aware: sees scene & participants</span>
             </div>
 
             {/* Feature 6: Summarize button */}
@@ -225,7 +225,7 @@ export const AIAssistant = ({
             </div>
 
             {/* Input */}
-            <div className="p-3 border-t border-gray-100 bg-white">
+            <div className="p-3 md:p-4 border-t border-gray-100 bg-white">
                 <div className="flex gap-2 items-end">
                     <input
                         type="text"
@@ -233,18 +233,19 @@ export const AIAssistant = ({
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
                         placeholder='Ask anything…'
-                        className="flex-1 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10 bg-gray-50 resize-none"
+                        className="flex-1 border border-gray-200 rounded-xl px-4 py-3 md:py-2.5 text-sm text-gray-800 focus:outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/10 bg-gray-50 resize-none md:text-base"
                         disabled={isLoading}
                     />
                     <button
                         onClick={handleSend}
                         disabled={isLoading || !input.trim()}
-                        className="p-2.5 bg-primary rounded-xl text-white hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex-shrink-0 shadow-sm"
+                        className="p-3 md:p-2.5 bg-primary rounded-xl text-white hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex-shrink-0 shadow-sm"
                     >
-                        <Send className="w-4 h-4" />
+                        <Send className="w-4.5 h-4.5 md:w-4 md:h-4" />
                     </button>
                 </div>
             </div>
         </div>
     );
 };
+

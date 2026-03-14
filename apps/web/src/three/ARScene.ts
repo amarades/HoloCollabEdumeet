@@ -30,6 +30,8 @@ export class ARScene {
     public camera: THREE.PerspectiveCamera;
     private renderer: THREE.WebGLRenderer;
     public currentModel: THREE.Group | null = null;
+    private basePosition = new THREE.Vector3(0, 0, 0);
+    private baseRotation = new THREE.Euler(0, 0, 0);
     private currentModelUrl: string | null = null;
     private selectedPart: THREE.Mesh | null = null;
     private animationId: number | null = null;
@@ -47,6 +49,8 @@ export class ARScene {
     private mouse = new THREE.Vector2();
     private isSlideFullscreen: boolean = false;
     private slideOriginalState: { position: THREE.Vector3, scale: THREE.Vector3, rotation: THREE.Euler } | null = null;
+    private slideZoom: number = 1.0;
+    private slideOffset = new THREE.Vector2(0, 0);
 
     // Visual & Motion state
     private visualFilter: 'realistic' | 'blue_glow' | 'red_glow' = 'realistic';
@@ -62,6 +66,7 @@ export class ARScene {
     public onStateChange?: (state: ModelState) => void;
     public onPartSelected?: (partName: string) => void;
     public onSlideFullscreen?: (isFullscreen: boolean) => void;
+    public onSlideTransform?: (zoom: number, offset: { x: number, y: number }) => void;
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -165,10 +170,13 @@ export class ARScene {
             };
 
             // Animate to fullscreen (Front and Center)
-            currentSlide.position.set(0, 0, -3.5);
+            // Move slide closer to camera and center it
+            currentSlide.position.set(0, 0, -3.2); 
             currentSlide.rotation.set(0, 0, 0);
-            currentSlide.scale.setScalar(1.4);
+            currentSlide.scale.setScalar(2.8); // Larger scale to fill most of the screen
             this.isSlideFullscreen = true;
+            this.slideZoom = 1.0;
+            this.slideOffset.set(0, 0);
         } else {
             if (this.slideOriginalState) {
                 currentSlide.position.copy(this.slideOriginalState.position);
@@ -179,6 +187,56 @@ export class ARScene {
         }
 
         if (this.onSlideFullscreen) this.onSlideFullscreen(this.isSlideFullscreen);
+    }
+
+    public zoomSlide(delta: number) {
+        if (!this.isSlideFullscreen || this.presentationSlides.length === 0) return;
+        
+        const prevZoom = this.slideZoom;
+        this.slideZoom = Math.max(1, Math.min(5, this.slideZoom + delta * 2));
+        
+        if (prevZoom !== this.slideZoom) {
+            this.updateSlideTransform();
+            if (this.onSlideTransform) {
+                this.onSlideTransform(this.slideZoom, { x: this.slideOffset.x, y: this.slideOffset.y });
+            }
+        }
+    }
+
+    public panSlide(deltaX: number, deltaY: number) {
+        if (!this.isSlideFullscreen || this.presentationSlides.length === 0 || this.slideZoom <= 1) return;
+
+        // Sensible panning speed relative to zoom
+        const panSpeed = 0.005 / this.slideZoom;
+        this.slideOffset.x += deltaX * panSpeed;
+        this.slideOffset.y -= deltaY * panSpeed;
+
+        // Clamp offset so slide doesn't go off screen entirely
+        const limit = (this.slideZoom - 1) * 2;
+        this.slideOffset.x = Math.max(-limit, Math.min(limit, this.slideOffset.x));
+        this.slideOffset.y = Math.max(-limit, Math.min(limit, this.slideOffset.y));
+
+        this.updateSlideTransform();
+        if (this.onSlideTransform) {
+            this.onSlideTransform(this.slideZoom, { x: this.slideOffset.x, y: this.slideOffset.y });
+        }
+    }
+
+    private updateSlideTransform() {
+        if (!this.isSlideFullscreen || this.presentationSlides.length === 0) return;
+        const currentSlide = this.presentationSlides[this.currentSlideIndex];
+        
+        // Base fullscreen scale is 2.8. User zoom multiplication on top.
+        currentSlide.scale.setScalar(2.8 * this.slideZoom);
+        
+        // Base fullscreen position is (0, 0, -3.2). Offset applied on top.
+        currentSlide.position.set(this.slideOffset.x, this.slideOffset.y, -3.2);
+    }
+
+    public setSlideTransform(zoom: number, offset: { x: number, y: number }) {
+        this.slideZoom = zoom;
+        this.slideOffset.set(offset.x, offset.y);
+        this.updateSlideTransform();
     }
 
     public setSlideFullscreen(isFullscreen: boolean) {
@@ -197,22 +255,28 @@ export class ARScene {
         });
 
         this.boundMouseMove = (e: MouseEvent) => {
-            if (!this.isDragging || !this.currentModel) return;
+            if (!this.isDragging) return;
 
             const deltaX = e.clientX - this.previousMousePosition.x;
             const deltaY = e.clientY - this.previousMousePosition.y;
 
-            if (e.buttons === 2 || (e.buttons === 1 && e.shiftKey)) {
-                const panSpeed = 0.01;
-                this.currentModel.position.x += deltaX * panSpeed;
-                this.currentModel.position.y -= deltaY * panSpeed;
-            } else {
-                this.currentModel.rotation.y += deltaX * 0.01;
-                this.currentModel.rotation.x += deltaY * 0.01;
+            if (this.isPresentationMode && this.isSlideFullscreen) {
+                this.panSlide(deltaX, deltaY);
+            } else if (this.currentModel) {
+                if (e.buttons === 2 || (e.buttons === 1 && e.shiftKey)) {
+                    const panSpeed = 0.01;
+                    this.currentModel.position.x += deltaX * panSpeed;
+                    this.currentModel.position.y -= deltaY * panSpeed;
+                } else {
+                    this.currentModel.rotation.y += deltaX * 0.01;
+                    this.currentModel.rotation.x += deltaY * 0.01;
+                    this.basePosition.copy(this.currentModel.position);
+                    this.baseRotation.copy(this.currentModel.rotation);
+                }
+                this.notifyStateChange();
             }
 
             this.previousMousePosition = { x: e.clientX, y: e.clientY };
-            this.notifyStateChange();
         };
 
         this.boundMouseUp = () => {
@@ -225,8 +289,13 @@ export class ARScene {
         this.canvas.addEventListener('wheel', (e) => {
             e.preventDefault();
             const delta = e.deltaY * -0.001;
-            this.camera.position.z = Math.max(2, Math.min(15, this.camera.position.z + delta));
-            this.notifyStateChange();
+
+            if (this.isPresentationMode && this.isSlideFullscreen) {
+                this.zoomSlide(delta);
+            } else {
+                this.camera.position.z = Math.max(2, Math.min(15, this.camera.position.z + delta));
+                this.notifyStateChange();
+            }
         });
 
         this.canvas.addEventListener('click', () => {
@@ -361,7 +430,8 @@ export class ARScene {
                 const scale = 3 / maxDim;
                 model.scale.setScalar(scale);
                 model.position.sub(center.multiplyScalar(scale));
-
+                this.basePosition.copy(model.position);
+                this.baseRotation.copy(model.rotation);
                 this.scene.add(model);
                 this.renderer.render(this.scene, this.camera);
                 console.log('✅ Model loaded successfully');
@@ -385,17 +455,25 @@ export class ARScene {
 
         // Feature 1: Float animation + shader uniform update
         if (this.currentModel && !this.isPresentationMode) {
-            // Gentle sine-wave float
-            this.currentModel.position.y = Math.sin(time * 0.8) * 0.15;
+            // Gentle sine-wave float added as offset to base position
+            this.currentModel.position.y = this.basePosition.y + Math.sin(time * 0.8) * 0.15;
+            this.currentModel.position.x = this.basePosition.x;
+            this.currentModel.position.z = this.basePosition.z;
             
             // 180-degree oscillation (sine wave between -90 and 90 degrees)
             if (this.autoOscillate && !this.isDragging) {
                 // Math.sin(time) gives -1 to 1. PI/2 is 90 degrees.
                 const angle = Math.sin(time * 0.5) * (Math.PI / 2);
-                this.currentModel.rotation.y = angle;
+                this.currentModel.rotation.y = this.baseRotation.y + angle;
+                this.currentModel.rotation.x = this.baseRotation.x;
             } else if (!this.isDragging) {
                 // Fallback slow rotate
-                this.currentModel.rotation.y += 0.003;
+                this.baseRotation.y += 0.003;
+                this.currentModel.rotation.y = this.baseRotation.y;
+                this.currentModel.rotation.x = this.baseRotation.x;
+            } else {
+                // While dragging, just keep current model rotation synced to base
+                this.currentModel.rotation.copy(this.baseRotation);
             }
 
             this.currentModel.traverse((child: any) => {
@@ -421,8 +499,8 @@ export class ARScene {
         this.presentationSlides.forEach(s => this.scene.remove(s));
         this.presentationSlides = [];
 
-        slides.forEach((slide, index) => {
-            const geometry = new THREE.PlaneGeometry(7.2, 5.2); // Tall cinematic slides
+            slides.forEach((slide, index) => {
+            const geometry = new THREE.PlaneGeometry(9.6, 5.4); // 16:9 Aspect Ratio (e.g. 9.6 x 5.4)
 
             let texture: THREE.Texture;
 
@@ -437,8 +515,8 @@ export class ARScene {
             } else {
                 // Render slide text to an offscreen canvas
                 const offscreen = document.createElement('canvas');
-                offscreen.width = 1024; // High resolution for massive slides
-                offscreen.height = 736;
+                offscreen.width = 1280; // High resolution 16:9
+                offscreen.height = 720;
                 const ctx = offscreen.getContext('2d')!;
 
                 ctx.fillStyle = 'rgba(0, 17, 34, 0.9)';
@@ -491,7 +569,7 @@ export class ARScene {
             });
 
             // TV Style Frame / Card Background
-            const frameGeometry = new THREE.PlaneGeometry(7.3, 5.3);
+            const frameGeometry = new THREE.PlaneGeometry(9.7, 5.5);
             const frameMaterial = new THREE.MeshBasicMaterial({
                 color: 0x111111,
                 transparent: true,
@@ -500,7 +578,7 @@ export class ARScene {
             const frame = new THREE.Mesh(frameGeometry, frameMaterial);
             
             // Bezel / Border (slightly larger)
-            const bezelGeometry = new THREE.PlaneGeometry(7.4, 5.4);
+            const bezelGeometry = new THREE.PlaneGeometry(9.8, 5.6);
             const bezelMaterial = new THREE.MeshBasicMaterial({
                 color: 0x444444, // Dark metallic gray
                 transparent: true,
@@ -517,8 +595,8 @@ export class ARScene {
             slideGroup.add(frame);
             slideGroup.add(contentMesh);
             
-            // Position: Pushed further right to clear speaker and fill vertical space
-            slideGroup.position.set(4.8, 0.5, -4.5);
+            // Position: Pushed slightly more right and adjusted vertical
+            slideGroup.position.set(5.0, 0.5, -4.5);
             slideGroup.rotation.y = 0; // Facing students straight
             slideGroup.visible = index === 0;
 
@@ -644,8 +722,7 @@ export class ARScene {
                     this.holoPointLight.intensity = 1;
                     break;
             }
-        this.canvas.removeEventListener('click', this.boundCanvasClick);
-    }
+        }
 
         this.notifyStateChange();
     }
@@ -701,6 +778,7 @@ export class ARScene {
         // Apply rotation
         if (state.rotation) {
             this.currentModel.rotation.set(state.rotation.x, state.rotation.y, state.rotation.z);
+            this.baseRotation.copy(this.currentModel.rotation);
         }
 
         // Apply scale
@@ -711,6 +789,7 @@ export class ARScene {
         // Apply position
         if (state.position) {
             this.currentModel.position.set(state.position.x, state.position.y, state.position.z);
+            this.basePosition.copy(this.currentModel.position);
         }
 
         // Apply camera
@@ -767,14 +846,17 @@ export class ARScene {
         }
     }
 
-    public setMode(_mode: 'student' | 'instructor') {
+    public setMode(mode: 'student' | 'instructor') {
         // mode is currently unused by the class logic internally
+        void mode;
     }
 
     public resetTransform() {
         if (!this.currentModel) return;
-        this.currentModel.position.set(0, 0, 0);
-        this.currentModel.rotation.set(0, 0, 0);
+        this.basePosition.set(0, 0, 0);
+        this.baseRotation.set(0, 0, 0);
+        this.currentModel.position.copy(this.basePosition);
+        this.currentModel.rotation.copy(this.baseRotation);
         this.currentModel.scale.setScalar(1);
         this.camera.position.set(0, 0, 5);
         this.notifyStateChange();
@@ -899,7 +981,8 @@ export class ARScene {
 
     public rotateModel(axis: 'x' | 'y' | 'z', angle: number) {
         if (!this.currentModel) return;
-        this.currentModel.rotation[axis] += angle;
+        this.baseRotation[axis] += angle;
+        this.currentModel.rotation.copy(this.baseRotation);
         this.notifyStateChange();
     }
 

@@ -8,19 +8,36 @@
     --neon-glow: rgba(168, 85, 247, 0.7);
     --neon-border: rgba(168, 85, 247, 0.5);
     --text-dark: #111827;
-    --text-gray: #4b5563;
+    --text-gray: #d1d5db;
     --text-light: #9ca3af;
     --bg-white: #ffffff;
-    --bg-gray: #f9fafb;
-    --border-light: #e5e7eb;
+    --bg-gray: #f3f4f6;
+    --border-light: #d1d5db;
+    
+    /* Fluid Typography Foundation */
+    --fs-xs: clamp(0.7rem, 0.65rem + 0.25vw, 0.8rem);
+    --fs-sm: clamp(0.8rem, 0.75rem + 0.25vw, 0.9rem);
+    --fs-base: clamp(0.9rem, 0.85rem + 0.25vw, 1rem);
+    --fs-lg: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+    --fs-xl: clamp(1.125rem, 1rem + 0.5vw, 1.25rem);
+    --fs-2xl: clamp(1.25rem, 1.1rem + 0.75vw, 1.5rem);
+    --fs-3xl: clamp(1.5rem, 1.3rem + 1vw, 2rem);
+    --fs-4xl: clamp(2rem, 1.7rem + 1.5vw, 3rem);
+    --fs-hero: clamp(2.5rem, 1.5rem + 5vw, 4.5rem);
   }
 
   body {
     @apply antialiased min-h-screen flex flex-col;
     font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: var(--fs-base);
     background-color: var(--bg-white);
     color: var(--text-dark);
+    margin: 0;
+    padding: 0;
+    width: 100%;
     overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
@@ -144,8 +161,8 @@
 /* ── Premium Glassmorphism & UI ── */
 @layer utilities {
   .glass-card {
-    @apply bg-white/5 backdrop-blur-xl border border-purple-500/20 shadow-2xl;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(147, 51, 234, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    @apply bg-white/15 backdrop-blur-3xl border border-white/20 shadow-2xl;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 40px rgba(147, 51, 234, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.15);
   }
 
   .btn-premium-primary {

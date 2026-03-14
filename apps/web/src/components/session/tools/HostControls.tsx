@@ -45,10 +45,6 @@ export const HostControls: React.FC<HostControlsProps> = ({
         socket?.emit('HOST_MUTE', { targetId: id, targetName: name, by: localName });
     };
 
-    const makeCoHost = (id: string, name: string) => {
-        socket?.emit('HOST_PROMOTE', { targetId: id, targetName: name });
-    };
-
     const removeParticipant = (id: string, name: string) => {
         if (!confirm(`Remove ${name} from the session?`)) return;
         socket?.emit('HOST_REMOVE', { targetId: id, targetName: name, by: localName });

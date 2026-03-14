@@ -29,6 +29,9 @@ const PreJoinLobby = () => {
 
     // Start camera preview
     useEffect(() => {
+        let rafId: number | null = null;
+        let audioCtx: AudioContext | null = null;
+
         const startPreview = async () => {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -38,9 +41,9 @@ const PreJoinLobby = () => {
                 }
 
                 // Audio level meter
-                const ctx = new AudioContext();
-                const src = ctx.createMediaStreamSource(stream);
-                const analyser = ctx.createAnalyser();
+                audioCtx = new AudioContext();
+                const src = audioCtx.createMediaStreamSource(stream);
+                const analyser = audioCtx.createAnalyser();
                 analyser.fftSize = 256;
                 src.connect(analyser);
                 const data = new Uint8Array(analyser.frequencyBinCount);
@@ -48,7 +51,7 @@ const PreJoinLobby = () => {
                     analyser.getByteFrequencyData(data);
                     const avg = data.reduce((s, v) => s + v, 0) / data.length;
                     setAudioLevel(Math.min(100, avg * 2));
-                    requestAnimationFrame(poll);
+                    rafId = requestAnimationFrame(poll);
                 };
                 poll();
             } catch {
@@ -57,6 +60,8 @@ const PreJoinLobby = () => {
         };
         startPreview();
         return () => {
+            if (rafId) cancelAnimationFrame(rafId);
+            if (audioCtx) void audioCtx.close();
             streamRef.current?.getTracks().forEach(t => t.stop());
         };
     }, []);
@@ -79,6 +84,7 @@ const PreJoinLobby = () => {
 
         // Give the OS a moment to fully release the hardware
         setTimeout(() => {
+            localStorage.setItem('user_name', displayName.trim());
             if (role === 'host') {
                 navigate('/topic-prep', { state: { sessionId } });
             } else {

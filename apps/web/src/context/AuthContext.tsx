@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+/* eslint-disable react-refresh/only-export-components */
+import { createContext, useContext, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AUTH_TOKEN_KEY } from '../services/api';
 
@@ -23,26 +24,18 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-    const [user, setUser] = useState<User | null>(null);
-    const [token, setToken] = useState<string | null>(null);
-    // Loading is true initially to check for existing token
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        const storedToken = localStorage.getItem(AUTH_TOKEN_KEY);
-        const storedUser = localStorage.getItem(USER_DATA_KEY);
-
-        if (storedToken && storedUser) {
-            setToken(storedToken);
-            try {
-                setUser(JSON.parse(storedUser));
-            } catch {
-                // Corrupted data — clear it
-                localStorage.removeItem(USER_DATA_KEY);
-            }
+    const [token, setToken] = useState<string | null>(() => localStorage.getItem(AUTH_TOKEN_KEY));
+    const [user, setUser] = useState<User | null>(() => {
+        const raw = localStorage.getItem(USER_DATA_KEY);
+        if (!raw) return null;
+        try {
+            return JSON.parse(raw);
+        } catch {
+            localStorage.removeItem(USER_DATA_KEY);
+            return null;
         }
-        setLoading(false);
-    }, []);
+    });
+    const loading = false;
 
     const login = (newToken: string, newUser: User) => {
         setToken(newToken);

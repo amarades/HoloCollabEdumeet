@@ -97,7 +97,7 @@ const Signup = () => {
                     <div className="space-y-4">
                         <label className="text-xs font-black text-purple-300/70 ml-1 uppercase tracking-widest">I am a...</label>
                         <div className="grid grid-cols-2 gap-4">
-                            {(['student', 'host'] as const).map(r => (
+                            {(['student', 'instructor'] as const).map(r => (
                                 <button
                                     key={r}
                                     type="button"

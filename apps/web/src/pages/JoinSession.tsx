@@ -20,6 +20,16 @@ const JoinSession = () => {
     const [isValidating, setIsValidating] = useState(false);
 
     useEffect(() => {
+        const queryCode = searchParams.get('code');
+        if (queryCode) {
+            const normalized = queryCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+            if (normalized) {
+                setRoomCode(normalized);
+            }
+        }
+    }, [searchParams]);
+
+    useEffect(() => {
         if (roomCode.length === 6) {
             validateRoom();
         } else {
@@ -35,7 +45,7 @@ const JoinSession = () => {
             const data = await apiRequest(`/api/sessions/validate/${roomCode}`);
             setSessionInfo(data);
             setParticipants(data.participants || []);
-        } catch (err: any) {
+        } catch {
             setError('Invalid room code or session has ended.');
             setSessionInfo(null);
             setParticipants([]);
@@ -72,6 +82,7 @@ const JoinSession = () => {
 
             sessionStorage.setItem('room_code', data.room_code);
             sessionStorage.setItem('session_role', data.role || 'student');
+            sessionStorage.removeItem('host_token');
             navigate(`/lobby?session=${data.session_id}&code=${data.room_code}&role=${data.role || 'student'}`);
         } catch (err: any) {
             setError(err.message || 'Failed to join. Please check the room code.');
@@ -119,7 +130,7 @@ const JoinSession = () => {
                             <input
                                 type="text"
                                 value={roomCode}
-                                onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+                                onChange={(e) => setRoomCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))}
                                 placeholder="XXXXXX"
                                 maxLength={6}
                                 className="w-full py-6 px-4 bg-gray-50/50 border-2 border-gray-100 rounded-2xl text-center text-4xl font-mono font-black tracking-[0.4em] text-gray-900 focus:border-indigo-400 focus:bg-white transition-all outline-none"

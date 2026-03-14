@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Eye, EyeOff, RotateCcw, Upload, Box, Trash2, Plus, Circle, Cylinder, Lock, Sparkles, MoveHorizontal, Palette } from 'lucide-react';
+import { X, Eye, EyeOff, RotateCcw, Upload, Box, Trash2, Plus, Circle, Cylinder, Lock, Sparkles, MoveHorizontal, Palette, BookmarkPlus } from 'lucide-react';
 import type { SceneObject } from '../../../3d/SceneSync';
 
 interface ScenePanelProps {
@@ -20,6 +20,10 @@ interface ScenePanelProps {
     onSetVisualFilter?: (filter: 'realistic' | 'blue_glow' | 'red_glow') => void;
     autoOscillate?: boolean;
     onSetAutoOscillate?: (enabled: boolean) => void;
+    onSelectLibraryModel?: (url: string, name: string) => void;
+    onAddToLibrary?: () => void;
+    libraryModels?: any[];
+    isHost?: boolean;
 }
 
 const SHAPE_COLORS = [
@@ -43,9 +47,13 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
     onSetVisualFilter,
     autoOscillate = true,
     onSetAutoOscillate,
+    onSelectLibraryModel,
+    onAddToLibrary,
+    libraryModels = [],
+    isHost = false,
 }) => {
     const [selectedColor, setSelectedColor] = useState('#6366f1');
-    const [activeTab, setActiveTab] = useState<'objects' | 'model'>('objects');
+    const [activeTab, setActiveTab] = useState<'objects' | 'model' | 'library'>('objects');
 
     const getShapeIcon = (type: SceneObject['type']) => {
         switch (type) {
@@ -70,7 +78,7 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
 
             {/* Tabs */}
             <div className="flex border-b border-gray-100">
-                {(['objects', 'model'] as const).map((tab) => (
+                {(['objects', 'model', 'library'] as const).map((tab) => (
                     <button
                         key={tab}
                         onClick={() => setActiveTab(tab)}
@@ -80,7 +88,7 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
                                 : 'text-gray-500 hover:text-gray-700'
                             }`}
                     >
-                        {tab === 'objects' ? `Objects (${sceneObjects.length})` : '3D Model'}
+                        {tab === 'objects' ? `Objects (${sceneObjects.length})` : tab === 'model' ? '3D Model' : 'Library'}
                     </button>
                 ))}
             </div>
@@ -242,6 +250,17 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
                                     </button>
 
                                     <button
+                                        onClick={onAddToLibrary}
+                                        className="flex items-center gap-3 p-4 rounded-xl border border-primary/20 hover:bg-primary/5 transition-all bg-white text-primary"
+                                    >
+                                        <BookmarkPlus className="w-5 h-5" />
+                                        <div className="text-left">
+                                            <div className="font-medium text-sm">Add to Library</div>
+                                            <div className="text-primary/60 text-xs">Save this model for future use</div>
+                                        </div>
+                                    </button>
+
+                                    <button
                                         onClick={onDeleteModel}
                                         className="flex items-center gap-3 p-4 rounded-xl border border-red-100 hover:bg-red-50 transition-all bg-white"
                                     >
@@ -307,26 +326,116 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
                                         </div>
                                     </button>
                                 </div>
+
+                                {/* Gesture tips */}
+                                <div className="p-4 bg-primary/5 border border-primary/20 rounded-xl mt-2">
+                                    <h4 className="text-primary font-semibold text-sm mb-2 flex items-center gap-2">
+                                        <RotateCcw className="w-3.5 h-3.5" />
+                                        Gesture Controls
+                                    </h4>
+                                    <div className="flex flex-col gap-1.5">
+                                        {[
+                                            ['✊', 'Fist to reset position'],
+                                            ['☝️', 'Point to move model'],
+                                            ['🤏', 'Pinch to zoom'],
+                                            ['🖐️', 'Open hand to rotate'],
+                                        ].map(([emoji, tip]) => (
+                                            <div key={tip} className="flex items-center gap-2 text-xs text-gray-600">
+                                                <span>{emoji}</span><span>{tip}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
                             </>
                         )}
+                    </div>
+                )}
 
-                        {/* Gesture tips */}
-                        <div className="p-4 bg-primary/5 border border-primary/20 rounded-xl">
-                            <h4 className="text-primary font-semibold text-sm mb-2 flex items-center gap-2">
-                                <RotateCcw className="w-3.5 h-3.5" />
-                                Gesture Controls
-                            </h4>
-                            <div className="flex flex-col gap-1.5">
-                                {[
-                                    ['✊', 'Fist to reset position'],
-                                    ['☝️', 'Point to move model'],
-                                    ['🤏', 'Pinch to zoom'],
-                                    ['🖐️', 'Open hand to rotate'],
-                                ].map(([emoji, tip]) => (
-                                    <div key={tip} className="flex items-center gap-2 text-xs text-gray-600">
-                                        <span>{emoji}</span><span>{tip}</span>
-                                    </div>
-                                ))}
+                {/* ── Library Tab ── */}
+                {activeTab === 'library' && (
+                    <div className="p-4 flex flex-col gap-4">
+                        <div className="flex items-center gap-2 mb-1">
+                            <Sparkles className="w-4 h-4 text-primary" />
+                            <h3 className="text-gray-900 font-semibold text-sm">3D Library</h3>
+                        </div>
+                        <p className="text-gray-500 text-xs leading-relaxed mb-4">
+                            Select a curated model from our interactive library. These are optimized for high-performance spatial education.
+                        </p>
+                        
+                        {!isHost && (
+                            <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl text-amber-700 text-xs mb-4">
+                                <strong>Note:</strong> Only the session host can change the primary 3D model for all participants.
+                            </div>
+                        )}
+
+                        <div className="space-y-6">
+                            {/* Curated Section */}
+                            <div>
+                                <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                    <Lock className="w-3 h-3" />
+                                    In-built Models
+                                </h4>
+                                <div className="grid grid-cols-2 gap-3">
+                                    {libraryModels.filter(m => m.is_curated).map(model => (
+                                        <button
+                                            key={model.id}
+                                            disabled={!isHost}
+                                            onClick={() => onSelectLibraryModel?.(model.url, model.name)}
+                                            className={`flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all text-center group
+                                                ${isHost 
+                                                    ? 'bg-purple-50/30 border-purple-100 hover:border-primary/40 hover:bg-primary/5 hover:shadow-md' 
+                                                    : 'bg-gray-50/50 border-gray-100 opacity-60 cursor-not-allowed'}`}
+                                        >
+                                            <span className="text-3xl group-hover:scale-110 transition-transform duration-300">
+                                                {model.thumbnail || '📦'}
+                                            </span>
+                                            <div>
+                                                <div className="text-gray-900 font-bold text-[11px] leading-tight">{model.name}</div>
+                                                <div className="text-primary text-[9px] uppercase tracking-tighter mt-0.5 font-medium">{model.category}</div>
+                                            </div>
+                                        </button>
+                                    ))}
+                                    {libraryModels.filter(m => m.is_curated).length === 0 && (
+                                        <div className="col-span-2 py-4 text-center text-gray-400 text-xs italic">
+                                            Loading curated collection...
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Community Section */}
+                            <div>
+                                <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                    <Plus className="w-3 h-3" />
+                                    Community Contributions
+                                </h4>
+                                <div className="grid grid-cols-2 gap-3">
+                                    {libraryModels.filter(m => !m.is_curated).map(model => (
+                                        <button
+                                            key={model.id}
+                                            disabled={!isHost}
+                                            onClick={() => onSelectLibraryModel?.(model.url, model.name)}
+                                            className={`flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all text-center group
+                                                ${isHost 
+                                                    ? 'bg-gray-50 border-gray-100 hover:border-primary/40 hover:bg-primary/5 hover:shadow-md' 
+                                                    : 'bg-gray-50/50 border-gray-100 opacity-60 cursor-not-allowed'}`}
+                                        >
+                                            <span className="text-3xl group-hover:scale-110 transition-transform duration-300">
+                                                {model.thumbnail || '📦'}
+                                            </span>
+                                            <div>
+                                                <div className="text-gray-900 font-bold text-[11px] leading-tight">{model.name}</div>
+                                                <div className="text-gray-400 text-[9px] uppercase tracking-tighter mt-0.5">{model.category}</div>
+                                            </div>
+                                        </button>
+                                    ))}
+                                    {libraryModels.filter(m => !m.is_curated).length === 0 && (
+                                        <div className="col-span-2 py-8 text-center border border-dashed border-gray-200 rounded-2xl">
+                                            <p className="text-gray-400 text-xs italic">No uploads in the library yet.</p>
+                                            <p className="text-gray-400 text-[10px] mt-1">Uploaded models appear here once saved.</p>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>

@@ -3,11 +3,31 @@ import { X, Youtube, Monitor, Link as LinkIcon, Lock } from 'lucide-react';
 
 interface MediaPanelProps {
     onClose: () => void;
+    onShareScreen?: () => void;
+    onPlayVideo?: (url: string) => void;
 }
 
-export const MediaPanel: React.FC<MediaPanelProps> = ({ onClose }) => {
+export const MediaPanel: React.FC<MediaPanelProps> = ({ onClose, onShareScreen, onPlayVideo }) => {
     const [activeTab, setActiveTab] = useState<'video' | 'screen'>('video');
     const [url, setUrl] = useState('');
+    const [error, setError] = useState('');
+
+    const handlePlay = () => {
+        const normalized = url.trim();
+        if (!normalized) {
+            setError('Please enter a media URL.');
+            return;
+        }
+        try {
+            const parsed = new URL(normalized);
+            if (!/^https?:$/i.test(parsed.protocol)) throw new Error('invalid');
+        } catch {
+            setError('Please enter a valid http/https URL.');
+            return;
+        }
+        setError('');
+        onPlayVideo?.(normalized);
+    };
 
     return (
         <div className="absolute inset-4 md:inset-y-10 md:right-10 md:left-auto md:w-[400px] bg-white rounded-2xl border border-gray-200 shadow-2xl z-40 flex flex-col overflow-hidden animate-in slide-in-from-right duration-200">
@@ -67,10 +87,14 @@ export const MediaPanel: React.FC<MediaPanelProps> = ({ onClose }) => {
                                         placeholder="https://..."
                                     />
                                 </div>
-                                <button className="bg-primary hover:bg-primary-hover text-white font-semibold py-2 px-5 rounded-xl transition-all shadow-sm shrink-0">
+                                <button
+                                    onClick={handlePlay}
+                                    className="bg-primary hover:bg-primary-hover text-white font-semibold py-2 px-5 rounded-xl transition-all shadow-sm shrink-0"
+                                >
                                     Play
                                 </button>
                             </div>
+                            {error && <p className="text-xs text-red-500">{error}</p>}
                         </div>
 
                         {/* Recent/Suggested */}
@@ -108,7 +132,10 @@ export const MediaPanel: React.FC<MediaPanelProps> = ({ onClose }) => {
                             Share your screen, window, or tab with all attendees.
                         </p>
 
-                        <button className="mt-6 bg-primary hover:bg-primary-hover text-white font-semibold py-3.5 px-8 rounded-full flex items-center justify-center gap-2 transition-all shadow-md">
+                        <button
+                            onClick={onShareScreen}
+                            className="mt-6 bg-primary hover:bg-primary-hover text-white font-semibold py-3.5 px-8 rounded-full flex items-center justify-center gap-2 transition-all shadow-md"
+                        >
                             <Monitor className="w-5 h-5" />
                             Share Screen
                         </button>

@@ -21,6 +21,7 @@ export class PermissionsService {
     private isHost: boolean = false;
     private pendingRequests: ParticipantRequest[] = [];
     private participantPermissions: Record<string, UserPermissions> = {};
+    private unsubscribers: Array<() => void> = [];
 
     static getInstance(): PermissionsService {
         if (!PermissionsService.instance) {
@@ -30,6 +31,8 @@ export class PermissionsService {
     }
 
     initialize(socket: SocketManager, isHost: boolean) {
+        this.unsubscribers.forEach(unsub => unsub());
+        this.unsubscribers = [];
         this.socket = socket;
         this.isHost = isHost;
         
@@ -47,7 +50,8 @@ export class PermissionsService {
         if (!this.socket) return;
 
         // Listen for participant join requests
-        this.socket.on('PARTICIPANT_JOIN_REQUEST', (data: any) => {
+        this.unsubscribers.push(this.socket.on('PARTICIPANT_JOIN_REQUEST', (data: any) => {
+            console.log('[PermissionsService] Received JOIN_REQUEST event from socket:', data);
             const request: ParticipantRequest = {
                 userId: data.userId,
                 userName: data.userName,
@@ -55,35 +59,35 @@ export class PermissionsService {
             };
             this.pendingRequests.push(request);
             this.notifyJoinRequest(request);
-        });
+        }));
 
         // Listen for permission requests from participants
-        this.socket.on('PERMISSION_REQUEST', (data: any) => {
+        this.unsubscribers.push(this.socket.on('PERMISSION_REQUEST', (data: any) => {
             this.handlePermissionRequest(data.userId, data.permission);
-        });
+        }));
     }
 
     private setupParticipantListeners() {
         if (!this.socket) return;
 
         // Listen for permission grants from host
-        this.socket.on('PERMISSION_GRANTED', (data: any) => {
+        this.unsubscribers.push(this.socket.on('PERMISSION_GRANTED', (data: any) => {
             this.updatePermissions(data.userId, data.permissions);
-        });
+        }));
 
         // Listen for permission revocations
-        this.socket.on('PERMISSION_REVOKED', (data: any) => {
+        this.unsubscribers.push(this.socket.on('PERMISSION_REVOKED', (data: any) => {
             this.updatePermissions(data.userId, data.permissions);
-        });
+        }));
 
         // Listen for join approval/rejection
-        this.socket.on('JOIN_APPROVED', (data: any) => {
+        this.unsubscribers.push(this.socket.on('JOIN_APPROVED', (data: any) => {
             this.onJoinApproved(data);
-        });
+        }));
 
-        this.socket.on('JOIN_REJECTED', (data: any) => {
+        this.unsubscribers.push(this.socket.on('JOIN_REJECTED', (data: any) => {
             this.onJoinRejected(data);
-        });
+        }));
     }
 
     // Host methods
@@ -244,6 +248,8 @@ export class PermissionsService {
 
     // Cleanup
     destroy() {
+        this.unsubscribers.forEach(unsub => unsub());
+        this.unsubscribers = [];
         this.socket = null;
         this.isHost = false;
         this.pendingRequests = [];

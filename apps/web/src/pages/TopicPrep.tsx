@@ -4,10 +4,6 @@ import { Mic, MicOff, Sparkles, Loader2, ArrowRight, ArrowLeft, Brain, Tag, Help
 import { apiRequest } from '../services/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-interface TopicResult {
-    topic: string;
-    keywords: string[];
-}
 interface LectureNotes {
     summary: string;
     key_points: string[];
@@ -16,8 +12,13 @@ interface LectureNotes {
 }
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
+const CHIP_COLOR_CLASS: Record<string, string> = {
+    purple: 'bg-purple-500/20 text-purple-200 border border-purple-500/30',
+    blue: 'bg-blue-500/20 text-blue-200 border border-blue-500/30',
+};
+
 const Chip = ({ label, color = 'purple' }: { label: string; color?: string }) => (
-    <span className={`px-2.5 py-1 rounded-full text-xs font-medium bg-${color}-500/20 text-${color}-200 border border-${color}-500/30`}>
+    <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${CHIP_COLOR_CLASS[color] || CHIP_COLOR_CLASS.purple}`}>
         {label}
     </span>
 );
@@ -47,7 +48,8 @@ const TopicPrep = () => {
 
     // Detection result
     const [isDetecting, setIsDetecting] = useState(false);
-    const [detected, setDetected] = useState<TopicResult | null>(null);
+    const [detected, setDetected] = useState<any | null>(null);
+    const [autoModel, setAutoModel] = useState<any | null>(null);
 
     // Notes
     const [isGenerating, setIsGenerating] = useState(false);
@@ -88,6 +90,7 @@ const TopicPrep = () => {
         if (!input) return;
         setIsDetecting(true);
         setDetected(null);
+        setAutoModel(null);
         setNotes(null);
         try {
             const result = await apiRequest('/api/ai/topic-detect', {
@@ -95,6 +98,12 @@ const TopicPrep = () => {
                 body: JSON.stringify({ transcript: input }),
             });
             setDetected(result);
+            if (result.auto_load_model) {
+                setAutoModel(result.auto_load_model);
+                sessionStorage.setItem('auto_load_model', JSON.stringify(result.auto_load_model));
+            } else {
+                sessionStorage.removeItem('auto_load_model');
+            }
             // Auto-save to sessionStorage
             if (result.topic) sessionStorage.setItem('detected_topic', result.topic);
         } catch {
@@ -103,6 +112,7 @@ const TopicPrep = () => {
             const topic = words.slice(0, 3).join(' ');
             setDetected({ topic, keywords: words.slice(0, 5) });
             sessionStorage.setItem('detected_topic', topic);
+            sessionStorage.removeItem('auto_load_model');
         } finally {
             setIsDetecting(false);
         }
@@ -268,11 +278,27 @@ const TopicPrep = () => {
                                 <h2 className="text-xl font-bold text-white">{detected.topic}</h2>
                                 {detected.keywords?.length > 0 && (
                                     <div className="flex flex-wrap gap-1.5 mt-2">
-                                        {detected.keywords.map((kw, i) => <Chip key={i} label={kw} />)}
+                                        {detected.keywords.map((kw: string, i: number) => <Chip key={i} label={kw} />)}
                                     </div>
                                 )}
                             </div>
                         </div>
+
+                        {/* Feature 11: Auto Model Match Notification */}
+                        {autoModel && (
+                            <div className="mt-4 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="text-2xl">{autoModel.thumbnail}</div>
+                                    <div>
+                                        <p className="text-[10px] uppercase tracking-wider text-emerald-400 font-bold">Matched 3D Model</p>
+                                        <p className="text-sm font-semibold text-white">{autoModel.name}</p>
+                                    </div>
+                                </div>
+                                <div className="px-3 py-1 bg-emerald-500 text-white text-[10px] font-bold rounded-lg uppercase">
+                                    Ready to Load
+                                </div>
+                            </div>
+                        )}
 
                         <button
                             onClick={generateNotes}

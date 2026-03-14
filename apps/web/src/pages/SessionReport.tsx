@@ -1,7 +1,11 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, Clock, Brain, TrendingUp, CheckCircle, AlertTriangle, BarChart3, Award } from 'lucide-react';
-import { apiRequest } from '../services/api';
+import { 
+    Users, Clock, Brain, TrendingUp, CheckCircle, AlertTriangle, 
+    BarChart3, Award, Home, LayoutDashboard, ChevronDown, Bot
+} from 'lucide-react';
+import { apiRequest, AUTH_TOKEN_KEY } from '../services/api';
+import { AIAssistant } from '../components/AIAssistant';
 
 interface StudentStat {
     name: string;
@@ -62,9 +66,50 @@ const SessionReport = () => {
     const [report, setReport] = useState<ReportData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [sortConfig, setSortConfig] = useState<{ key: 'name' | 'duration_minutes' | 'attention_score', direction: 'asc' | 'desc' }>({ key: 'attention_score', direction: 'desc' });
+    const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+    const [showAI, setShowAI] = useState(false);
 
-    const handleExportCSV = () => {
-        window.open(`${import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'}/api/sessions/${sessionId}/export/csv`, '_blank');
+    const toggleRow = (index: number) => {
+        const newExpanded = new Set(expandedRows);
+        if (newExpanded.has(index)) newExpanded.delete(index);
+        else newExpanded.add(index);
+        setExpandedRows(newExpanded);
+    };
+
+    const handleSort = (key: 'name' | 'duration_minutes' | 'attention_score') => {
+        setSortConfig(prev => ({
+            key,
+            direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc'
+        }));
+    };
+
+    const handleExportCSV = async () => {
+        if (!sessionId) return;
+        try {
+            const token = localStorage.getItem(AUTH_TOKEN_KEY);
+            if (!token || token === 'guest') throw new Error('Please sign in to export attendance.');
+
+            const base = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+            const endpoint = `${base}/api/sessions/${sessionId}/export/csv`;
+            const response = await fetch(endpoint, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!response.ok) throw new Error(`Export failed (${response.status})`);
+
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `attendance_${sessionId}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error(err);
+            setError('Could not export attendance CSV.');
+        }
     };
 
     useEffect(() => {
@@ -109,7 +154,14 @@ const SessionReport = () => {
     }
 
     const ratingInfo = RATING_INFO(report.rating);
-    const sortedStudents = [...report.students].sort((a, b) => b.attention_score - a.attention_score);
+    
+    const sortedStudents = [...report.students].sort((a, b) => {
+        const aValue = a[sortConfig.key];
+        const bValue = b[sortConfig.key];
+        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+    });
 
     return (
         <div className="min-h-screen premium-bg p-4 md:p-8">
@@ -121,17 +173,34 @@ const SessionReport = () => {
 
                 {/* Header */}
                 <div className="flex items-center gap-4">
-                    <button
-                        onClick={() => navigate('/dashboard')}
-                        className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors border border-white/20"
-                    >
-                        <ArrowLeft className="w-5 h-5 text-white" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => navigate('/dashboard')}
+                            title="Back to Dashboard"
+                            className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors border border-white/20 group"
+                        >
+                            <LayoutDashboard className="w-5 h-5 text-white/70 group-hover:text-white" />
+                        </button>
+                        <button
+                            onClick={() => navigate('/')}
+                            title="Go Home"
+                            className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors border border-white/20 group"
+                        >
+                            <Home className="w-5 h-5 text-white/70 group-hover:text-white" />
+                        </button>
+                    </div>
                     <div>
                         <h1 className="text-2xl font-bold text-white">Session Report</h1>
                         <p className="text-white/60 text-sm">{report.session_name} — {report.topic}</p>
                     </div>
-                    <div className="ml-auto">
+                    <div className="ml-auto flex items-center gap-3">
+                        <button
+                            onClick={() => setShowAI(!showAI)}
+                            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-lg ${showAI ? 'bg-purple-600 text-white shadow-purple-900/40' : 'bg-white/10 text-white hover:bg-white/20 border border-white/20'}`}
+                        >
+                            <Bot className="w-4 h-4" />
+                            AI Analyst
+                        </button>
                         <button
                             onClick={handleExportCSV}
                             className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-semibold transition-all shadow-lg shadow-green-900/20"
@@ -227,35 +296,93 @@ const SessionReport = () => {
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="border-b border-white/10">
-                                        <th className="text-left text-white/50 font-medium pb-3 pr-4">Student</th>
-                                        <th className="text-left text-white/50 font-medium pb-3 pr-4">Duration</th>
-                                        <th className="text-left text-white/50 font-medium pb-3 pr-4">Attention</th>
+                                        <th 
+                                            className="text-left text-white/50 font-medium pb-3 pr-4 cursor-pointer hover:text-white transition-colors"
+                                            onClick={() => handleSort('name')}
+                                        >
+                                            <div className="flex items-center gap-1">
+                                                Student {sortConfig.key === 'name' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                                            </div>
+                                        </th>
+                                        <th 
+                                            className="text-left text-white/50 font-medium pb-3 pr-4 cursor-pointer hover:text-white transition-colors"
+                                            onClick={() => handleSort('duration_minutes')}
+                                        >
+                                            <div className="flex items-center gap-1">
+                                                Duration {sortConfig.key === 'duration_minutes' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                                            </div>
+                                        </th>
+                                        <th 
+                                            className="text-left text-white/50 font-medium pb-3 pr-4 cursor-pointer hover:text-white transition-colors"
+                                            onClick={() => handleSort('attention_score')}
+                                        >
+                                            <div className="flex items-center gap-1">
+                                                Attention {sortConfig.key === 'attention_score' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                                            </div>
+                                        </th>
                                         <th className="text-left text-white/50 font-medium pb-3">Rating</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-white/5">
                                     {sortedStudents.map((s, i) => {
                                         const r = RATING_INFO(GET_RATING_LABEL(s.attention_score));
+                                        const isExpanded = expandedRows.has(i);
                                         return (
-                                            <tr key={i} className="group">
-                                                <td className="py-3 pr-4">
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="w-6 h-6 rounded-full bg-purple-500/30 flex items-center justify-center text-white text-xs font-bold">
-                                                            {i + 1}
+                                            <React.Fragment key={i}>
+                                                <tr 
+                                                    className="group cursor-pointer hover:bg-white/5 transition-colors"
+                                                    onClick={() => toggleRow(i)}
+                                                >
+                                                    <td className="py-4 pr-4">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-6 h-6 rounded-full bg-purple-500/30 flex items-center justify-center text-white text-xs font-bold">
+                                                                {i + 1}
+                                                            </div>
+                                                            <span className="text-white/90 font-medium">{s.name}</span>
                                                         </div>
-                                                        <span className="text-white/90">{s.name}</span>
-                                                    </div>
-                                                </td>
-                                                <td className="py-3 pr-4 text-white/70">{s.duration_minutes}m</td>
-                                                <td className="py-3 pr-4">
-                                                    <span className={`font-semibold ${ATTENTION_COLOR(s.attention_score)}`}>
-                                                        {s.attention_score}%
-                                                    </span>
-                                                </td>
-                                                <td className="py-3">
-                                                    <span className="text-white/60">{r.icon} {r.label}</span>
-                                                </td>
-                                            </tr>
+                                                    </td>
+                                                    <td className="py-4 pr-4 text-white/70">{s.duration_minutes}m</td>
+                                                    <td className="py-4 pr-4">
+                                                        <span className={`font-bold ${ATTENTION_COLOR(s.attention_score)}`}>
+                                                            {s.attention_score}%
+                                                        </span>
+                                                    </td>
+                                                    <td className="py-4 flex items-center justify-between">
+                                                        <span className="text-white/60">{r.icon} {r.label}</span>
+                                                        <ChevronDown size={16} className={`text-white/30 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
+                                                    </td>
+                                                </tr>
+                                                {isExpanded && (
+                                                    <tr>
+                                                        <td colSpan={4} className="pb-4 pt-0">
+                                                            <div className="bg-white/5 rounded-2xl p-4 grid grid-cols-2 md:grid-cols-4 gap-4 animate-in fade-in slide-in-from-top-2">
+                                                                <div className="space-y-1">
+                                                                    <p className="text-[10px] text-white/40 uppercase font-black">Joined At</p>
+                                                                    <p className="text-white/80 text-sm">
+                                                                        {s.join_time ? new Date(s.join_time).toLocaleTimeString() : 'N/A'}
+                                                                    </p>
+                                                                </div>
+                                                                <div className="space-y-1">
+                                                                    <p className="text-[10px] text-white/40 uppercase font-black">Left At</p>
+                                                                    <p className="text-white/80 text-sm">
+                                                                        {s.leave_time ? new Date(s.leave_time).toLocaleTimeString() : 'In Progress'}
+                                                                    </p>
+                                                                </div>
+                                                                <div className="space-y-1">
+                                                                    <p className="text-[10px] text-white/40 uppercase font-black">Duration</p>
+                                                                    <p className="text-white/80 text-sm">{s.duration_minutes} Minutes</p>
+                                                                </div>
+                                                                <div className="space-y-1">
+                                                                    <p className="text-[10px] text-white/40 uppercase font-black">Performance</p>
+                                                                    <p className={`text-sm font-bold ${ATTENTION_COLOR(s.attention_score)}`}>
+                                                                        {s.attention_score}% Score
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </React.Fragment>
                                         );
                                     })}
                                 </tbody>
@@ -315,15 +442,35 @@ const SessionReport = () => {
                 </div>
 
                 {/* Actions */}
-                <div className="flex flex-col sm:flex-row gap-3">
+                <div className="flex flex-col sm:flex-row gap-4">
                     <button
                         onClick={() => navigate('/dashboard')}
-                        className="flex-1 py-3 bg-white/10 hover:bg-white/20 text-white rounded-full font-medium transition-all border border-white/20"
+                        className="flex-1 py-4 bg-white/10 hover:bg-white/20 text-white rounded-2xl font-bold transition-all border border-white/20 flex items-center justify-center gap-3 shadow-lg shadow-black/20"
                     >
+                        <LayoutDashboard className="w-5 h-5" />
                         Back to Dashboard
+                    </button>
+                    <button
+                        onClick={() => navigate('/')}
+                        className="flex-1 py-4 bg-purple-600/20 hover:bg-purple-600/30 text-purple-200 rounded-2xl font-bold transition-all border border-purple-500/30 flex items-center justify-center gap-3 shadow-lg shadow-purple-900/20"
+                    >
+                        <Home className="w-5 h-5" />
+                        Return Home
                     </button>
                 </div>
             </div>
+
+            {/* AI Assistant Overlay */}
+            {showAI && (
+                <div className="fixed inset-4 md:inset-auto md:bottom-24 md:right-8 md:w-[400px] md:h-[600px] z-[100] animate-in fade-in slide-in-from-right-8 duration-300">
+                    <AIAssistant 
+                        onClose={() => setShowAI(false)}
+                        modelName={`Session Report: ${report.session_name}`}
+                        detectedTopic={report.topic}
+                        participants={report.students.map((s, idx) => ({ id: `s_${idx}`, name: s.name }))}
+                    />
+                </div>
+            )}
         </div>
     );
 };

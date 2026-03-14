@@ -1,8 +1,15 @@
 import React, { useState } from 'react';
 import { X, Mic, Video, Volume2, Monitor, Hand, Cpu, ChevronDown } from 'lucide-react';
+import { useSettings } from '../../../context/SettingsContext';
 
 interface SettingsPanelProps {
     onClose: () => void;
+    micEnabled?: boolean;
+    cameraEnabled?: boolean;
+    gesturesEnabled?: boolean;
+    onMicEnabledChange?: (enabled: boolean) => void;
+    onCameraEnabledChange?: (enabled: boolean) => void;
+    onGesturesEnabledChange?: (enabled: boolean) => void;
 }
 
 const Toggle: React.FC<{ checked: boolean; onChange: (v: boolean) => void; label: string; description?: string }> = ({
@@ -50,11 +57,20 @@ const SelectField: React.FC<{ label: string; value: string; options: string[]; o
     </div>
 );
 
-export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
+export const SettingsPanel: React.FC<SettingsPanelProps> = ({
+    onClose,
+    micEnabled: micEnabledProp,
+    cameraEnabled: cameraEnabledProp,
+    gesturesEnabled: gesturesEnabledProp,
+    onMicEnabledChange,
+    onCameraEnabledChange,
+    onGesturesEnabledChange,
+}) => {
+    const { videoSettings, updateVideoSettings } = useSettings();
     const [activeTab, setActiveTab] = useState<'audio' | 'video' | 'display' | 'gestures'>('audio');
 
     // Audio
-    const [micEnabled, setMicEnabled] = useState(true);
+    const [micEnabled, setMicEnabled] = useState(micEnabledProp ?? true);
     const [noiseSuppression, setNoiseSuppression] = useState(true);
     const [echoCancellation, setEchoCancellation] = useState(true);
     const [spatialAudio, setSpatialAudio] = useState(false);
@@ -62,11 +78,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
     const [speakerDevice, setSpeakerDevice] = useState('Default Speaker');
 
     // Video
-    const [cameraEnabled, setCameraEnabled] = useState(true);
-    const [mirrorVideo, setMirrorVideo] = useState(true);
-    const [hdVideo, setHdVideo] = useState(true);
-    const [lowLightMode, setLowLightMode] = useState(false);
-    const [resolution, setResolution] = useState('720p');
+    const [cameraEnabled, setCameraEnabled] = useState(cameraEnabledProp ?? true);
+    const mirrorVideo = videoSettings.mirrorVideo;
+    const hdVideo = videoSettings.hdVideo;
+    const lowLightMode = videoSettings.lowLightMode;
+    const resolution = videoSettings.resolution;
 
     // Display
     const [darkMode, setDarkMode] = useState(false);
@@ -75,10 +91,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
     const [compactUI, setCompactUI] = useState(false);
 
     // Gestures
-    const [gesturesEnabled, setGesturesEnabled] = useState(true);
+    const [gesturesEnabled, setGesturesEnabled] = useState(gesturesEnabledProp ?? true);
     const [gestureConfidence, setGestureConfidence] = useState('0.7');
     const [handTracking, setHandTracking] = useState(true);
     const [gestureHaptics, setGestureHaptics] = useState(false);
+
+    const effectiveMicEnabled = typeof micEnabledProp === 'boolean' ? micEnabledProp : micEnabled;
+    const effectiveCameraEnabled = typeof cameraEnabledProp === 'boolean' ? cameraEnabledProp : cameraEnabled;
+    const effectiveGesturesEnabled = typeof gesturesEnabledProp === 'boolean' ? gesturesEnabledProp : gesturesEnabled;
 
     const tabs = [
         { id: 'audio' as const, label: 'Audio', icon: Mic },
@@ -135,7 +155,15 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
                             </div>
                         </div>
                         <div className="bg-gray-50 rounded-xl px-4 mb-6">
-                            <Toggle checked={micEnabled} onChange={setMicEnabled} label="Enable Microphone" description="Allow others to hear you" />
+                            <Toggle
+                                checked={effectiveMicEnabled}
+                                onChange={(enabled) => {
+                                    if (typeof micEnabledProp !== 'boolean') setMicEnabled(enabled);
+                                    onMicEnabledChange?.(enabled);
+                                }}
+                                label="Enable Microphone"
+                                description="Allow others to hear you"
+                            />
                             <Toggle checked={noiseSuppression} onChange={setNoiseSuppression} label="Noise Suppression" description="Reduce background noise" />
                             <Toggle checked={echoCancellation} onChange={setEchoCancellation} label="Echo Cancellation" description="Prevent audio feedback" />
                             <SelectField
@@ -179,15 +207,23 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
                             </div>
                         </div>
                         <div className="bg-gray-50 rounded-xl px-4">
-                            <Toggle checked={cameraEnabled} onChange={setCameraEnabled} label="Enable Camera" description="Show your video to others" />
-                            <Toggle checked={mirrorVideo} onChange={setMirrorVideo} label="Mirror Video" description="Flip your camera horizontally" />
-                            <Toggle checked={hdVideo} onChange={setHdVideo} label="HD Video" description="Stream at higher quality" />
-                            <Toggle checked={lowLightMode} onChange={setLowLightMode} label="Low-Light Enhancement" description="Improve video in dark environments" />
+                            <Toggle
+                                checked={effectiveCameraEnabled}
+                                onChange={(enabled) => {
+                                    if (typeof cameraEnabledProp !== 'boolean') setCameraEnabled(enabled);
+                                    onCameraEnabledChange?.(enabled);
+                                }}
+                                label="Enable Camera"
+                                description="Show your video to others"
+                            />
+                            <Toggle checked={mirrorVideo} onChange={(v) => updateVideoSettings({ mirrorVideo: v })} label="Mirror Video" description="Flip your camera horizontally" />
+                            <Toggle checked={hdVideo} onChange={(v) => updateVideoSettings({ hdVideo: v })} label="HD Video" description="Stream at higher quality" />
+                            <Toggle checked={lowLightMode} onChange={(v) => updateVideoSettings({ lowLightMode: v })} label="Low-Light Enhancement" description="Improve video in dark environments" />
                             <SelectField
                                 label="Resolution"
                                 value={resolution}
                                 options={['360p', '480p', '720p', '1080p']}
-                                onChange={setResolution}
+                                onChange={(v) => updateVideoSettings({ resolution: v })}
                             />
                         </div>
                     </div>
@@ -225,7 +261,15 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose }) => {
                             </div>
                         </div>
                         <div className="bg-gray-50 rounded-xl px-4 mb-6">
-                            <Toggle checked={gesturesEnabled} onChange={setGesturesEnabled} label="Enable Gestures" description="Control 3D models with hand movements" />
+                            <Toggle
+                                checked={effectiveGesturesEnabled}
+                                onChange={(enabled) => {
+                                    if (typeof gesturesEnabledProp !== 'boolean') setGesturesEnabled(enabled);
+                                    onGesturesEnabledChange?.(enabled);
+                                }}
+                                label="Enable Gestures"
+                                description="Control 3D models with hand movements"
+                            />
                             <Toggle checked={handTracking} onChange={setHandTracking} label="Hand Landmark Tracking" description="Send hand data over network" />
                             <Toggle checked={gestureHaptics} onChange={setGestureHaptics} label="Haptic Feedback" description="Vibration on gesture recognition (mobile)" />
                             <SelectField

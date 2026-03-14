@@ -1,16 +1,21 @@
 import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 
+const pseudoRandom = (index: number, salt: number): number => {
+    const x = Math.sin(index * 12.9898 + salt * 78.233) * 43758.5453;
+    return x - Math.floor(x);
+};
+
 const HolographicBackground: React.FC = () => {
     // Generate static shapes once to avoid re-renders
     const particles = useMemo(() =>
         Array.from({ length: 15 }).map((_, i) => ({
             id: i,
-            size: Math.random() * 100 + 50,
-            x: Math.random() * 100,
-            y: Math.random() * 100,
-            duration: Math.random() * 20 + 20,
-            delay: Math.random() * -20,
+            size: pseudoRandom(i, 1) * 100 + 50,
+            x: pseudoRandom(i, 2) * 100,
+            y: pseudoRandom(i, 3) * 100,
+            duration: pseudoRandom(i, 4) * 20 + 20,
+            delay: pseudoRandom(i, 5) * -20,
         })), []);
 
     return (

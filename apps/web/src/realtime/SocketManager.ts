@@ -1,3 +1,5 @@
+import { AUTH_TOKEN_KEY, createWebSocketTicket } from '../services/api';
+
 // Types for socket events to ensure type safety
 export interface User {
     id: string;
@@ -35,6 +37,8 @@ export class SocketManager {
     private reconnectDelay: number = 1000; // Start with 1s
     private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     private intentionalDisconnect: boolean = false;
+    private pendingMessages: string[] = [];
+    private maxPendingMessages: number = 200;
 
     // Session State
     private roomId: string | null = null;
@@ -55,16 +59,51 @@ export class SocketManager {
     // Buffer for events that arrived before a listener was registered
     private eventBuffer: Record<string, any[]> = {};
     // Events that should be buffered if no listener is registered yet
-    private static BUFFERED_EVENTS = ['PARTICIPANT_JOIN_REQUEST'];
+    private static BUFFERED_EVENTS = ['PARTICIPANT_JOIN_REQUEST', 'DRAW_STROKE', 'WHITEBOARD_CLEAR'];
 
     constructor(url?: string) {
-        // Default: use Vite's proxy path so we work in both dev and prod
-        if (url) {
-            this.url = url;
-        } else {
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            this.url = `${protocol}//${window.location.host}`;
+        this.url = this.resolveBaseUrl(url);
+    }
+
+    private resolveBaseUrl(overrideUrl?: string): string {
+        if (overrideUrl) return overrideUrl.replace(/\/$/, '');
+
+        const explicitWs = import.meta.env.VITE_REALTIME_WS_URL?.trim();
+        if (explicitWs) {
+            const normalized = explicitWs.replace(/\/$/, '');
+            if (import.meta.env.DEV) {
+                try {
+                    const parsed = new URL(normalized);
+                    const isFrontendDevPort = parsed.port === window.location.port;
+                    if (isFrontendDevPort && parsed.hostname === window.location.hostname) {
+                        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                        const directRealtime = `${protocol}//${window.location.hostname}:8002`;
+                        console.warn('[SocketManager] VITE_REALTIME_WS_URL points to frontend dev server; using direct realtime service URL:', directRealtime);
+                        return directRealtime;
+                    }
+                } catch {
+                    // Fall through to provided value if URL parsing fails.
+                }
+            }
+            return normalized;
         }
+
+        const realtimeHttp = import.meta.env.VITE_REALTIME_URL?.trim();
+        if (realtimeHttp) {
+            // Convert http(s) -> ws(s) when a HTTP realtime URL is provided.
+            const wsUrl = realtimeHttp.replace(/^http:/i, 'ws:').replace(/^https:/i, 'wss:');
+            return wsUrl.replace(/\/$/, '');
+        }
+
+        // Local dev default: connect directly to realtime service.
+        if (import.meta.env.DEV) {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            return `${protocol}//${window.location.hostname}:8002`;
+        }
+
+        // Production fallback for setups without explicit env vars.
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        return `${protocol}//${window.location.hostname}:8002`;
     }
 
     /**
@@ -78,18 +117,20 @@ export class SocketManager {
         onUserUpdate: (users: User[]) => void,
         onGesture?: (data: GestureData) => void
     ) {
+        this.intentionalDisconnect = false;
         this.roomId = roomId;
         this.scene = scene;
         this.userName = userName;
         this.isHost = isHost;
-        this.userId = `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`; // Generate unique ID
+        // Temporary client id until server assigns canonical websocket peer id.
+        this.userId = `client-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
         this.onUserUpdate = onUserUpdate;
         if (onGesture) this.onGesture = onGesture;
 
-        this.initiateConnection();
+        void this.initiateConnection();
     }
 
-    private initiateConnection() {
+    private async initiateConnection() {
         if (this.socket) {
             this.socket.close();
         }
@@ -97,8 +138,26 @@ export class SocketManager {
         if (!this.roomId || !this.userName) return;
 
         // Construct WebSocket URL with query params
-        const wsUrl = `${this.url}/ws/room/${this.roomId}?user=${encodeURIComponent(this.userName)}&is_host=${this.isHost}`;
-        console.log(`[SocketManager] Connecting to ${wsUrl}...`);
+        const token = localStorage.getItem(AUTH_TOKEN_KEY);
+        const hostToken = this.isHost ? sessionStorage.getItem('host_token') : null;
+        const params = new URLSearchParams({
+            user: this.userName,
+            is_host: String(this.isHost),
+        });
+        if (token && token !== 'guest') {
+            const wsTicket = await createWebSocketTicket(this.roomId);
+            if (wsTicket) {
+                params.set('ws_ticket', wsTicket);
+            } else {
+                // Backward-compatible fallback if ticket endpoint is unavailable.
+                params.set('token', token);
+            }
+        }
+        if (hostToken) params.set('host_token', hostToken);
+
+        const wsUrl = `${this.url}/ws/room/${this.roomId}?${params.toString()}`;
+        const safeLogUrl = `${this.url}/ws/room/${this.roomId}?user=${encodeURIComponent(this.userName)}&is_host=${this.isHost}`;
+        console.log(`[SocketManager] Connecting to ${safeLogUrl}...`);
 
         this.socket = new WebSocket(wsUrl);
 
@@ -107,6 +166,7 @@ export class SocketManager {
             this.connected = true;
             this.reconnectAttempts = 0;
             this.reconnectDelay = 1000; // Reset delay
+            this.flushPendingMessages();
         };
 
         this.socket.onmessage = (event) => {
@@ -149,7 +209,7 @@ export class SocketManager {
         this.reconnectTimer = setTimeout(() => {
             this.reconnectAttempts++;
             this.reconnectDelay = Math.min(this.reconnectDelay * 2, 30000); // Backoff up to 30s
-            this.initiateConnection();
+            void this.initiateConnection();
         }, this.reconnectDelay);
     }
 
@@ -161,6 +221,11 @@ export class SocketManager {
         // Backend sends either { event: 'FOO', ... } (server-originated) or
         // { type: 'FOO', payload: ... } (echo of client message). Support both.
         const eventName: string = data.event ?? data.type ?? '';
+        
+        if (eventName === 'PARTICIPANT_JOIN_REQUEST') {
+            console.log(`[SocketManager] Handling PARTICIPANT_JOIN_REQUEST:`, data);
+        }
+        
         const { state, users, action, value, message, payload } = data;
 
         // 1. Scene & State Updates
@@ -179,6 +244,11 @@ export class SocketManager {
         else if (eventName === 'USER_UPDATE') {
             if (this.onUserUpdate && users) {
                 this.onUserUpdate(users as User[]);
+            }
+        }
+        else if (eventName === 'SELF_ID') {
+            if (data.userId) {
+                this.userId = data.userId as string;
             }
         }
         // 3. Gestures
@@ -260,19 +330,42 @@ export class SocketManager {
      * Sends a message to backend.
      */
     emit(eventType: string, payload: any) {
+        const message = JSON.stringify({
+            type: eventType,
+            payload: payload
+        });
+
         if (!this.connected || !this.socket || this.socket.readyState !== WebSocket.OPEN) {
-            console.warn('[SocketManager] Cannot emit, socket not connected.');
+            if (this.pendingMessages.length >= this.maxPendingMessages) {
+                this.pendingMessages.shift();
+            }
+            this.pendingMessages.push(message);
+            console.warn('[SocketManager] Socket not connected. Queued outbound event:', eventType);
             return;
         }
 
         try {
-            this.socket.send(JSON.stringify({
-                type: eventType,
-                payload: payload
-            }));
+            this.socket.send(message);
         } catch (err) {
             console.error('[SocketManager] Failed to emit message:', err);
+            if (this.pendingMessages.length >= this.maxPendingMessages) {
+                this.pendingMessages.shift();
+            }
+            this.pendingMessages.push(message);
         }
+    }
+
+    private flushPendingMessages() {
+        if (!this.socket || this.socket.readyState !== WebSocket.OPEN || !this.pendingMessages.length) return;
+        const queued = [...this.pendingMessages];
+        this.pendingMessages = [];
+        queued.forEach((msg) => {
+            try {
+                this.socket?.send(msg);
+            } catch {
+                this.pendingMessages.push(msg);
+            }
+        });
     }
 
     /**

@@ -7,50 +7,40 @@ test.describe('HoloCollab Home Page', () => {
 
   test('has correct title and heading', async ({ page }) => {
     await expect(page).toHaveTitle(/HoloCollab/);
-    await expect(page.locator('h1')).toContainText('Learning Revolution');
+    await expect(page.locator('h1')).toContainText(/Premium 3D/i);
   });
 
   test('displays navigation elements', async ({ page }) => {
     await expect(page.locator('header')).toBeVisible();
     await expect(page.locator('header >> text=Sign In')).toBeVisible();
-    await expect(page.locator('header nav >> text=Get Started Free')).toBeVisible();
+    await expect(page.locator('header >> text=Get Started')).toBeVisible();
   });
 
   test('main call-to-action buttons work', async ({ page }) => {
-    // Test "Start Learning Free" button
-    const startButton = page.locator('text=Start Learning Free');
-    await expect(startButton).toBeVisible();
-    await startButton.click();
+    const getStartedButton = page.locator('button', { hasText: 'Get Started' });
+    await expect(getStartedButton).toBeVisible();
+    await getStartedButton.click();
     await expect(page).toHaveURL(/.*signup/);
 
-    // Go back and test "Join Session" button
+    // Go back and test room-code join flow
     await page.goBack();
-    const joinButton = page.locator('text=Join Session');
+    await page.locator('input[placeholder="Enter code"]').fill('ABC123');
+    const joinButton = page.locator('button', { hasText: 'Join' });
     await expect(joinButton).toBeVisible();
     await joinButton.click();
-    await expect(page).toHaveURL(/.*join/);
+    await expect(page).toHaveURL(/.*join\?code=ABC123/);
   });
 
   test('displays feature cards', async ({ page }) => {
-    await expect(page.locator('text=Real-time 3D Collaboration')).toBeVisible();
-    await expect(page.locator('text=AI-Powered Insights')).toBeVisible();
-    await expect(page.locator('text=HD Video Conferencing')).toBeVisible();
+    await expect(page.locator('text=Instant Holographic Meetings')).toBeVisible();
+    await expect(page.locator('text=Infinite Spatial Canvas')).toBeVisible();
+    await expect(page.locator('text=AI Meeting Assistant')).toBeVisible();
   });
 
   test('responsive design works on mobile', async ({ page }) => {
-    // Test mobile viewport
     await page.setViewportSize({ width: 375, height: 667 });
     await expect(page.locator('h1')).toBeVisible();
-    
-    // Navigation should be hidden on mobile (hamburger menu)
-    const navLinks = page.locator('header nav');
-    await expect(navLinks).toBeHidden();
-  });
-
-  test('stats section displays correctly', async ({ page }) => {
-    await expect(page.locator('text=50K+')).toBeVisible();
-    await expect(page.locator('text=Active Students')).toBeVisible();
-    await expect(page.locator('text=1000+')).toBeVisible();
-    await expect(page.locator('div:has-text("3D Models")').first()).toBeVisible(); // First occurrence in stats
+    await expect(page.locator('header')).toBeVisible();
+    await expect(page.locator('button', { hasText: 'Join' })).toBeVisible();
   });
 });

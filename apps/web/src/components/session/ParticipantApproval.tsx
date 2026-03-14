@@ -15,6 +15,7 @@ export const ParticipantApproval: React.FC<ParticipantApprovalProps> = ({ isHost
 
         const handleJoinRequest = (event: CustomEvent) => {
             const request = event.detail as ParticipantRequest;
+            console.log('[ParticipantApproval] Received join request event:', request);
             setPendingRequests(prev => [...prev, request]);
             setShow(true);
         };

@@ -14,7 +14,7 @@ export interface Reaction {
     timestamp: number;
 }
 
-export const REACTIONS = ['👍', '👏', '❤️', '😂', '😮', '🎉'];
+export const REACTIONS = ['\u{1F44D}', '\u{1F44F}', '\u{2764}\u{FE0F}', '\u{1F602}', '\u{1F62E}', '\u{1F389}'];
 
 export function useSessionControls(socket: SocketManager | null, userName: string) {
     const [handRaised, setHandRaised] = useState(false);
@@ -24,10 +24,18 @@ export function useSessionControls(socket: SocketManager | null, userName: strin
     const screenStreamRef = useRef<MediaStream | null>(null);
     const screenVideoRef = useRef<HTMLVideoElement | null>(null);
 
+    const stopScreenShare = useCallback(() => {
+        screenStreamRef.current?.getTracks().forEach(t => t.stop());
+        screenStreamRef.current = null;
+        setIsScreenSharing(false);
+        socket?.emit('SCREEN_SHARE_STOP', { userName });
+    }, [socket, userName]);
+
     // Listen for incoming reactions and hand-raise events
     useEffect(() => {
         if (!socket) return;
-        socket.on('REACTION', (data: any) => {
+
+        const offReaction = socket.on('REACTION', (data: any) => {
             const reaction: Reaction = {
                 id: `${data.userId}_${Date.now()}`,
                 userId: data.userId,
@@ -36,18 +44,23 @@ export function useSessionControls(socket: SocketManager | null, userName: strin
                 timestamp: Date.now(),
             };
             setReactions(prev => [...prev, reaction]);
-            // Auto-remove after 4s
             setTimeout(() => {
                 setReactions(prev => prev.filter(r => r.id !== reaction.id));
             }, 4000);
         });
 
-        socket.on('HAND_RAISED', (_data: any) => { /* handled via USER_UPDATE */ });
-
-        socket.on('HOST_MUTE', (_data: any) => {
-            // Host asked to mute — surface a toast/notification to user
+        const offRaise = socket.on('HAND_RAISE', () => { /* handled via USER_UPDATE */ });
+        const offLower = socket.on('HAND_LOWER', () => { /* handled via USER_UPDATE */ });
+        const offMute = socket.on('HOST_MUTE', () => {
             console.log('[HostControl] Host requested mute');
         });
+
+        return () => {
+            offReaction();
+            offRaise();
+            offLower();
+            offMute();
+        };
     }, [socket]);
 
     // Simulated connection quality ping (real impl would use WebRTC stats API)
@@ -59,8 +72,6 @@ export function useSessionControls(socket: SocketManager | null, userName: strin
         return () => clearInterval(interval);
     }, []);
 
-    // ── Actions ─────────────────────────────────────────────────────────
-
     const toggleHand = useCallback(() => {
         const next = !handRaised;
         setHandRaised(next);
@@ -69,7 +80,6 @@ export function useSessionControls(socket: SocketManager | null, userName: strin
 
     const sendReaction = useCallback((emoji: string) => {
         socket?.emit('SEND_REACTION', { emoji, userName });
-        // Show local reaction immediately
         const local: Reaction = {
             id: `local_${Date.now()}`,
             userId: 'local',
@@ -97,14 +107,7 @@ export function useSessionControls(socket: SocketManager | null, userName: strin
         } catch (err) {
             console.error('Screen share failed:', err);
         }
-    }, [socket, userName]);
-
-    const stopScreenShare = useCallback(() => {
-        screenStreamRef.current?.getTracks().forEach(t => t.stop());
-        screenStreamRef.current = null;
-        setIsScreenSharing(false);
-        socket?.emit('SCREEN_SHARE_STOP', { userName });
-    }, [socket, userName]);
+    }, [socket, userName, stopScreenShare]);
 
     const toggleScreenShare = useCallback(() => {
         if (isScreenSharing) stopScreenShare();
@@ -118,7 +121,6 @@ export function useSessionControls(socket: SocketManager | null, userName: strin
         sendReaction,
         isScreenSharing,
         toggleScreenShare,
-        screenStream: screenStreamRef.current,
         screenVideoRef,
         connectionQuality,
         REACTIONS,

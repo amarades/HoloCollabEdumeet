@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, Copy, Check, Video, Mic, MicOff, Sparkles, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Loader2, Copy, Check, Video, Mic, Sparkles, CheckCircle } from 'lucide-react';
 import { apiRequest } from '../services/api';
 
 interface LectureNotes {
@@ -120,6 +120,11 @@ const CreateSession = () => {
             sessionStorage.setItem('room_code', code);
             sessionStorage.setItem('session_id', data.session_id);
             sessionStorage.setItem('session_role', data.role || 'host');
+            if (data.host_token) {
+                sessionStorage.setItem('host_token', data.host_token);
+            } else {
+                sessionStorage.removeItem('host_token');
+            }
             // Persist lecture notes if generated already
             if (lectureNotes) {
                 sessionStorage.setItem('lecture_notes', JSON.stringify(lectureNotes));
