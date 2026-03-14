@@ -3,15 +3,15 @@
 
 export const RENDER_CONFIG = {
   // Render provides PORT environment variable
-  port: process.env.PORT || 10000,
+  port: (import.meta.env.VITE_PORT as any) || 10000,
 
   // Free tier optimizations
-  isFreeTier: process.env.RENDER_INSTANCE_TYPE === 'free' ||
-              process.env.ENVIRONMENT === 'free',
+  isFreeTier: import.meta.env.VITE_RENDER_INSTANCE_TYPE === 'free' ||
+              import.meta.env.VITE_ENVIRONMENT === 'free',
 
   // Render-specific environment detection
-  isRender: process.env.RENDER === 'true' ||
-            !!process.env.RENDER_SERVICE_ID,
+  isRender: import.meta.env.VITE_RENDER === 'true' ||
+            !!import.meta.env.VITE_RENDER_SERVICE_ID,
 
   // Health check endpoint for Render
   healthCheck: {

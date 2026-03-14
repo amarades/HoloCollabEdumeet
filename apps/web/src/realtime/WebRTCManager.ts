@@ -56,9 +56,10 @@ class SFUManager {
     private room: any = null;
     private localParticipant: any = null;
     private callbacks: WebRTCManagerCallbacks = {};
-    private localStream: MediaStream | null = null;
+    private socket: SocketManager;
 
-    constructor(private socket: SocketManager, callbacks: WebRTCManagerCallbacks = {}) {
+    constructor(socket: SocketManager, callbacks: WebRTCManagerCallbacks = {}) {
+        this.socket = socket;
         this.callbacks = callbacks;
     }
 
@@ -85,14 +86,14 @@ class SFUManager {
                 this.callbacks.onRemoteStreamRemoved?.(participant.identity);
             });
 
-            this.room.on(RoomEvent.TrackSubscribed, (track: any, publication: any, participant: any) => {
+            this.room.on(RoomEvent.TrackSubscribed, (track: any, _publication: any, participant: any) => {
                 if (track.kind === 'video' || track.kind === 'audio') {
                     const stream = new MediaStream([track.mediaStreamTrack]);
                     this.callbacks.onRemoteStream?.(participant.identity, stream);
                 }
             });
 
-            this.room.on(RoomEvent.TrackUnsubscribed, (track: any, publication: any, participant: any) => {
+            this.room.on(RoomEvent.TrackUnsubscribed, (_track: any, _publication: any, participant: any) => {
                 this.callbacks.onRemoteStreamRemoved?.(participant.identity);
             });
 
@@ -137,11 +138,10 @@ class SFUManager {
         return data.token;
     }
 
-    setLocalStream(stream: MediaStream) {
-        this.localStream = stream;
+    setLocalStream(_stream: MediaStream) {
         if (this.localParticipant && this.room) {
             // Publish tracks to SFU
-            stream.getTracks().forEach(track => {
+            _stream.getTracks().forEach(track => {
                 this.localParticipant.publishTrack(track);
             });
         }

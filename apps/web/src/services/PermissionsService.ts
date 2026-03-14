@@ -194,6 +194,13 @@ export class PermissionsService {
         return this.participantPermissions[userId]?.[permission] || false;
     }
 
+    canInteract(): boolean {
+        if (this.isHost) return true;
+        const myId = this.socket?.getUserId();
+        if (!myId) return false;
+        return this.hasPermission(myId, 'canControlGestures');
+    }
+
     getPendingRequests(): ParticipantRequest[] {
         return this.pendingRequests;
     }
