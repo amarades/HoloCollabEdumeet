@@ -3,6 +3,44 @@
     };
 
     const handleCreateSession = async () => {
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { LogOut, Video, Plus, Bot, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { AIAssistant } from '../components/AIAssistant';
+import { apiRequest, API_BASE_URL } from '../services/api';
+
+const Dashboard = () => {
+    const { user, logout } = useAuth();
+    const navigate = useNavigate();
+    const [showAI, setShowAI] = useState(false);
+    const [isCreating, setIsCreating] = useState(false);
+
+    useEffect(() => {
+        // Verification check for backend connectivity (as requested)
+        const checkBackend = async () => {
+            try {
+                const response = await fetch(`${API_BASE_URL}/health`);
+                if (response.ok) {
+                    console.log("✅ Backend connection verified via /health");
+                }
+            } catch (err) {
+                console.error("❌ Backend connection failure:", err);
+            }
+        };
+        checkBackend();
+    }, []);
+
+    const handleLogout = () => {
+        logout();
+        navigate('/login');
+    };
+
+    const handleJoinSession = () => {
+        navigate('/join');
+    };
+
+    const handleCreateSession = async () => {
         setIsCreating(true);
         try {
             const data = await apiRequest('/api/sessions/create', {
@@ -20,17 +58,6 @@
                 sessionStorage.removeItem('host_token');
             }
             navigate(`/lobby?session=${data.session_id}&code=${data.room_code}&role=${data.role || 'host'}`);
-        } catch (err) {
-            console.error('Create session failed:', err);
-            alert('Failed to create session. Please try again.');
-        } finally {
-            setIsCreating(false);
-        }
-    };
-
-    return (
-        <div className="min-h-screen flex flex-col">
-            <div className="premium-bg">
                 <div className="floating-shape circle s1" />
                 <div className="floating-shape square s4" />
                 <div className="floating-shape circle s6" />
