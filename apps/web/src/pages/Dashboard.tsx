@@ -1,21 +1,3 @@
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { LogOut, Video, Plus, Bot, Loader2 } from 'lucide-react';
-import { useState } from 'react';
-import { AIAssistant } from '../components/AIAssistant';
-import { apiRequest } from '../services/api';
-
-const Dashboard = () => {
-    const { user, logout } = useAuth();
-    const navigate = useNavigate();
-    const [showAI, setShowAI] = useState(false);
-    const [isCreating, setIsCreating] = useState(false);
-
-    const handleLogout = () => {
-        logout();
-        navigate('/login');
-    };
-
     const handleJoinSession = () => {
         navigate('/join');
     };
