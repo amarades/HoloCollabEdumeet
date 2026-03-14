@@ -1,8 +1,3 @@
-    const handleJoinSession = () => {
-        navigate('/join');
-    };
-
-    const handleCreateSession = async () => {
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LogOut, Video, Plus, Bot, Loader2 } from 'lucide-react';
@@ -58,6 +53,17 @@ const Dashboard = () => {
                 sessionStorage.removeItem('host_token');
             }
             navigate(`/lobby?session=${data.session_id}&code=${data.room_code}&role=${data.role || 'host'}`);
+        } catch (err) {
+            console.error('Create session failed:', err);
+            alert('Failed to create session. Please try again.');
+        } finally {
+            setIsCreating(false);
+        }
+    };
+
+    return (
+        <div className="min-h-screen flex flex-col">
+            <div className="premium-bg">
                 <div className="floating-shape circle s1" />
                 <div className="floating-shape square s4" />
                 <div className="floating-shape circle s6" />
