@@ -41,6 +41,7 @@ def _map_model(db_model: DBModelMetadata) -> PydanticModelMetadata:
         thumbnail=db_model.thumbnail,
         url=db_model.url,
         description=db_model.description,
+        is_curated=db_model.is_curated,
     )
 
 
@@ -154,7 +155,7 @@ class PersistenceLayer:
             
             if action == "join":
                 log = DBAttendanceLog(
-                    id=uuid.uuid4().hex[:8],
+                    id=uuid.uuid4().hex,
                     session_id=session_id,
                     user_name=user_name,
                     joined_at=datetime.utcnow(),
@@ -235,8 +236,18 @@ class PersistenceLayer:
 
     async def save_model(self, model: PydanticModelMetadata):
         async with async_session_maker() as db:
+            # Check by ID first
             result = await db.execute(select(DBModelMetadata).where(DBModelMetadata.id == model.id))
             obj = result.scalar_one_or_none()
+            
+            if not obj:
+                # Check for duplicate by name AND URL (to avoid re-adding same model)
+                stmt = select(DBModelMetadata).where(
+                    (DBModelMetadata.name == model.name) & (DBModelMetadata.url == model.url)
+                )
+                dup = await db.execute(stmt)
+                obj = dup.scalar_one_or_none()
+                
             if not obj:
                 obj = DBModelMetadata(
                     id=model.id,
@@ -245,6 +256,7 @@ class PersistenceLayer:
                     thumbnail=model.thumbnail,
                     url=model.url,
                     description=model.description,
+                    is_curated=model.is_curated,
                 )
                 db.add(obj)
             else:
@@ -253,6 +265,7 @@ class PersistenceLayer:
                 obj.thumbnail = model.thumbnail
                 obj.url = model.url
                 obj.description = model.description
+                obj.is_curated = model.is_curated
             await db.commit()
 
 

@@ -24,6 +24,15 @@ class SessionService:
         model_id: Optional[str] = None,
     ) -> Session:
         """Create a new session and persist it to PostgreSQL."""
+        room_code = None
+        for _ in range(5):
+            candidate = _generate_room_code()
+            if not await db.get_session_by_code(candidate):
+                room_code = candidate
+                break
+        if not room_code:
+            raise RuntimeError("Failed to allocate unique room code")
+
         host = User(
             id=host_user["id"],
             email=host_user["email"],
@@ -32,8 +41,8 @@ class SessionService:
             hashed_password=None,  # never store hash in session participants
         )
         session = Session(
-            id=uuid.uuid4().hex[:8],
-            room_code=_generate_room_code(),
+            id=uuid.uuid4().hex,
+            room_code=room_code,
             name=name,
             topic=topic,
             meet_link=meet_link,

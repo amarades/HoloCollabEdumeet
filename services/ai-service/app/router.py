@@ -1,8 +1,12 @@
+import logging
+
 from fastapi import APIRouter, HTTPException
+
 from app.models import AIRequest, QuizRequest, ExplainRequest, LectureNotesRequest, TopicRequest, DoubtsRequest
 from app.ai_service import ai_service
 
 router = APIRouter(prefix="/api/ai", tags=["AI"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("/chat")
@@ -11,8 +15,9 @@ async def chat(request: AIRequest):
     try:
         response = await ai_service.chat(request.message, request.context)
         return response
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI chat error: {str(e)}")
+    except Exception:
+        logger.exception("AI chat failed")
+        raise HTTPException(status_code=500, detail="AI chat error")
 
 
 @router.post("/quiz")
@@ -22,11 +27,12 @@ async def generate_quiz(request: QuizRequest):
         quiz = await ai_service.generate_quiz(
             request.model_name,
             request.difficulty,
-            request.question_count
+            request.question_count,
         )
         return quiz
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Quiz generation error: {str(e)}")
+    except Exception:
+        logger.exception("Quiz generation failed")
+        raise HTTPException(status_code=500, detail="Quiz generation error")
 
 
 @router.post("/explain")
@@ -35,8 +41,9 @@ async def explain_concept(request: ExplainRequest):
     try:
         explanation = await ai_service.explain(request.concept, request.context)
         return explanation
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Explanation error: {str(e)}")
+    except Exception:
+        logger.exception("Concept explanation failed")
+        raise HTTPException(status_code=500, detail="Explanation error")
 
 
 @router.post("/lecture-notes")
@@ -46,20 +53,17 @@ async def generate_lecture_notes(request: LectureNotesRequest):
         notes = await ai_service.generate_lecture_notes(
             request.topic,
             request.model_name,
-            request.transcript or ""
+            request.transcript or "",
         )
         return notes
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Lecture notes generation error: {str(e)}")
+    except Exception:
+        logger.exception("Lecture notes generation failed")
+        raise HTTPException(status_code=500, detail="Lecture notes generation error")
 
 
-# ── /generate-notes: used by CreateSession speech section ─────────────────────
 @router.post("/generate-notes")
 async def generate_notes_from_speech(body: dict):
-    """
-    Generate structured lecture notes from a spoken transcript and/or topic.
-    Uses the fast model. Falls back gracefully if Ollama is unavailable.
-    """
+    """Generate structured lecture notes from transcript/topic with graceful fallback."""
     topic = body.get("topic", "").strip()
     transcript = body.get("transcript", "").strip()
 
@@ -73,22 +77,22 @@ async def generate_notes_from_speech(body: dict):
             model_name="",
             transcript=transcript,
         )
-        # Ensure important_terms field exists
         if "important_terms" not in notes:
             notes["important_terms"] = [w for w in subject.split() if len(w) > 4][:6]
         return notes
-    except Exception as e:
-        # Hard fallback — never fail the user
+    except Exception as exc:
+        logger.warning("generate-notes fallback used: %s", exc)
         return {
             "summary": f"Session about {subject}.",
             "key_points": [f"Introduction to {subject}", "Core concepts", "Practical applications"],
             "important_terms": [w for w in subject.split() if len(w) > 4][:6],
-            "follow_up_questions": [f"What are the key principles of {subject}?", f"How is {subject} applied?"],
-            "error": str(e),
+            "follow_up_questions": [
+                f"What are the key principles of {subject}?",
+                f"How is {subject} applied?",
+            ],
+            "error": "ai_fallback",
         }
 
-
-# ── Feature 2: Voice Topic Detection ──────────────────────────────────────────
 
 @router.post("/topic-detect")
 async def detect_topic(request: TopicRequest):
@@ -96,17 +100,17 @@ async def detect_topic(request: TopicRequest):
     try:
         result = await ai_service.detect_topic(request.transcript)
         return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Topic detection error: {str(e)}")
+    except Exception:
+        logger.exception("Topic detection failed")
+        raise HTTPException(status_code=500, detail="Topic detection error")
 
-
-# ── Feature 7: Smart Doubt Detection ──────────────────────────────────────────
 
 @router.post("/detect-doubts")
 async def detect_doubts(request: DoubtsRequest):
-    """Analyze chat messages and identify student confusion topics using Ollama llama3.2."""
+    """Analyze chat messages and identify confusion topics."""
     try:
         result = await ai_service.detect_doubts(request.messages)
         return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Doubt detection error: {str(e)}")
+    except Exception:
+        logger.exception("Doubt detection failed")
+        raise HTTPException(status_code=500, detail="Doubt detection error")

@@ -51,6 +51,7 @@ class DBModelMetadata(Base):
     thumbnail = Column(String, default="📦")
     url = Column(String, nullable=False)
     description = Column(String, default="Custom uploaded model")
+    is_curated = Column(Boolean, default=False)
 
 
 class DBAttendanceLog(Base):

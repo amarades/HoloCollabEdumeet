@@ -3,10 +3,7 @@ from typing import Optional, List
 
 
 class Settings(BaseSettings):
-    """AI Service Settings"""
-
     environment: str = "development"
-    ai_service: str = "ollama"
     cors_origins: Optional[str] = "http://localhost:5173"
 
     class Config:

@@ -14,6 +14,41 @@ MODEL_FAST = "llama3.2:1b"
 MODEL_SMART = "llama3.2:1b"  # User has :1b installed, and it's much faster
 
 
+# Inbuilt library of 3D models for educational topics
+MODEL_LIBRARY = {
+    "human heart": {
+        "name": "Human Heart",
+        "url": "/api/models/heart.glb",
+        "category": "Biology",
+        "thumbnail": "❤️"
+    },
+    "dna": {
+        "name": "DNA Double Helix",
+        "url": "/api/models/dna.glb",
+        "category": "Biology",
+        "thumbnail": "🧬"
+    },
+    "solar system": {
+        "name": "Solar System",
+        "url": "/api/models/solar_system.glb",
+        "category": "Astronomy",
+        "thumbnail": "🪐"
+    },
+    "molecule": {
+        "name": "Water Molecule",
+        "url": "/api/models/molecule.glb",
+        "category": "Chemistry",
+        "thumbnail": "🧪"
+    },
+    "brain": {
+        "name": "Human Brain",
+        "url": "/api/models/brain.glb",
+        "category": "Biology",
+        "thumbnail": "🧠"
+    }
+}
+
+
 async def _ollama(model: str, prompt: str, timeout: float = 30.0) -> str:
     """Low-level helper — POST to Ollama and return the response text."""
     async with httpx.AsyncClient(timeout=timeout) as client:
@@ -41,7 +76,7 @@ class OllamaAIService:
     """Real AI service backed by locally-running Ollama models."""
 
     # ── Feature 2: Voice Topic Detection ──────────────────────────────────────
-    async def detect_topic(self, transcript: str) -> Dict:
+    async def detect_topic(self, transcript: str) -> Dict[str, Any]:
         prompt = (
             "From this classroom speech transcript, extract the main educational topic.\n"
             'Reply ONLY as JSON with no extra text:\n'
@@ -50,7 +85,23 @@ class OllamaAIService:
         )
         try:
             raw = await _ollama(MODEL_FAST, prompt, timeout=15)
-            return _extract_json(raw)
+            data = _extract_json(raw)
+            
+            # Match detected topic/keywords against the MODEL_LIBRARY
+            detected_topic = data.get("topic", "").lower()
+            keywords = [k.lower() for k in data.get("keywords", [])]
+            
+            match = None
+            # Search for direct topic match or keyword match
+            for key, model_info in MODEL_LIBRARY.items():
+                if key in detected_topic or any(key in k for k in keywords):
+                    match = model_info
+                    break
+            
+            if match:
+                data["auto_load_model"] = match
+                
+            return data
         except Exception as e:
             return {"topic": "Unknown", "keywords": [], "error": str(e)}
 

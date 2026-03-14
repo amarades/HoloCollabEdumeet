@@ -1,10 +1,12 @@
 from fastapi import APIRouter, HTTPException
+import logging
 from pydantic import BaseModel
 from typing import List
 from app.recognition.classifier import GestureClassifier
 
 router = APIRouter(prefix="/api/gestures", tags=["Gestures"])
 classifier = GestureClassifier()
+logger = logging.getLogger(__name__)
 
 
 class LandmarkPoint(BaseModel):
@@ -24,5 +26,6 @@ async def classify_gesture(request: ClassifyRequest):
         landmarks = [{"x": p.x, "y": p.y, "z": p.z} for p in request.landmarks]
         result = classifier.classify(landmarks)
         return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Gesture classification failed")
+        raise HTTPException(status_code=500, detail="Gesture classification failed")

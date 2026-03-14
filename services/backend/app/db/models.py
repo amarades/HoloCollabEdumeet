@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
 
@@ -21,7 +21,7 @@ class Session(BaseModel):
     model_id: Optional[str] = None
     created_at: datetime
     is_active: bool = True
-    participants: List[User] = []
+    participants: List[User] = Field(default_factory=list)
 
 
 class ModelMetadata(BaseModel):
@@ -31,3 +31,4 @@ class ModelMetadata(BaseModel):
     thumbnail: str = "📦"
     url: str
     description: str = "Custom uploaded model"
+    is_curated: bool = False
