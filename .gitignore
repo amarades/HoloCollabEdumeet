@@ -20,6 +20,11 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
+# Local environment files
+.env
+.env.*
+!.env.example
+
 # Project specific
 uploads/
 *.log
@@ -34,8 +39,6 @@ apps/web/test-results/
 
 # Databases
 *.db
-*.sqlite
-*.sqlite3
 
 # TypeScript error logs
 tsc_errors*.txt

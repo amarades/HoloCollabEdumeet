@@ -9,62 +9,54 @@
 
 ---
 
-## 🎯 Overview
+### 🎯 Overview
 
-HoloCollab EduMeet is a next-generation educational platform that combines augmented reality, computer vision, and artificial intelligence to create immersive learning experiences. Students and educators can interact with 3D models in real-time, collaborate seamlessly, and receive AI-powered assistance—all through a web browser.
+HoloCollab EduMeet is a next-generation educational platform that combines augmented reality, computer vision, and artificial intelligence to create immersive learning experiences. Students and educators can interact with 3D models in real-time, collaborate seamlessly, and receive AI-powered assistance—all through a modern web interface.
+
+### 📅 Current Status (March 2026)
+
+- **🚀 AI Upgrade**: Migrated from external APIs to local **Ollama (Llama 3.2)** for low-latency, private AI capabilities.
+- **🎥 Presentation Mode**: Full implementation of 3D presentation slides with synchronized zoom/pan controls.
+- **🛡️ Algorithm Audit**: Completed a comprehensive audit of AI, CV, Networking, and Rendering algorithms.
+- **💎 Premium UI**: Ongoing refinement of the "Neon Purple" high-fidelity design system.
 
 ### Key Features
 
-- **🎨 3D Model Visualization**: Interactive WebGL-based 3D rendering with Three.js
-- **👋 Gesture Recognition**: MediaPipe-powered hand tracking for intuitive model manipulation
-- **🤖 AI Assistant**: Google Gemini integration for contextual explanations and quiz generation
-- **📹 Real-time Collaboration**: WebRTC video conferencing with synchronized model states
-- **🔐 Secure Authentication**: JWT-based auth with role-based access control
-- **⚡ Low Latency**: Socket.IO for instant state synchronization across participants
+- **🎨 3D Model Visualization**: High-performance Three.js rendering with custom holographic shaders.
+- **👋 Gesture Recognition**: MediaPipe-powered tracking for touchless rotation, zoom, and translation.
+- **🤖 Ollama AI**: Context-aware assistance for topic detection, lecture notes, and quiz generation.
+- **📹 Real-time Collaboration**: WebRTC video/audio with synchronized 3D scene states.
+- **✏️ Augmented Whiteboard**: Real-time synchronized drawing layer with 3D shape recognition.
 
 ---
 
 ## 🏗️ Architecture
 
-HoloCollab EduMeet follows a **microservices architecture** for scalability and maintainability:
+HoloCollab EduMeet follows a **microservices architecture** designed for high throughput and modularity:
 
-```
-┌─────────────┐     ┌──────────────┐     ┌─────────────┐
-│   Frontend  │────▶│   Backend    │────▶│  AI Service │
-│  (Browser)  │     │   (FastAPI)  │     │   (Gemini)  │
-└─────────────┘     └──────────────┘     └─────────────┘
-       │                    │
-       │                    ▼
-       │            ┌──────────────┐
-       │            │   Realtime   │
-       └───────────▶│  (Socket.IO) │
-                    └──────────────┘
-                           │
-                           ▼
-                    ┌──────────────┐
-                    │  CV Service  │
-                    │  (MediaPipe) │
-                    └──────────────┘
+```mermaid
+graph TD
+    User((User)) --> WebApp[Web App /apps/web]
+    WebApp <--> Realtime[Realtime Svc /services/realtime]
+    WebApp --> CV[CV Svc /services/cv-service]
+    Realtime <--> Backend[Backend /services/backend]
+    Backend --> AI[AI Svc /services/ai-service]
+    AI --- Ollama((Ollama LLM))
 ```
 
 ### Technology Stack
 
-**Frontend**
-- HTML5, CSS3, JavaScript (ES6+)
-- Three.js for 3D rendering
-- MediaPipe for gesture recognition
-- Socket.IO client for real-time communication
+**Frontend (Monorepo)**
+- **Framework**: Vite + React + TypeScript
+- **3D Engine**: Three.js (WebGL)
+- **Computer Vision**: MediaPipe Hands
+- **Real-time**: FastAPI WebSocket + WebRTC
 
-**Backend**
-- FastAPI (Python 3.9+)
-- Socket.IO for WebSocket management
-- Pydantic for data validation
-- JWT for authentication
-
-**Services**
-- **AI Service**: Google Gemini API integration
-- **CV Service**: MediaPipe Hands for gesture processing
-- **Realtime Service**: Room management and state synchronization
+**Backend (Python Microservices)**
+- **API Framework**: FastAPI
+- **Database**: PostgreSQL + SQLAlchemy (Async)
+- **AI Backend**: Ollama (Llama 3.2)
+- **Networking**: Native WebSocket signaling (FastAPI)
 
 ---
 
@@ -72,73 +64,58 @@ HoloCollab EduMeet follows a **microservices architecture** for scalability and 
 
 ### Prerequisites
 
-- Python 3.9 or higher
-- Node.js 16+ (optional, for frontend tooling)
-- Google Gemini API key
+- **Python 3.9+**
+- **Node.js 18+**
+- **Ollama** installed and running locally with `llama3.2:1b`.
 
-### Installation
+### Installation & Execution
 
-1. **Clone the repository**
+1. **Clone & Setup**
    ```bash
-   git clone https://github.com/yourusername/holocollab-edumeet.git
-   cd holocollab-edumeet
+   git clone https://github.com/yourusername/HoloCollabEduMeet.git
+   cd HoloCollabEduMeet
+   ./SETUP.bat
    ```
 
-2. **Set up the backend**
+2. **Launch Services**
+   The easiest way to start the entire stack is using the provided batch script:
    ```bash
-   cd backend
-   python -m venv .venv
-   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-   pip install -r requirements.txt
+   ./START_DEV.bat
+   ```
+   *This will start the Backend (8000), Realtime (8002), AI (8003), and CV (8001) services.*
+
+3. **Launch Frontend**
+   ```bash
+   cd apps/web
+   npm install
+   npm run dev
    ```
 
-3. **Configure environment variables**
-   ```bash
-   cp .env.example .env
-   # Edit .env and add your GEMINI_API_KEY
-   ```
-
-4. **Run the application**
-   ```bash
-   python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
-   ```
-
-5. **Access the platform**
-   - Open your browser to `http://localhost:8000/session.html`
-   - Grant camera permissions when prompted
-   - Start collaborating!
-
-For detailed setup instructions, see [QUICK_START.md](QUICK_START.md).
+4. **Access**
+   - Frontend: `http://localhost:5173`
+   - API Docs: `http://localhost:8000/docs`
 
 ---
 
 ## 📁 Project Structure
 
 ```
-holocollab-edumeet/
-├── frontend/          # Static web application
-│   ├── js/
-│   │   ├── core/      # App logic, auth, API client
-│   │   ├── ar/        # 3D scene, model loader
-│   │   ├── gestures/  # Hand tracking & recognition
-│   │   ├── video/     # WebRTC implementation
-│   │   ├── realtime/  # Socket.IO client
-│   │   └── ai/        # AI assistant integration
-│   └── css/           # Stylesheets
+HoloCollabEduMeet/
+├── apps/
+│   └── web/           # React + Three.js Frontend
+│       ├── src/3d/    # Scene & synchronization logic
+│       ├── src/realtime/ # WebSocket & WebRTC managers
+│       └── src/pages/ # Responsive UI components
 │
-├── backend/           # FastAPI application
-│   └── app/
-│       ├── api/       # REST endpoints
-│       ├── services/  # Business logic
-│       ├── db/        # Database models
-│       └── websocket/ # WebSocket handlers
+├── services/
+│   ├── backend/       # FastAPI - Auth, DB, Session Mgmt
+│   ├── ai-service/    # Ollama integration & logic
+│   ├── cv-service/    # MediaPipe gesture recognition
+│   └── realtime/      # State sync & room management
 │
-├── ai-service/        # AI integration module
-├── cv-service/        # Computer vision module
-├── realtime/          # Real-time state management
-├── shared/            # Shared utilities
-├── docs/              # Documentation
-└── infrastructure/    # Deployment configs
+├── infrastructure/    # Docker & deployment configs
+├── scripts/           # Automation & startup scripts
+└── docs/              # Detailed documentation
 ```
 
 ---
@@ -215,7 +192,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - **Three.js** for 3D rendering capabilities
 - **MediaPipe** for hand tracking technology
-- **Google Gemini** for AI-powered features
+- **Ollama** for local LLM integration (Llama 3.2)
 - **FastAPI** for the robust backend framework
 
 ---

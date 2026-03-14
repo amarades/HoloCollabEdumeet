@@ -93,7 +93,7 @@ def test_backend_service():
     print("=" * 60)
     
     try:
-        response = requests.get("http://localhost:8000/api-info", timeout=2)
+        response = requests.get("http://localhost:8000/health", timeout=2)
         if response.status_code == 200:
             print("✅ Backend Service is running")
             data = response.json()
