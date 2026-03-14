@@ -84,5 +84,10 @@ if settings.environment.lower() == "production":
     if settings.internal_api_key == "change-me-internal-api-key":
         raise RuntimeError("INTERNAL_API_KEY must be configured in production.")
 
-os.makedirs(settings.upload_dir, exist_ok=True)
-os.makedirs(os.path.join(settings.upload_dir, "models"), exist_ok=True)
+# Secure directory creation - Render's filesystem is read-only unless a disk is mounted.
+# We wrap this to prevent startup crashes when persistent storage isn't attached.
+try:
+    os.makedirs(settings.upload_dir, exist_ok=True)
+    os.makedirs(os.path.join(settings.upload_dir, "models"), exist_ok=True)
+except Exception as e:
+    print(f"Note: Could not create upload directories ({e}). This is expected on some read-only environments.")
