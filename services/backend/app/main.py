@@ -10,7 +10,7 @@ import time
 import uuid
 from urllib.parse import parse_qsl, urlencode
 
-from app.api import auth, sessions, models, observability, livekit
+from app.api import auth, sessions, models, observability, livekit_routes as livekit
 from app.db.engine import init_db
 from app.config import settings, get_cors_origins
 

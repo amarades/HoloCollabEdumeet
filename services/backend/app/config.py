@@ -86,9 +86,16 @@ if settings.environment.lower() == "production":
 
 # Diagnostic: Verify if DATABASE_URL is actually coming from ENV
 if "DATABASE_URL" in os.environ:
-    print("✅ Configuration: DATABASE_URL loaded from environment.")
+    val = os.environ["DATABASE_URL"]
+    print(f"✅ Configuration: DATABASE_URL is set in environment (Length: {len(val)})")
+    if val.startswith("localhost") or "127.0.0.1" in val:
+         print("⚠️ WARNING: DATABASE_URL contains 'localhost' or '127.0.0.1' - this will fail on Render!")
 else:
     print("⚠️ Configuration: DATABASE_URL NOT found in environment, using default.")
+    # List keys that DO exist to help debug
+    db_keys = [k for k in os.environ.keys() if "DB" in k.upper() or "POSTGRES" in k.upper()]
+    if db_keys:
+        print(f"DEBUG: Found these related env keys: {db_keys}")
 
 # Secure directory creation - Render's filesystem is read-only unless a disk is mounted.
 # We wrap this to prevent startup crashes when persistent storage isn't attached.

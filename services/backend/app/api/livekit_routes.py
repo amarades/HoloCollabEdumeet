@@ -11,13 +11,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 try:
-    from livekit import api
+    # Explicitly import from the package, not the local file shadowing it
+    import livekit.api as lk_api
     LIVEKIT_AVAILABLE = True
-except ImportError as e:
+except (ImportError, AttributeError) as e:
     LIVEKIT_AVAILABLE = False
-    logger.warning(f"LiveKit SDK Error: {e}")
-    # Fallback/Diagnostic
-    print(f"⚠️ LiveKit dependency issue: {e}. Check if 'livekit' is in requirements.txt")
+    print(f"⚠️ LiveKit SDK Import Failed: {e}")
+    lk_api = None
 
 @router.post("/token")
 async def get_livekit_token(
@@ -44,7 +44,7 @@ async def get_livekit_token(
 
     try:
         # Create access token
-        token = api.AccessToken(
+        token = lk_api.AccessToken(
             settings.livekit_api_key,
             settings.livekit_api_secret
         )
@@ -54,7 +54,7 @@ async def get_livekit_token(
         token.with_name(participant_name or current_user["username"])
 
         # Grant permissions
-        grant = api.VideoGrant()
+        grant = lk_api.VideoGrant()
         grant.room_join = True
         grant.room = room_name
         grant.can_publish = True
@@ -96,7 +96,7 @@ async def get_room_participants(
 
     try:
         # Create room service client
-        room_client = api.RoomServiceClient(
+        room_client = lk_api.RoomServiceClient(
             settings.livekit_url.replace('ws://', 'http://').replace('wss://', 'https://'),
             settings.livekit_api_key,
             settings.livekit_api_secret
