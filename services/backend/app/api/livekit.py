@@ -13,9 +13,11 @@ router = APIRouter()
 try:
     from livekit import api
     LIVEKIT_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     LIVEKIT_AVAILABLE = False
-    logger.warning("LiveKit not available. Install with: pip install livekit")
+    logger.warning(f"LiveKit SDK Error: {e}")
+    # Fallback/Diagnostic
+    print(f"⚠️ LiveKit dependency issue: {e}. Check if 'livekit' is in requirements.txt")
 
 @router.post("/token")
 async def get_livekit_token(

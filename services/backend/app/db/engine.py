@@ -4,10 +4,20 @@ from app.db.schema import Base
 from app.config import settings
 
 # Ensure the database URL uses the asyncpg driver
-# Render and Supabase often provide postgresql://, but SQLAlchemy async requires postgresql+asyncpg://
 db_url = settings.database_url
+# Handle both postgresql:// and postgres:// (common in Supabase/Heroku)
 if db_url.startswith("postgresql://"):
     db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+elif db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql+asyncpg://", 1)
+
+# Log the database host for diagnostics (safe, doesn't leak credentials)
+try:
+    from urllib.parse import urlparse
+    parsed = urlparse(db_url)
+    print(f"📡 Database Host: {parsed.hostname or 'localhost'} (Scheme: {parsed.scheme})")
+except Exception:
+    print("📡 Database Host: [Could not parse URL]")
 
 engine = create_async_engine(
     db_url,

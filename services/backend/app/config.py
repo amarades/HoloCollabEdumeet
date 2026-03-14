@@ -84,6 +84,12 @@ if settings.environment.lower() == "production":
     if settings.internal_api_key == "change-me-internal-api-key":
         raise RuntimeError("INTERNAL_API_KEY must be configured in production.")
 
+# Diagnostic: Verify if DATABASE_URL is actually coming from ENV
+if "DATABASE_URL" in os.environ:
+    print("✅ Configuration: DATABASE_URL loaded from environment.")
+else:
+    print("⚠️ Configuration: DATABASE_URL NOT found in environment, using default.")
+
 # Secure directory creation - Render's filesystem is read-only unless a disk is mounted.
 # We wrap this to prevent startup crashes when persistent storage isn't attached.
 try:
