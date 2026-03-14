@@ -1,0 +1,74 @@
+# Dockerfile for Free Hosting Platforms
+# Optimized for Railway, Render, Fly.io free tiers
+# Minimal resource usage, fast cold starts
+
+FROM node:18-alpine AS base
+
+# Install dumb-init for proper signal handling
+RUN apk add --no-cache dumb-init curl
+
+# Set working directory
+WORKDIR /app
+
+# ==========================================
+# Dependencies Stage
+# ==========================================
+FROM base AS deps
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies only (no dev dependencies for production)
+RUN npm ci --only=production --no-audit --no-fund && \
+    npm cache clean --force
+
+# ==========================================
+# Build Stage
+# ==========================================
+FROM deps AS builder
+
+# Copy source code
+COPY . .
+
+# Build application (if needed)
+RUN npm run build 2>/dev/null || echo "No build script found"
+
+# ==========================================
+# Production Stage (Minimal)
+# ==========================================
+FROM base AS production
+
+# Create non-root user for security
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nextjs -u 1001
+
+# Copy dependencies from deps stage
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
+
+# Copy built application
+COPY --from=builder --chown=nextjs:nodejs /app ./
+
+# Remove unnecessary files to reduce size
+RUN rm -rf .git .github docs scripts *.md && \
+    find . -name "*.test.*" -delete && \
+    find . -name "*.spec.*" -delete
+
+# Create necessary directories
+RUN mkdir -p /app/uploads /app/logs && \
+    chown -R nextjs:nodejs /app/uploads /app/logs
+
+# Switch to non-root user
+USER nextjs
+
+# Health check endpoint
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:${PORT:-3000}/health || exit 1
+
+# Expose port (Railway/Render provide PORT env var)
+EXPOSE ${PORT:-3000}
+
+# Use dumb-init for proper signal handling
+ENTRYPOINT ["dumb-init", "--"]
+
+# Start application
+CMD ["npm", "start"]
