@@ -462,6 +462,13 @@ const Session = () => {
                 });
                 webRTCManagerRef.current = webRTCManager;
 
+                // Initialize the WebRTC manager (SFU or mesh) with the session/room ID
+                if (sessionId) {
+                    await webRTCManager.initialize(sessionId);
+                } else {
+                    console.warn('[Session] Missing sessionId, WebRTC initialization skipped');
+                }
+
                 let lastTransformEmit = 0;
                 scene.onStateChange = (state) => {
                     const now = Date.now();
