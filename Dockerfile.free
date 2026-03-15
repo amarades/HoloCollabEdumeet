@@ -17,13 +17,15 @@ COPY apps/web/package*.json ./apps/web/
 RUN cd apps/web && npm ci --omit=dev --no-audit --no-fund
 
 # ==========================================
-# Backend Dependencies Stage
+# Backend & Realtime Dependencies Stage
 # ==========================================
-FROM base AS backend-deps
+FROM base AS python-deps
 COPY services/backend/requirements.txt ./services/backend/
+COPY services/realtime/requirements.txt ./services/realtime/
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --no-cache-dir -r services/backend/requirements.txt
+RUN pip install --no-cache-dir -r services/backend/requirements.txt && \
+    pip install --no-cache-dir -r services/realtime/requirements.txt
 
 # ==========================================
 # Build Stage
@@ -42,8 +44,8 @@ FROM base AS production
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nextjs -u 1001
 
-# Copy virtual env from backend-deps
-COPY --from=backend-deps /opt/venv /opt/venv
+# Copy virtual env from python-deps
+COPY --from=python-deps /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 # Copy frontend dependencies and build
@@ -52,16 +54,13 @@ COPY --from=builder /app/apps/web/dist ./apps/web/dist
 COPY --from=builder /app/apps/web/package.json ./apps/web/package.json
 COPY --from=builder /app/apps/web/server.js ./apps/web/server.js
 
-# Copy backend code
+# Copy backend and realtime code
 COPY services/backend ./services/backend
-
-# Copy start script or use concurrently directly in CMD
-# We need concurrently in the final image, but it's a dev dependency or we add it to production
-# Since it was added to 'dependencies' in package.json, it's in node_modules
+COPY services/realtime ./services/realtime
 
 # Set environment
 ENV NODE_ENV=production
-ENV PYTHONPATH=/app/services/backend
+ENV PYTHONPATH=/app/services/backend:/app/services/realtime
 
 # Create necessary directories
 RUN mkdir -p /app/uploads /app/logs && \
@@ -70,8 +69,8 @@ RUN mkdir -p /app/uploads /app/logs && \
 # Switch to non-root user
 USER nextjs
 
-# Health check (checks frontend which in turn checks backend)
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+# Health check (checks frontend which in turn checks backend/realtime)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
     CMD curl -f http://localhost:${PORT:-3000}/health || exit 1
 
 # Expose port
@@ -80,11 +79,12 @@ EXPOSE ${PORT:-3000}
 # Use dumb-init for proper signal handling
 ENTRYPOINT ["dumb-init", "--"]
 
-# Start both services concurrently
+# Start all three services concurrently
 CMD ["npx", "concurrently", \
     "--kill-others", \
     "--prefix", "name", \
-    "--names", "backend,frontend", \
-    "--prefix-colors", "green,blue", \
+    "--names", "backend,realtime,frontend", \
+    "--prefix-colors", "green,yellow,blue", \
     "python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --app-dir ./services/backend", \
-    "node apps/web/server.js"]
+    "python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8002 --app-dir ./services/realtime", \
+    "node apps/web/server.js"]

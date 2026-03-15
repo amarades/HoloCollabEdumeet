@@ -41,6 +41,8 @@ app.use('/ws', createProxyMiddleware({
 // Health check endpoint for Render
 app.get('/health', async (req, res) => {
   let backendStatus = 'unknown';
+  let realtimeStatus = 'unknown';
+  
   try {
     const resp = await fetch(`${BACKEND_URL}/health`);
     const data = await resp.json();
@@ -49,13 +51,22 @@ app.get('/health', async (req, res) => {
     backendStatus = 'unreachable';
   }
 
+  try {
+    const resp = await fetch(`${REALTIME_URL}/health`);
+    const data = await resp.json();
+    realtimeStatus = data.status || 'healthy';
+  } catch (err) {
+    realtimeStatus = 'unreachable';
+  }
+
   res.status(200).json({
     status: 'healthy',
     backend: backendStatus,
+    realtime: realtimeStatus,
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
     platform: process.env.RENDER ? 'render' : 'unknown',
-    version: '1.0.1'
+    version: '1.0.2'
   });
 });
 
