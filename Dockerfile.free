@@ -31,7 +31,9 @@ RUN pip install --no-cache-dir -r services/backend/requirements.txt && \
 # Build Stage
 # ==========================================
 FROM base AS builder
-COPY --from=frontend-deps /app/apps/web/node_modules ./apps/web/node_modules
+WORKDIR /app
+COPY apps/web/package*.json ./apps/web/
+RUN cd apps/web && npm install --no-audit --no-fund
 COPY . .
 RUN cd apps/web && npm run build
 
