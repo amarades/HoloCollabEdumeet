@@ -1,3 +1,9 @@
-# Root level dependencies for utility scripts
+# Root level dependencies for utility scripts and fallback for Render
 requests
 colorama
+httpx==0.28.1
+fastapi==0.116.1
+uvicorn==0.35.0
+websockets==14.2
+pydantic-settings==2.10.1
+redis==5.2.1
