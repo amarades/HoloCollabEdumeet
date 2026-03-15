@@ -97,7 +97,10 @@ async def register(user: UserRegister):
         raise
     except Exception as exc:
         logger.exception("Error in /register")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Registration failed.") from exc
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail=f"Registration failed: {type(exc).__name__} - {str(exc)}"
+        ) from exc
 
 
 @router.post("/login", response_model=Token)
@@ -128,7 +131,10 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         raise
     except Exception as exc:
         logger.exception("Error in /login")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Login failed.") from exc
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail=f"Login failed: {type(exc).__name__} - {str(exc)}"
+        ) from exc
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")

@@ -128,16 +128,27 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 @app.get("/health")
 async def health():
     db_status = "healthy"
+    tables = []
     try:
         from app.db.engine import engine
-        from sqlalchemy import text
+        from sqlalchemy import text, inspect
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
+            # Check if tables exist
+            def get_tables(connection):
+                return inspect(connection).get_table_names()
+            
+            table_names = await conn.run_sync(get_tables)
+            tables = table_names
+            if "users" not in table_names:
+                db_status = "degraded: 'users' table not found"
     except Exception as e:
         db_status = f"unhealthy: {str(e)}"
     
     return {
         "status": "healthy" if db_status == "healthy" else "degraded",
         "service": "backend",
-        "database": db_status
+        "database": db_status,
+        "tables": tables,
+        "environment": settings.environment
     }

@@ -5,11 +5,13 @@ from jose import jwt
 from app.config import settings
 
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
+def verify_password(plain_password: str, hashed_password: Optional[str]) -> bool:
     """Verify a password against a hash."""
+    if not hashed_password or not plain_password:
+        return False
     try:
         return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
-    except ValueError:
+    except (ValueError, AttributeError):
         return False
 
 
