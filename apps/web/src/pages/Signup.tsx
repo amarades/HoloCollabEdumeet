@@ -67,6 +67,7 @@ const Signup = () => {
                                 value={name}
                                 onChange={e => setName(e.target.value)}
                                 placeholder="John Doe"
+                                autoComplete="name"
                             />
                         </div>
                         <div className="space-y-2">
@@ -78,6 +79,7 @@ const Signup = () => {
                                 value={email}
                                 onChange={e => setEmail(e.target.value)}
                                 placeholder="you@example.com"
+                                autoComplete="email"
                             />
                         </div>
                     </div>
@@ -91,6 +93,7 @@ const Signup = () => {
                             value={password}
                             onChange={e => setPassword(e.target.value)}
                             placeholder="Minimum 8 characters"
+                            autoComplete="new-password"
                         />
                     </div>
 
