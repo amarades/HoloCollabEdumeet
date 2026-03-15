@@ -29,6 +29,9 @@ connect_args = {}
 if "localhost" not in db_url and "127.0.0.1" not in db_url:
     # require SSL for non-local connections
     connect_args["ssl"] = "require"
+    # Disable prepared statement caching for compatibility with PgBouncer
+    # (used by Render and many cloud providers for transaction pooling)
+    connect_args["statement_cache_size"] = 0
 
 engine = create_async_engine(
     db_url,
