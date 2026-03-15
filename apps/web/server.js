@@ -11,9 +11,9 @@ const PORT = process.env.PORT || 3000;
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
 const REALTIME_URL = process.env.REALTIME_URL || 'http://localhost:8002';
 
-// 1. Proxy API requests (MUST be before static middleware)
-// Preserve /api prefix by NOT stripping it
-app.use('/api', createProxyMiddleware({
+// 1. Proxy API requests (Preserve /api prefix)
+app.use(createProxyMiddleware({
+  pathFilter: '/api',
   target: BACKEND_URL,
   changeOrigin: true,
   onProxyReq: (proxyReq, req, res) => {
@@ -25,8 +25,9 @@ app.use('/api', createProxyMiddleware({
   }
 }));
 
-// 2. Proxy WebSocket requests
-app.use('/ws', createProxyMiddleware({
+// 2. Proxy WebSocket requests (Preserve /ws prefix)
+app.use(createProxyMiddleware({
+  pathFilter: '/ws',
   target: REALTIME_URL,
   ws: true,
   changeOrigin: true,
