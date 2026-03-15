@@ -2,7 +2,7 @@
 # Optimized for Railway, Render, Fly.io free tiers
 # Minimal resource usage, fast cold starts
 
-FROM node:18-alpine AS base
+FROM node:20-alpine AS base
 
 # Install dumb-init for proper signal handling
 RUN apk add --no-cache dumb-init curl
