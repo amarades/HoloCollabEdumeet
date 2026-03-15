@@ -11,21 +11,27 @@ RUN apk add --no-cache dumb-init curl
 WORKDIR /app
 
 # ==========================================
-# Dependencies Stage
+# Dependencies Stage (Production only)
 # ==========================================
 FROM base AS deps
 
 # Copy package files
 COPY apps/web/package*.json ./
 
-# Install dependencies only (no dev dependencies for production)
-RUN npm ci --only=production --no-audit --no-fund && \
+# Install production dependencies
+RUN npm ci --omit=dev --no-audit --no-fund && \
     npm cache clean --force
 
 # ==========================================
-# Build Stage
+# Build Stage (All dependencies)
 # ==========================================
-FROM deps AS builder
+FROM base AS builder
+
+# Copy package files
+COPY apps/web/package*.json ./
+
+# Install ALL dependencies (including devDependencies like tsc)
+RUN npm ci --no-audit --no-fund
 
 # Copy source code
 COPY . .
