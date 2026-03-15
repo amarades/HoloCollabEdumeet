@@ -1,4 +1,4 @@
-import { AUTH_TOKEN_KEY, createWebSocketTicket } from '../services/api';
+import { AUTH_TOKEN_KEY, createWebSocketTicket, API_BASE_URL } from '../services/api';
 
 // Types for socket events to ensure type safety
 export interface User {
@@ -102,6 +102,13 @@ export class SocketManager {
         }
 
         // Production fallback for setups without explicit env vars.
+        // If API_BASE_URL (from api.ts) is set to a specific host (e.g. Render), 
+        // we should try to derive the WS host from that instead of window.location.
+        if (API_BASE_URL && API_BASE_URL.startsWith('http')) {
+            const wsUrl = API_BASE_URL.replace(/^http:/i, 'ws:').replace(/^https:/i, 'wss:');
+            return wsUrl;
+        }
+
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         return `${protocol}//${window.location.hostname}:8002`;
     }

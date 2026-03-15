@@ -46,7 +46,7 @@ class WebSocketTicketResponse(BaseModel):
 
 class VerifyWebSocketTicketRequest(BaseModel):
     ws_ticket: str
-    room_code: str = Field(min_length=4, max_length=12)
+    room_code: str = Field(min_length=4, max_length=64)
 
 
 def _decode_token(token: str) -> Optional[str]:
@@ -172,7 +172,7 @@ async def get_current_user_info(user: dict = Depends(get_current_user_token)):
 
 @router.post("/ws-ticket", response_model=WebSocketTicketResponse)
 async def create_ws_ticket(
-    room_code: str = Query(..., min_length=4, max_length=12),
+    room_code: str = Query(..., min_length=4, max_length=64),
     user: dict = Depends(get_current_user_token),
 ):
     """Issue a short-lived websocket ticket to avoid passing long JWTs in URL query."""
