@@ -10,7 +10,6 @@ export interface GestureResult {
 
 export class GestureRecognizer {
     private previousHandPosition: { x: number; y: number; z: number } | null = null;
-    private previousPinchDistance: number | null = null;
     private gestureHistory: GestureResult[] = [];
     private readonly HISTORY_SIZE = 15;
 
@@ -19,7 +18,6 @@ export class GestureRecognizer {
     recognize(landmarks: NormalizedLandmark[]): GestureResult {
         // Landmark indices
         const indexTip = landmarks[8];
-        const thumbTip = landmarks[4];
 
         // Calculate finger extension
         const fingerExtended = this.calculateFingerExtensions(landmarks);
@@ -28,63 +26,41 @@ export class GestureRecognizer {
         // Detect gesture type
         let gesture: GestureResult = { type: 'none', confidence: 0 };
 
-        // 1. FIST - All fingers closed
-        if (extendedCount === 0) {
-            const handCenter = this.calculateHandCenter(landmarks);
-            const rotation = this.detectRotationDirection(handCenter);
+        const handCenter = this.calculateHandCenter(landmarks);
+        const swipe = this.detectSwipe(handCenter);
 
+        // 1. SWIPE - Fast movement (rotates model)
+        if (swipe.left || swipe.right) {
             gesture = {
-                type: rotation.left ? 'fist_left' : (rotation.right ? 'fist_right' : 'fist'),
-                confidence: 0.95,
-                rotation
+                type: swipe.left ? 'fist_left' : 'fist_right', // Mapping to existing types for spin
+                confidence: 0.9,
+                rotation: swipe
             };
         }
-
-        // 2. POINTING - Only index finger extended
-        else if (extendedCount === 1 && fingerExtended[1]) {
-            const position = {
-                x: (0.5 - indexTip.x) * 10, // Inverted: indexTip.x - 0.5 -> 0.5 - indexTip.x
-                y: (0.5 - indexTip.y) * 10,
-                z: -indexTip.z * 10
+        // 2. FIST - All fingers closed (zoom)
+        else if (extendedCount === 0) {
+            gesture = {
+                type: 'fist',
+                confidence: 0.95
             };
+        }
+        // 3. POINTING - Only index finger extended (selection)
+        else if (extendedCount === 1 && fingerExtended[1]) {
             gesture = {
                 type: 'pointing',
                 confidence: 0.9,
-                position
+                position: {
+                    x: (0.5 - indexTip.x) * 2 - 1, // Normalized to NDC [-1, 1]
+                    y: (0.5 - indexTip.y) * 2 - 1,
+                    z: indexTip.z
+                }
             };
         }
-
-        // 3. PINCH - Dynamic bidirectional scaling
-        else if (fingerExtended[1] && fingerExtended[0]) {
-            const pinchDistance = this.calculateDistance(thumbTip, indexTip);
-            
-            if (this.previousPinchDistance !== null) {
-                const ratio = pinchDistance / this.previousPinchDistance;
-                // Deadzone to prevent jitter
-                const isSignificant = Math.abs(1 - ratio) > 0.01;
-                
-                if (isSignificant) {
-                    gesture = {
-                        type: ratio < 1 ? 'pinch_in' : 'pinch_out',
-                        confidence: 0.9,
-                        scale: ratio
-                    };
-                }
-            }
-            this.previousPinchDistance = pinchDistance;
-        } else {
-            this.previousPinchDistance = null;
-        }
-
-        // 4. OPEN HAND - All fingers extended
-        if (gesture.type === 'none' && extendedCount >= 4) {
-            const handCenter = this.calculateHandCenter(landmarks);
-            const rotation = this.detectRotationDirection(handCenter);
-
+        // 4. OPEN HAND - All fingers extended (reset)
+        else if (extendedCount >= 4) {
             gesture = {
-                type: rotation.left ? 'open_left' : (rotation.right ? 'open_right' : 'none'),
-                confidence: 0.8,
-                rotation
+                type: 'open_left', // Using open_left as the signal for "Open Hand"
+                confidence: 0.8
             };
         }
 
@@ -146,29 +122,27 @@ export class GestureRecognizer {
         };
     }
 
-    private detectRotationDirection(handCenter: { x: number; y: number; z: number }) {
+    private detectSwipe(handCenter: { x: number; y: number; z: number }) {
         if (!this.previousHandPosition) {
             this.previousHandPosition = handCenter;
             return { left: false, right: false };
         }
 
         const currentTime = Date.now();
-        const deltaTime = (currentTime - this.previousTime) / 1000; // Convert to seconds
+        const deltaTime = (currentTime - this.previousTime) / 1000;
         this.previousTime = currentTime;
 
-        // Calculate velocity
         const deltaX = handCenter.x - this.previousHandPosition.x;
-        const velocity = deltaX / deltaTime;
+        const velocity = deltaX / (deltaTime || 0.001);
 
-        // Update previous position
         this.previousHandPosition = handCenter;
 
-        // Threshold for rotation detection (pixels per second)
-        const threshold = 0.3;
+        // Higher threshold for swipe to distinguish from jitter
+        const swipeThreshold = 0.8;
 
         return {
-            left: velocity < -threshold, 
-            right: velocity > threshold 
+            left: velocity < -swipeThreshold, 
+            right: velocity > swipeThreshold 
         };
     }
 
@@ -198,7 +172,6 @@ export class GestureRecognizer {
 
     reset() {
         this.previousHandPosition = null;
-        this.previousPinchDistance = null;
         this.gestureHistory = [];
     }
 }

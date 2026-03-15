@@ -7,9 +7,10 @@ import json
 import re
 import httpx
 from typing import Dict, List, Optional, Any
+from app.config import settings
 
 
-OLLAMA_BASE = "http://localhost:11434/api/generate"
+OLLAMA_API_PATH = "/api/generate"
 MODEL_FAST = "llama3.2:1b"
 MODEL_SMART = "llama3.2:1b"  # User has :1b installed, and it's much faster
 
@@ -52,7 +53,8 @@ MODEL_LIBRARY = {
 async def _ollama(model: str, prompt: str, timeout: float = 30.0) -> str:
     """Low-level helper — POST to Ollama and return the response text."""
     async with httpx.AsyncClient(timeout=timeout) as client:
-        resp = await client.post(OLLAMA_BASE, json={
+        url = f"{settings.ollama_base_url.rstrip('/')}{OLLAMA_API_PATH}"
+        resp = await client.post(url, json={
             "model": model,
             "prompt": prompt,
             "stream": False,

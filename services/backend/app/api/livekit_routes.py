@@ -16,7 +16,7 @@ try:
     LIVEKIT_AVAILABLE = True
 except (ImportError, AttributeError) as e:
     LIVEKIT_AVAILABLE = False
-    print(f"⚠️ LiveKit SDK Import Failed: {e}")
+    print(f"[WARNING] LiveKit SDK Import Failed: {e}")
     lk_api = None
 
 @router.post("/token")

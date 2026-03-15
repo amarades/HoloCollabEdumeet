@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 // @ts-expect-error - GLTFLoader types are typically provided by @types/three but may not be recognized depending on tsconfig resolution
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { API_BASE_URL } from '../services/api';
 
 // Define State Interface
 export interface ModelState {
@@ -72,11 +73,10 @@ export class ARScene {
         this.canvas = canvas;
         console.log('ARScene: Constructor called');
 
-
         // Init properties with temporary values to satisfy TS (will be overwritten in init)
         this.scene = new THREE.Scene();
         this.camera = new THREE.PerspectiveCamera();
-        this.renderer = new THREE.WebGLRenderer();
+        this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas });
 
         this.init();
         this.animate();
@@ -158,7 +158,31 @@ export class ARScene {
         }
     }
 
-    private toggleFullscreenSlide() {
+    /**
+     * Select a model part by screen coordinates (NDC: -1 to 1)
+     */
+    public selectAt(x: number, y: number) {
+        if (!this.currentModel) return;
+
+        this.raycaster.setFromCamera({ x, y }, this.camera);
+        const intersects = this.raycaster.intersectObjects(this.currentModel.children, true);
+
+        if (intersects.length > 0) {
+            const intersected = intersects[0].object as THREE.Mesh;
+            this.selectPart(intersected.name);
+            console.log(`🎯 Selection from gesture: ${intersected.name}`);
+        }
+    }
+
+    /**
+     * Incremental zoom for the camera
+     */
+    public zoomCamera(delta: number) {
+        this.camera.position.z = Math.max(2, Math.min(15, this.camera.position.z - delta));
+        this.notifyStateChange();
+    }
+
+    public toggleFullscreenSlide() {
         if (this.presentationSlides.length === 0) return;
         const currentSlide = this.presentationSlides[this.currentSlideIndex];
 
@@ -314,12 +338,27 @@ export class ARScene {
         let fullUrl: string;
         try {
             const parsed = new URL(url);
-            fullUrl = parsed.pathname + parsed.search;
+            // If the host in the URL matches the window's host, we strip it to use relative path (proxied by Vite)
+            // If it DOESN'T match (e.g. Render vs Vercel), we keep it as is, OR prepend API_BASE_URL if it's currently pointing to "self"
+            if (parsed.hostname === window.location.hostname) {
+                fullUrl = parsed.pathname + parsed.search;
+            } else {
+                fullUrl = url;
+            }
         } catch {
             // url is already relative (e.g. "/api/models/foo.glb")
-            fullUrl = url.startsWith('/') ? url : `/api/models/${url}`;
+            // url is already relative or simple filename (e.g. "/api/models/foo.glb" or "foo.glb")
+            if (url.startsWith('http')) {
+                fullUrl = url;
+            } else if (url.startsWith('/')) {
+                // If it's a relative path, ensure it uses API_BASE_URL in production
+                fullUrl = API_BASE_URL ? `${API_BASE_URL}${url}` : url;
+            } else {
+                const endpoint = `/api/models/${url}`;
+                fullUrl = API_BASE_URL ? `${API_BASE_URL}${endpoint}` : endpoint;
+            }
         }
-        console.log(`🔗 Full model URL (proxied): ${fullUrl}`);
+        console.log(`🔗 Full model URL (resolved): ${fullUrl}`);
 
         // ── Hologram Shader Implementation ──
         const hologramShader = {

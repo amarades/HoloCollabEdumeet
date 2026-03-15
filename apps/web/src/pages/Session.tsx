@@ -338,36 +338,29 @@ const Session = () => {
             setCurrentGesture(detected.type.replace('_', ' ').toUpperCase());
             if (detected.type === 'none' || detected.confidence < 0.7) return;
 
-            // Manipulation gestures (Host or permitted Students):
-            // fist => reset, open hand => rotate, swipe => one full spin,
-            // pinch => zoom, pointing => move model.
+            // Manipulation gestures:
+            // FIST => zoom slowly
+            // OPEN HAND => reset 
+            // POINT => select 
+            // SWIPE => rotation
             const canInteract = PermissionsService.getInstance().canInteract();
             if (canInteract && arSceneRef.current) {
                 if (detected.type === 'fist') {
-                    arSceneRef.current.resetTransform();
+                    // Zoom camera slowly while fist is held
+                    arSceneRef.current.zoomCamera(0.05);
                 } else if (detected.type === 'open_left') {
-                    arSceneRef.current.rotateModel('y', -0.08);
-                } else if (detected.type === 'open_right') {
-                    arSceneRef.current.rotateModel('y', 0.08);
+                    // Reset transform when hand is opened
+                    arSceneRef.current.resetTransform();
+                    arSceneRef.current.resetView(); // Also reset camera
+                } else if (detected.type === 'pointing' && detected.position) {
+                    // Select object part by pointing
+                    arSceneRef.current.selectAt(detected.position.x, detected.position.y);
                 } else if (detected.type === 'fist_left') {
+                    // Swipe left -> rotate
                     triggerSwipeSpin(-1);
                 } else if (detected.type === 'fist_right') {
+                    // Swipe right -> rotate
                     triggerSwipeSpin(1);
-                } else if (detected.type === 'pinch_in' || detected.type === 'pinch_out') {
-                    const state = arSceneRef.current.getState();
-                    if (state?.scale !== undefined) {
-                        const ratio = detected.scale && detected.scale > 0 ? detected.scale : (detected.type === 'pinch_in' ? 0.95 : 1.05);
-                        arSceneRef.current.applyState({ scale: Math.max(0.5, Math.min(4, state.scale * ratio)) });
-                        arSceneRef.current.notifyStateChange();
-                    }
-                } else if (detected.type === 'pointing' && detected.position) {
-                    const mappedPosition = {
-                        x: Math.max(-3, Math.min(3, detected.position.x * 0.35)),
-                        y: Math.max(-2, Math.min(2, detected.position.y * 0.25)),
-                        z: Math.max(-3, Math.min(2, detected.position.z * 0.35)),
-                    };
-                    arSceneRef.current.applyState({ position: mappedPosition });
-                    arSceneRef.current.notifyStateChange();
                 }
             }
 

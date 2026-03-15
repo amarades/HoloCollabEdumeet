@@ -7,6 +7,7 @@ class Settings(BaseSettings):
 
     environment: str = "development"
     ai_service: str = "ollama"
+    ollama_base_url: str = "http://localhost:11434"
     cors_origins: Optional[str] = "http://localhost:5173"
 
     class Config:

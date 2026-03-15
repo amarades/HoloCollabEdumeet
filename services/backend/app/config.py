@@ -87,11 +87,11 @@ if settings.environment.lower() == "production":
 # Diagnostic: Verify if DATABASE_URL is actually coming from ENV
 db_env_val = os.environ.get("DATABASE_URL")
 if db_env_val:
-    print(f"✅ Configuration: DATABASE_URL is set in environment (Length: {len(db_env_val)})")
+    print(f"[OK] Configuration: DATABASE_URL is set in environment (Length: {len(db_env_val)})")
     if db_env_val.startswith("localhost") or "127.0.0.1" in db_env_val:
-         print("⚠️ WARNING: DATABASE_URL contains 'localhost' or '127.0.0.1' - this will fail on Render!")
+         print("[WARNING] WARNING: DATABASE_URL contains 'localhost' or '127.0.0.1' - this will fail on Render!")
 else:
-    print("⚠️ Configuration: DATABASE_URL NOT found in environment. Scanning for alternatives...")
+    print("[WARNING] Configuration: DATABASE_URL NOT found in environment. Scanning for alternatives...")
     # List keys that DO exist to help debug
     all_keys = list(os.environ.keys())
     db_keys = [k for k in all_keys if any(x in k.upper() for x in ["DB", "POSTGRES", "URL", "CONNECT"])]
