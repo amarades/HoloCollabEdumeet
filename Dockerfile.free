@@ -1,80 +1,90 @@
-# Dockerfile for Free Hosting Platforms
-# Optimized for Railway, Render, Fly.io free tiers
-# Minimal resource usage, fast cold starts
+# Dockerfile for Free Hosting Platforms (Monolith: Node.js + Python)
+# Optimized for Render free tier
 
 FROM node:20-alpine AS base
 
-# Install dumb-init for proper signal handling
-RUN apk add --no-cache dumb-init curl
+# Install system dependencies
+RUN apk add --no-cache dumb-init curl python3 py3-pip make g++ gcc
 
 # Set working directory
 WORKDIR /app
 
 # ==========================================
-# Dependencies Stage (Production only)
+# Frontend Dependencies Stage
 # ==========================================
-FROM base AS deps
-
-# Copy package files
-COPY apps/web/package*.json ./
-
-# Install production dependencies
-RUN npm ci --omit=dev --no-audit --no-fund && \
-    npm cache clean --force
+FROM base AS frontend-deps
+COPY apps/web/package*.json ./apps/web/
+RUN cd apps/web && npm ci --omit=dev --no-audit --no-fund
 
 # ==========================================
-# Build Stage (All dependencies)
+# Backend Dependencies Stage
+# ==========================================
+FROM base AS backend-deps
+COPY services/backend/requirements.txt ./services/backend/
+RUN python3 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+RUN pip install --no-cache-dir -r services/backend/requirements.txt
+
+# ==========================================
+# Build Stage
 # ==========================================
 FROM base AS builder
-
-# Copy package files
-COPY apps/web/package*.json ./
-
-# Install ALL dependencies (including devDependencies like tsc)
-RUN npm ci --no-audit --no-fund
-
-# Copy source code
+COPY --from=frontend-deps /app/apps/web/node_modules ./apps/web/node_modules
 COPY . .
-
-# Build application
 RUN cd apps/web && npm run build
 
 # ==========================================
-# Production Stage (Minimal)
+# Production Stage
 # ==========================================
 FROM base AS production
 
-# Create non-root user for security
+# Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nextjs -u 1001
 
-# Copy dependencies from deps stage
-COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
+# Copy virtual env from backend-deps
+COPY --from=backend-deps /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy built application
-COPY --from=builder --chown=nextjs:nodejs /app ./
+# Copy frontend dependencies and build
+COPY --from=frontend-deps /app/apps/web/node_modules ./apps/web/node_modules
+COPY --from=builder /app/apps/web/dist ./apps/web/dist
+COPY --from=builder /app/apps/web/package.json ./apps/web/package.json
+COPY --from=builder /app/apps/web/server.js ./apps/web/server.js
 
-# Remove unnecessary files to reduce size
-RUN rm -rf .git .github docs scripts *.md && \
-    find . -name "*.test.*" -delete && \
-    find . -name "*.spec.*" -delete
+# Copy backend code
+COPY services/backend ./services/backend
+
+# Copy start script or use concurrently directly in CMD
+# We need concurrently in the final image, but it's a dev dependency or we add it to production
+# Since it was added to 'dependencies' in package.json, it's in node_modules
+
+# Set environment
+ENV NODE_ENV=production
+ENV PYTHONPATH=/app/services/backend
 
 # Create necessary directories
 RUN mkdir -p /app/uploads /app/logs && \
-    chown -R nextjs:nodejs /app/uploads /app/logs
+    chown -R nextjs:nodejs /app
 
 # Switch to non-root user
 USER nextjs
 
-# Health check endpoint
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+# Health check (checks frontend which in turn checks backend)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:${PORT:-3000}/health || exit 1
 
-# Expose port (Railway/Render provide PORT env var)
+# Expose port
 EXPOSE ${PORT:-3000}
 
 # Use dumb-init for proper signal handling
 ENTRYPOINT ["dumb-init", "--"]
 
-# Start application from the web app directory
-CMD ["npm", "start", "--prefix", "apps/web"]
+# Start both services concurrently
+CMD ["npx", "concurrently", \
+    "--kill-others", \
+    "--prefix", "name", \
+    "--names", "backend,frontend", \
+    "--prefix-colors", "green,blue", \
+    "python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --app-dir ./services/backend", \
+    "node apps/web/server.js"]
