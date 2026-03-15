@@ -16,7 +16,7 @@ WORKDIR /app
 FROM base AS deps
 
 # Copy package files
-COPY package*.json ./
+COPY apps/web/package*.json ./
 
 # Install dependencies only (no dev dependencies for production)
 RUN npm ci --only=production --no-audit --no-fund && \
@@ -30,8 +30,8 @@ FROM deps AS builder
 # Copy source code
 COPY . .
 
-# Build application (if needed)
-RUN npm run build 2>/dev/null || echo "No build script found"
+# Build application
+RUN cd apps/web && npm run build
 
 # ==========================================
 # Production Stage (Minimal)
@@ -70,5 +70,5 @@ EXPOSE ${PORT:-3000}
 # Use dumb-init for proper signal handling
 ENTRYPOINT ["dumb-init", "--"]
 
-# Start application
-CMD ["npm", "start"]
+# Start application from the web app directory
+CMD ["npm", "start", "--prefix", "apps/web"]
