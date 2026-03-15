@@ -164,7 +164,7 @@ export class ARScene {
     public selectAt(x: number, y: number) {
         if (!this.currentModel) return;
 
-        this.raycaster.setFromCamera({ x, y }, this.camera);
+        this.raycaster.setFromCamera(new THREE.Vector2(x, y), this.camera);
         const intersects = this.raycaster.intersectObjects(this.currentModel.children, true);
 
         if (intersects.length > 0) {

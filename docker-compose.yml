@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   db:
     image: postgres:15-alpine
@@ -60,11 +58,16 @@ services:
     environment:
       - ENVIRONMENT=development
       - OLLAMA_BASE_URL=http://ollama:11434
+    volumes:
+      - ./services/ai-service:/app
+    command: >
+      sh -c "chmod +x /app/pull-model.sh && /app/pull-model.sh & 
+             python -m uvicorn app.main:app --host 0.0.0.0 --port 8003"
     depends_on:
       - ollama
 
   ollama:
-    image: ollama/ollama:latest
+    image: alpine/ollama
     ports:
       - "11434:11434"
     volumes:

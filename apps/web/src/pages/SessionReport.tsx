@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { apiRequest, AUTH_TOKEN_KEY } from '../services/api';
 import { AIAssistant } from '../components/AIAssistant';
+import { useAuth } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface StudentStat {
@@ -87,6 +88,9 @@ const cardHover: any = {
 const SessionReport = () => {
     const { sessionId } = useParams<{ sessionId: string }>();
     const navigate = useNavigate();
+    const { token } = useAuth();
+    const isGuest = token === 'guest';
+
     const [report, setReport] = useState<ReportData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -248,12 +252,22 @@ const SessionReport = () => {
                 <motion.div variants={itemVariants} className="flex flex-col md:flex-row md:items-center gap-6 justify-between">
                     <div className="flex items-center gap-5">
                         <button
-                            onClick={() => navigate('/dashboard')}
-                            title="Back to Dashboard"
+                            onClick={() => navigate('/')}
+                            title="Go to Home"
+                            className="p-3.5 bg-white/5 hover:bg-white/10 rounded-2xl transition-all border border-white/10 group flex items-center justify-center"
+                        >
+                            <Home className="w-5 h-5 text-white/50 group-hover:text-white transition-colors" />
+                        </button>
+                        <div className="h-6 w-px bg-white/10" />
+                        <button
+                            onClick={() => navigate(isGuest ? '/join' : '/dashboard')}
+                            title={isGuest ? "Join Another Session" : "Back to Workspace"}
                             className="p-3.5 bg-white/5 hover:bg-white/10 rounded-2xl transition-all border border-white/10 group flex items-center gap-2 pr-6"
                         >
                             <ChevronLeft className="w-5 h-5 text-white/50 group-hover:text-white group-hover:-translate-x-1 transition-transform" />
-                            <span className="text-white/70 text-sm font-black uppercase tracking-widest hidden sm:inline">Workspace</span>
+                            <span className="text-white/70 text-sm font-black uppercase tracking-widest hidden sm:inline">
+                                {isGuest ? 'Join Session' : 'Workspace'}
+                            </span>
                         </button>
                         <div className="h-10 w-px bg-white/10 hidden md:block" />
                         <div>
@@ -631,18 +645,18 @@ const SessionReport = () => {
                 {/* Footer Actions */}
                 <motion.div variants={itemVariants} className="flex flex-col sm:flex-row gap-6 pt-10">
                     <button
-                        onClick={() => navigate('/dashboard')}
+                        onClick={() => navigate(isGuest ? '/join' : '/dashboard')}
                         className="flex-1 py-7 bg-white/5 hover:bg-white/10 text-white rounded-[32px] font-black uppercase tracking-[0.3em] transition-all border border-white/10 flex items-center justify-center gap-4 group shadow-2xl hover:translate-y-[-4px]"
                     >
                         <LayoutDashboard className="w-6 h-6 text-white/40 group-hover:text-white transition-colors" />
-                        Enter Dashboard
+                        {isGuest ? 'Join Another' : 'Enter Dashboard'}
                     </button>
                     <button
                         onClick={() => navigate('/')}
                         className="flex-1 py-7 bg-purple-600/20 hover:bg-purple-600/30 text-purple-200 rounded-[32px] font-black uppercase tracking-[0.3em] transition-all border border-purple-500/30 flex items-center justify-center gap-4 group shadow-2xl hover:translate-y-[-4px]"
                     >
                         <Home className="w-6 h-6 text-purple-400 group-hover:text-white transition-colors" />
-                        Exit Protocol
+                        Return Home
                     </button>
                 </motion.div>
 
