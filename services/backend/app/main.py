@@ -127,4 +127,17 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy", "service": "backend"}
+    db_status = "healthy"
+    try:
+        from app.db.engine import engine
+        from sqlalchemy import text
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+    except Exception as e:
+        db_status = f"unhealthy: {str(e)}"
+    
+    return {
+        "status": "healthy" if db_status == "healthy" else "degraded",
+        "service": "backend",
+        "database": db_status
+    }

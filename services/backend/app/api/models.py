@@ -32,16 +32,18 @@ async def upload_model(
     
     is_authorized = PermissionService.is_instructor(user)
     
-    if not is_authorized and session_id:
-        try:
-            # If the user is a student host of this session, they are authorized
+    # If not an instructor, check if they are the host of the specific session
+    if not is_authorized:
+        if session_id:
+            # require_host will raise its own 403 or 404 if appropriate
             await PermissionService.require_host(session_id, user)
             is_authorized = True
-        except HTTPException:
-            pass
-
-    if not is_authorized:
-        raise HTTPException(status_code=403, detail="Only instructors or session hosts can upload models")
+        else:
+            # No session_id and not an instructor
+            raise HTTPException(
+                status_code=403, 
+                detail="Only instructors or session hosts (providing a session_id) can upload models"
+            )
 
     # Validate file extension
     if not model.filename or not model.filename.lower().endswith((".glb", ".gltf")):

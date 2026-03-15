@@ -9,26 +9,26 @@ db_url = settings.database_url
 
 # If the current URL is localhost or default, try to find a better one in env vars
 if "localhost" in db_url or "127.0.0.1" in db_url:
-    for key in ["DATABASE_URL", "POSTGRES_URL", "DATABASE_PRIVATE_URL", "DB_URL", "SUPABASE_URL", "POSTGRESQL_URL"]:
+    # Order of preference: Render Personal/Private URLs, Database URL, others
+    keys = ["DATABASE_URL", "POSTGRES_URL", "DATABASE_PRIVATE_URL", "DB_URL", "SUPABASE_URL", "POSTGRESQL_URL"]
+    for key in keys:
         env_val = os.environ.get(key)
         if env_val and "localhost" not in env_val:
-            print(f"[SYNC] Auto-switching to database URL from env var: {key}")
+            print(f"[DB] Auto-switching to production database: {key}")
             db_url = env_val
             break
 
-# Handle both postgresql:// and postgres:// (common in Supabase/Heroku)
-if db_url.startswith("postgresql://"):
-    db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-elif db_url.startswith("postgres://"):
+# Handle scheme differences (Heroku/Render common issues)
+if db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql+asyncpg://", 1)
+elif db_url.startswith("postgresql://"):
+    db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
-# Log the database host for diagnostics (safe, doesn't leak credentials)
-try:
-    from urllib.parse import urlparse
-    parsed = urlparse(db_url)
-    print(f"[DB] Final Database Host: {parsed.hostname or 'localhost'} (Scheme: {parsed.scheme})")
-except Exception:
-    print("[DB] Database Host: [Could not parse URL]")
+# Render / Supabase / Managed Postgres often require SSL
+connect_args = {}
+if "localhost" not in db_url and "127.0.0.1" not in db_url:
+    # require SSL for non-local connections
+    connect_args["ssl"] = "require"
 
 engine = create_async_engine(
     db_url,
@@ -36,6 +36,7 @@ engine = create_async_engine(
     pool_pre_ping=True,
     pool_size=settings.db_pool_size,
     max_overflow=settings.db_max_overflow,
+    connect_args=connect_args
 )
 
 async_session_maker = async_sessionmaker(
