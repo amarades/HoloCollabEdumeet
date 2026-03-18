@@ -1,19 +1,12 @@
-
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ARScene } from '../three/ARScene';
-import type { SlideData } from '../three/ARScene';
 
 import { SocketManager } from '../realtime/SocketManager';
-import { WebRTCManager } from '../realtime/WebRTCManager';
-import { VideoManager } from '../services/VideoManager';
 import { PermissionsService } from '../services/PermissionsService';
-import { GestureService } from '../services/GestureService';
-import { GestureRecognizer } from '../services/GestureRecognizer';
-import type { Results } from '@mediapipe/hands';
 import { useAuth } from '../context/AuthContext';
 import { useScene } from '../hooks/useScene';
-import { useSessionControls, REACTIONS } from '../hooks/useSessionControls';
+import { useSessionControls } from '../hooks/useSessionControls';
 import { useSessionRealtimeListeners } from '../hooks/useSessionRealtimeListeners';
 import {
     Mic, MicOff, Video, VideoOff, PhoneOff,
@@ -25,11 +18,15 @@ import {
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
 
+// Hooks
+import { useMediaSession } from '../hooks/useMediaSession';
+import { useGestureSession } from '../hooks/useGestureSession';
+import { usePresentationSession } from '../hooks/usePresentationSession';
+
 // Configure PDF.js worker using local Vite asset
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 import { apiRequest } from '../services/api';
-
 
 import { SessionSidebar } from '../components/session/wrapper/SessionSidebar';
 import { ChatPanel } from '../components/session/layout/ChatPanel';
@@ -44,42 +41,30 @@ import { VideoGrid } from '../components/VideoGrid';
 import { ConnectionQuality } from '../components/ConnectionQuality';
 import { ParticipantApproval } from '../components/session/ParticipantApproval';
 
+const REACTIONS = ['❤️', '👍', '🔥', '😮', '👏', '🤔', '🎉', '😢'];
+
 const Session = () => {
     const { sessionId } = useParams();
     const navigate = useNavigate();
     const location = useLocation();
     const { user } = useAuth();
-    // const { videoSettings } = useSettings();
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const videoRef = useRef<HTMLVideoElement>(null);
     const scenePanelFileInputRef = useRef<HTMLInputElement>(null);
+    const presentationFileInputRef = useRef<HTMLInputElement>(null);
 
     const arSceneRef = useRef<ARScene | null>(null);
     const socketRef = useRef<SocketManager | null>(null);
-    const videoManagerRef = useRef<VideoManager | null>(null);
-    const gestureServiceRef = useRef<GestureService | null>(null);
-    const webRTCManagerRef = useRef<WebRTCManager | null>(null);
 
     const [socketInstance, setSocketInstance] = useState<SocketManager | null>(null);
-
     const [users, setUsers] = useState<any[]>([]);
-    const [localStream, setLocalStream] = useState<MediaStream | null>(null);
-    const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({});
-    const [micOn, setMicOn] = useState(true);
-    const [cameraOn, setCameraOn] = useState(true);
     const [isConnected, setIsConnected] = useState(false);
-    const [gesturesEnabled, setGesturesEnabled] = useState(false); // Disabled by default
+    const [gesturesEnabled, setGesturesEnabled] = useState(false); 
     const [modelVisible, setModelVisible] = useState(true);
-    const [currentGesture, setCurrentGesture] = useState<string>('None');
     const [modelLoaded, setModelLoaded] = useState(false);
     const [visualFilter, setVisualFilter] = useState<'realistic' | 'blue_glow' | 'red_glow'>('realistic');
     const [autoOscillate, setAutoOscillate] = useState(false);
-    const gesturesEnabledRef = useRef(false);
-    const gestureRecognizerRef = useRef(new GestureRecognizer());
-    const lastGestureEmitRef = useRef<{ type: string; at: number }>({ type: 'none', at: 0 });
-    const swipeAnimatingRef = useRef(false);
-    const swipeCooldownRef = useRef(0);
 
     // Layout state
     const [splitView, setSplitView] = useState(false);
@@ -98,8 +83,44 @@ const Session = () => {
         return navState.role || sessionStorage.getItem('session_role') || 'student';
     });
     const isHost = sessionRole === 'host';
-    const [isApproved, setIsApproved] = useState(isHost); // Host approved by default
+    const [isApproved, setIsApproved] = useState(isHost); 
     const [codeCopied, setCodeCopied] = useState(false);
+
+    // ── Media Session Hook ────────────────────────────────────────────────
+    const {
+        localStream,
+        remoteStreams,
+        micOn,
+        cameraOn,
+        setMicEnabled,
+        setCameraEnabled,
+        toggleMic,
+        toggleCamera,
+        initializeMedia,
+        cleanupMedia
+    } = useMediaSession({ sessionId, socketInstance, user });
+
+    // ── Presentation Session Hook ─────────────────────────────────────────
+    const {
+        presentationMode,
+        setPresentationMode,
+        currentSlides,
+        setCurrentSlides,
+        isConverting,
+        handleFileUpload,
+    } = usePresentationSession({ arSceneRef, socketInstance, isHost: true });
+
+    // ── Gesture Session Hook ──────────────────────────────────────────────
+    const {
+        currentGesture
+    } = useGestureSession({
+        gesturesEnabled,
+        arSceneRef,
+        socketInstance,
+        user,
+        videoElement: videoRef.current,
+        isApproved
+    });
 
     // Meeting timer
     const [meetingStartTime] = useState(Date.now());
@@ -109,7 +130,6 @@ const Session = () => {
 
     // ── Feature 6: Persistent 3D Library ────────────────────────────────────
     const [libraryModels, setLibraryModels] = useState<any[]>([]);
-    const [currentModelMetadata, setCurrentModelMetadata] = useState<any>(null);
     
     const fetchLibraryModels = async () => {
         try {
@@ -149,67 +169,6 @@ const Session = () => {
 
     // ── Feature 7: Doubt Detection ────────────────────────────────────────────
     const [doubtAlert, setDoubtAlert] = useState<{ topic: string; pct: number } | null>(null);
-    const doubtCheckRef = useRef<number>(0);
-
-    // ── Feature 10: 3D Presentation Mode ──────────────────────────────────────
-    const [presentationMode, setPresentationMode] = useState(false);
-    const [currentSlides, setCurrentSlides] = useState<SlideData[]>([
-        { title: 'Introduction', body: 'Welcome to today\'s lesson. We will explore the topic using 3D interactive models.' },
-        { title: 'Key Concepts', body: 'Observe the 3D model carefully. Notice the structure, orientation, and components.' },
-        { title: 'Discussion', body: 'How does this structure relate to what we studied previously? Share your observations.' },
-    ]);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const [isConverting, setIsConverting] = useState(false);
-
-    const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file || file.type !== 'application/pdf') return;
-
-        setIsConverting(true);
-        try {
-            console.log('[PDF] Starting conversion for:', file.name);
-            const arrayBuffer = await file.arrayBuffer();
-            const loadingTask = pdfjsLib.getDocument({ 
-                data: arrayBuffer,
-                useWorkerFetch: true,
-                isEvalSupported: false,
-            });
-            
-            const pdf = await loadingTask.promise;
-            console.log('[PDF] Document loaded, pages:', pdf.numPages);
-            const newSlides: SlideData[] = [];
-
-            for (let i = 1; i <= pdf.numPages; i++) {
-                const page = await pdf.getPage(i);
-                // Scale up for high quality (Vite dev mode might be slow but it's okay for host)
-                const viewport = page.getViewport({ scale: 2.0 });
-                const canvas = document.createElement('canvas');
-                const context = canvas.getContext('2d')!;
-                canvas.height = viewport.height;
-                canvas.width = viewport.width;
-
-                await page.render({ canvasContext: context, viewport } as any).promise;
-                newSlides.push({
-                    title: `Page ${i}`,
-                    body: `Visual content from ${file.name}`,
-                    imageUrl: canvas.toDataURL('image/jpeg', 0.8)
-                });
-                console.log(`[PDF] Rendered page ${i}/${pdf.numPages}`);
-            }
-
-            setCurrentSlides(newSlides);
-            if (presentationMode) {
-                arSceneRef.current?.startPresentationMode(newSlides);
-                socketRef.current?.emit('PRESENTATION_STARTED', { slides: newSlides });
-            }
-            console.log('[PDF] Conversion complete');
-        } catch (error: any) {
-            console.error('PDF Conversion error details:', error);
-            alert(`Failed to process PDF: ${error.message || 'Unknown error'}`);
-        } finally {
-            setIsConverting(false);
-        }
-    };
 
     const handleCopyCode = async () => {
         if (roomCode) {
@@ -219,23 +178,19 @@ const Session = () => {
         }
     };
 
-
     // ── Feature 4: Tab visibility engagement signals ──────────────────────────
     useEffect(() => {
         const handleVisibility = () => {
             const type = document.hidden ? 'tab_away' : 'tab_back';
-            socketRef.current?.emit('ENGAGEMENT_SIGNAL', { type });
+            socketInstance?.emit('ENGAGEMENT_SIGNAL', { type });
         };
         document.addEventListener('visibilitychange', handleVisibility);
         return () => document.removeEventListener('visibilitychange', handleVisibility);
-    }, []);
+    }, [socketInstance]);
 
     // ── Feature 7: Periodic doubt detection (host only) ───────────────────────
     useEffect(() => {
         if (!isHost || chatHistory.length < 5) return;
-        const newMessages = chatHistory.length;
-        if (newMessages - doubtCheckRef.current < 5) return;
-        doubtCheckRef.current = newMessages;
         apiRequest('/api/ai/detect-doubts', {
             method: 'POST',
             body: JSON.stringify({ messages: chatHistory.slice(-20).map(m => `${m.sender}: ${m.text}`) }),
@@ -245,22 +200,6 @@ const Session = () => {
             }
         }).catch(() => { });
     }, [chatHistory, isHost]);
-
-    // ── Feature 10: Keyboard navigation for presentation mode ─────────────────
-    useEffect(() => {
-        if (!presentationMode) return;
-        const handleKey = (e: KeyboardEvent) => {
-            if (e.key === 'ArrowRight') {
-                arSceneRef.current?.nextSlide();
-                socketRef.current?.emit('SLIDE_CHANGED', { direction: 'next' });
-            } else if (e.key === 'ArrowLeft') {
-                arSceneRef.current?.prevSlide();
-                socketRef.current?.emit('SLIDE_CHANGED', { direction: 'prev' });
-            }
-        };
-        window.addEventListener('keydown', handleKey);
-        return () => window.removeEventListener('keydown', handleKey);
-    }, [presentationMode]);
 
     // ── Feature 3 & 4: Socket listeners for new events ───────────────────────
     useSessionRealtimeListeners({
@@ -276,358 +215,138 @@ const Session = () => {
         setAutoOscillate,
     });
 
-    // ── 3D Scene Sync listeners ───────────────────────────────────────────────
-    useEffect(() => {
-        gesturesEnabledRef.current = gesturesEnabled;
-    }, [gesturesEnabled]);
-
-    useEffect(() => {
-        const gestureService = gestureServiceRef.current;
-        const video = videoRef.current;
-        if (!gestureService || !video || !isApproved) return;
-
-        const triggerSwipeSpin = (direction: 1 | -1) => {
-            const now = Date.now();
-            if (swipeAnimatingRef.current || now - swipeCooldownRef.current < 1200) return;
-            if (!arSceneRef.current) return;
-
-            swipeAnimatingRef.current = true;
-            swipeCooldownRef.current = now;
-
-            const total = Math.PI * 2;
-            let rotated = 0;
-            const step = 0.22;
-
-            const animate = () => {
-                if (!arSceneRef.current) {
-                    swipeAnimatingRef.current = false;
-                    return;
-                }
-                const delta = Math.min(step, total - rotated);
-                arSceneRef.current.rotateModel('y', direction * delta);
-                rotated += delta;
-
-                if (rotated < total) {
-                    requestAnimationFrame(animate);
-                } else {
-                    swipeAnimatingRef.current = false;
-                }
-            };
-
-            requestAnimationFrame(animate);
-        };
-
-        if (!gesturesEnabled) {
-            setCurrentGesture('None');
-            gestureRecognizerRef.current.reset();
-            gestureService.stop();
-            return;
-        }
-
-        gestureService.start(video, (results: Results) => {
-            if (!gesturesEnabledRef.current) return;
-
-            const landmarks = results.multiHandLandmarks?.[0];
-            if (!landmarks) {
-                setCurrentGesture('None');
-                gestureRecognizerRef.current.reset();
-                return;
-            }
-
-            const detected = gestureRecognizerRef.current.recognize(landmarks);
-            setCurrentGesture(detected.type.replace('_', ' ').toUpperCase());
-            if (detected.type === 'none' || detected.confidence < 0.7) return;
-
-            // Manipulation gestures:
-            // FIST => zoom slowly
-            // OPEN HAND => reset 
-            // POINT => select 
-            // SWIPE => rotation
-            const canInteract = PermissionsService.getInstance().canInteract();
-            if (canInteract && arSceneRef.current) {
-                if (detected.type === 'fist') {
-                    // Zoom camera slowly while fist is held
-                    arSceneRef.current.zoomCamera(0.05);
-                } else if (detected.type === 'open_left') {
-                    // Reset transform when hand is opened
-                    arSceneRef.current.resetTransform();
-                    arSceneRef.current.resetView(); // Also reset camera
-                } else if (detected.type === 'pointing' && detected.position) {
-                    // Select object part by pointing
-                    arSceneRef.current.selectAt(detected.position.x, detected.position.y);
-                } else if (detected.type === 'fist_left') {
-                    // Swipe left -> rotate
-                    triggerSwipeSpin(-1);
-                } else if (detected.type === 'fist_right') {
-                    // Swipe right -> rotate
-                    triggerSwipeSpin(1);
-                }
-            }
-
-            const now = Date.now();
-            const shouldEmit =
-                lastGestureEmitRef.current.type !== detected.type ||
-                now - lastGestureEmitRef.current.at > 750;
-            if (!shouldEmit) return;
-
-            lastGestureEmitRef.current = { type: detected.type, at: now };
-            socketRef.current?.emit('GESTURE_DETECTED', {
-                gesture: detected.type,
-                user: user?.name || 'You',
-                confidence: detected.confidence,
-            });
-        })
-            .catch((error) => {
-                console.error('Failed to start gesture service:', error);
-                setGesturesEnabled(false);
-            });
-
-        return () => {
-            gestureService.stop();
-        };
-    }, [gesturesEnabled, isApproved, isHost, user?.name]);
-
     // ── Initialization ─────────────────────────────────────────────────────
-    // NOTE: depend on user.email (stable primitive) not the whole user object,
-    // to prevent the effect from re-running every render due to a new object reference.
     useEffect(() => {
         if (!canvasRef.current || !videoRef.current || !user || !sessionId) return;
 
-        // Guard flag so async operations that complete after cleanup are ignored
-        let cancelled = false;
-        let checkInterval: ReturnType<typeof setInterval> | null = null;
-        let videoManager: VideoManager | null = null;
         let socket: SocketManager | null = null;
         let scene: ARScene | null = null;
+        let checkInterval: ReturnType<typeof setInterval> | null = null;
 
         const initSession = async () => {
             try {
-                // ── Video ────────────────────────────────────────────────────
-                // videoManager = new VideoManager(videoSettings.resolution, videoSettings.hdVideo);
-                videoManager = new VideoManager();
-                videoManagerRef.current = videoManager;
-                try {
-                    const stream = await videoManager.start(videoRef.current!);
-                    if (cancelled) { videoManager.stop(); return; }
-                    setLocalStream(stream);
-
-                    // Set local stream for WebRTC after socket is initialized
-                    setTimeout(() => {
-                        if (webRTCManagerRef.current) {
-                            webRTCManagerRef.current.setLocalStream(stream);
-                        }
-                    }, 1000); // Wait for WebRTC manager to be initialized
-                } catch (videoError) {
-                    console.warn('Video initialization failed, continuing without video:', videoError);
-                }
-                if (cancelled) return;
+                // Initialize Media
+                initializeMedia(videoRef.current!);
 
                 // ── 3D Scene ─────────────────────────────────────────────────
-                                scene = new ARScene(canvasRef.current!);
+                scene = new ARScene(canvasRef.current!);
                 arSceneRef.current = scene;
-
-                const gestureService = new GestureService();
-                await gestureService.initialize();
-                gestureServiceRef.current = gestureService;
 
                 // WebSocket
                 socket = new SocketManager();
                 socketRef.current = socket;
-
-                // ── WebRTC Manager ────────────────────────────────────────
-                const webRTCManager = new WebRTCManager(socket, {
-                    onRemoteStream: (userId: string, stream: MediaStream) => {
-                        setRemoteStreams(prev => ({
-                            ...prev,
-                            [userId]: stream
-                        }));
-                    },
-                    onRemoteStreamRemoved: (userId: string) => {
-                        setRemoteStreams(prev => {
-                            const newStreams = { ...prev };
-                            delete newStreams[userId];
-                            return newStreams;
-                        });
-                    },
-                    onError: (error: Error) => {
-                        console.error('WebRTC error:', error);
-                    }
+                
+                socket.on('connect', () => {
+                    setIsConnected(true);
+                    socket?.emit('JOIN_SESSION', { 
+                        sessionId, 
+                        user,
+                        role: sessionRole,
+                        roomCode 
+                    });
                 });
-                webRTCManagerRef.current = webRTCManager;
 
-                // Initialize the WebRTC manager (SFU or mesh) with the session/room ID
-                if (sessionId) {
-                    await webRTCManager.initialize(sessionId);
-                } else {
-                    console.warn('[Session] Missing sessionId, WebRTC initialization skipped');
+                socket.on('disconnect', () => setIsConnected(false));
+                
+                socket.on('SESSION_START', (data: any) => {
+                    if (data.users) setUsers(data.users.filter((u: any) => u.id !== (user as any).id && u.id !== user.email));
+                });
+
+                socket.on('USER_JOINED', (data: any) => {
+                    setUsers(prev => [...prev.filter(u => u.id !== data.user.id), data.user]);
+                });
+
+                socket.on('USER_LEFT', (data: any) => {
+                    setUsers(prev => prev.filter(u => u.id !== data.userId));
+                });
+
+                // Approval logic
+                if (!isHost) {
+                    const handleApproved = () => setIsApproved(true);
+                    const handleRejected = () => {
+                        alert('Your request to join was declined by the host.');
+                        navigate('/dashboard');
+                    };
+                    window.addEventListener('joinApproved', handleApproved);
+                    window.addEventListener('joinRejected', handleRejected as EventListener);
+                    
+                    socket.on('JOIN_APPROVED', handleApproved);
+                    socket.on('JOIN_REJECTED', () => handleRejected());
                 }
 
+                socket.on('CHAT_RECEIVE', (data: any) => {
+                    setChatHistory(prev => [...prev, { sender: data.sender, text: data.text }]);
+                });
+
+                // Scene transformation sync
                 let lastTransformEmit = 0;
                 scene.onStateChange = (state) => {
                     const now = Date.now();
                     if (now - lastTransformEmit > 50) {
-                        socketRef.current?.emit('MODEL_TRANSFORM', state);
+                        socket?.emit('MODEL_TRANSFORM', state);
                         lastTransformEmit = now;
                     }
                 };
 
-                scene.onSlideFullscreen = (isFullscreen) => {
-                    if (isHost) {
-                        socketRef.current?.emit('SLIDE_FULLSCREEN', { isFullscreen });
-                    }
-                };
+                setSocketInstance(socket);
 
-                scene.onSlideTransform = (zoom, offset) => {
-                    if (isHost) {
-                        socketRef.current?.emit('SLIDE_TRANSFORM', { zoom, offset });
-                    }
-                };
+                // Permissions
+                PermissionsService.getInstance().initialize(socket, isHost);
 
-                socket.connect(
-                    sessionId,
-                    scene,
-                    user.name,
-                    isHost,
-                    (updatedUsers) => {
-                        if (!cancelled) setUsers(updatedUsers.filter((u: any) => u.name !== user.name));
-                    },
-                    (gestureEvent) => {
-                        console.log('Gesture Detected', gestureEvent);
-                    }
-                );
-                localStorage.setItem('user_name', user.name);
-
-                socket.on('SLIDE_FULLSCREEN', (data: { isFullscreen: boolean }) => {
-                    console.log('Remote fullscreen toggle:', data);
-                    arSceneRef.current?.setSlideFullscreen(data.isFullscreen);
-                });
-
-                socket.on('SLIDE_TRANSFORM', (data: { zoom: number, offset: { x: number, y: number } }) => {
-                    if (!isHost) {
-                        arSceneRef.current?.setSlideTransform(data.zoom, data.offset);
-                    }
-                });
-
-                socket.on('MODEL_CHANGED', (data) => {
-                    console.log('Remote user changed model:', data);
-                    if (arSceneRef.current && data.model_url) {
-                        arSceneRef.current.loadModel(data.model_url).catch(console.error);
-                    }
-                });
-
-                socket.onChat = (msg) => {
-                    if (!cancelled) setChatHistory(prev => [...prev.slice(-20), { sender: msg.sender, text: msg.text }]);
-                };
-
-                if (!cancelled) setSocketInstance(socket);
-
-                // ── Handle Join Approval (for students) ─────────────────────
-                if (!isHost) {
-                    const onJoinApproved = () => {
-                        console.log('[Session] Join approved by host!');
-                        setIsApproved(true);
-                    };
-                    
-                    const onJoinRejected = (e: any) => {
-                        alert(`Join request rejected: ${e.detail?.reason || 'Access denied'}`);
-                        navigate('/dashboard');
-                    };
-                    window.addEventListener('joinApproved', onJoinApproved);
-                    window.addEventListener('joinRejected', onJoinRejected as EventListener);
-
-                    // Ensure handlers are cleaned up even if init succeeds and component later unmounts.
-                    (window as any).__sessionJoinApprovedHandler = onJoinApproved;
-                    (window as any).__sessionJoinRejectedHandler = onJoinRejected;
-                } else {
-                    setIsApproved(true); // Host is always approved
-                }
-
-                // ── Permissions Service ───────────────────────────────────────
-                const permissionsService = PermissionsService.getInstance();
-                permissionsService.initialize(socket, isHost);
-
-                // ── Periodic Connection Check ──────────────────────────────
                 checkInterval = setInterval(() => {
-                    if (!cancelled) setIsConnected(socket?.isConnected() ?? false);
+                    setIsConnected(socket?.isConnected() ?? false);
                 }, 1000);
 
-            } catch (err) {
-                console.error('Failed to initialize session:', err);
+            } catch (error) {
+                console.error('Session initialization failed:', error);
             }
         };
 
         initSession();
 
-        // ── Cleanup ───────────────────────────────────────────────────────────
         return () => {
-            cancelled = true;
             if (checkInterval) clearInterval(checkInterval);
-            videoManagerRef.current?.stop();
-            gestureServiceRef.current?.stop();
-            gestureServiceRef.current = null;
-            webRTCManagerRef.current?.destroy();
+            cleanupMedia();
             socketRef.current?.disconnect();
             arSceneRef.current?.dispose();
             PermissionsService.getInstance().destroy();
-            
-            const approvedHandler = (window as any).__sessionJoinApprovedHandler;
-            const rejectedHandler = (window as any).__sessionJoinRejectedHandler;
-            if (approvedHandler) {
-                window.removeEventListener('joinApproved', approvedHandler);
-                delete (window as any).__sessionJoinApprovedHandler;
-            }
-            if (rejectedHandler) {
-                window.removeEventListener('joinRejected', rejectedHandler as EventListener);
-                delete (window as any).__sessionJoinRejectedHandler;
-            }
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sessionId, user?.email]);
 
     // ── Feature 11: Auto Load Model from Library ──────────────────────────────
     useEffect(() => {
-        if (!isHost || !arSceneRef.current || !socketRef.current) return;
+        if (!isHost || !arSceneRef.current || !socketInstance) return;
         
         const autoModelRaw = sessionStorage.getItem('auto_load_model');
         if (autoModelRaw) {
             try {
                 const autoModel = JSON.parse(autoModelRaw);
-                console.log('[AI] Auto-loading matched model:', autoModel.name);
-                
-                // Slight delay to ensure scene is fully settled
                 const timer = setTimeout(async () => {
                     if (arSceneRef.current) {
                         try {
                             await arSceneRef.current.loadModel(autoModel.url);
                             setModelLoaded(true);
-                            socketRef.current?.emit('MODEL_CHANGED', { 
+                            socketInstance.emit('MODEL_CHANGED', { 
                                 model_url: autoModel.url, 
                                 model_name: autoModel.name, 
                                 timestamp: Date.now() 
                             });
-                            // Clean up to prevent re-load on refreshes if not desired (optional)
-                            // sessionStorage.removeItem('auto_load_model');
                         } catch (err) {
                             console.error('Failed to auto-load model:', err);
                         }
                     }
                 }, 1500);
-                
                 return () => clearTimeout(timer);
             } catch (e) {
                 console.error('Invalid auto_load_model in storage:', e);
             }
         }
-    }, [isHost, socketInstance]); // socketInstance changes when ready
+    }, [isHost, socketInstance]);
 
-    // ── Media Controls ─────────────────────────────────────────────────────
     const handleModelUpload = async (file: File) => {
         if (!file.name.toLowerCase().endsWith('.glb') && !file.name.toLowerCase().endsWith('.gltf')) {
             alert('Only GLB and GLTF files are supported');
-            return;
-        }
-        if (file.size > 50 * 1024 * 1024) {
-            alert('File size must be less than 50MB');
             return;
         }
         try {
@@ -635,50 +354,31 @@ const Session = () => {
             formData.append('model', file);
             formData.append('name', file.name.replace(/\.[^/.]+$/, ''));
             formData.append('category', 'Session Upload');
-            if (sessionId) {
-                formData.append('session_id', sessionId);
-            }
+            if (sessionId) formData.append('session_id', sessionId);
 
             const newModel = await apiRequest('/api/models/upload', { method: 'POST', body: formData });
-
-            setCurrentModelMetadata(newModel);
             if (arSceneRef.current) {
                 await arSceneRef.current.loadModel(newModel.url);
                 setModelLoaded(true);
             }
-            if (socketRef.current) {
-                socketRef.current.emit('MODEL_CHANGED', { model_url: newModel.url, model_name: newModel.name, timestamp: Date.now() });
-            }
-            alert(`Model "${newModel.name}" uploaded successfully!`);
+            socketInstance?.emit('MODEL_CHANGED', { model_url: newModel.url, model_name: newModel.name, timestamp: Date.now() });
         } catch (error) {
             console.error('Model upload failed:', error);
-            const detail = error instanceof Error ? error.message : 'Unknown error';
-            alert(`Failed to upload model: ${detail}`);
         }
     };
 
     const handleAddToLibrary = async () => {
-        if (!currentModelMetadata) {
-            alert('No uploaded model to add to library.');
-            return;
-        }
         try {
-            // In our current backend, list_models returns all saved ModelMetadata.
-            // upload_model already calls db.save_model(model_data).
-            // So if it's uploaded, it's ALREADY in the library if we fetch it again.
-            // However, we might want to "pin" or "tag" it specifically if there's a distinction.
-            // For now, let's just refresh the library list.
             await fetchLibraryModels();
             alert('Model added to library successfully!');
         } catch (err) {
             console.error('Failed to add to library:', err);
-            alert('Failed to add to library.');
         }
     };
 
     const handleToggleModel = () => {
         setModelVisible(v => !v);
-        if (arSceneRef.current) arSceneRef.current.toggleModelVisibility();
+        arSceneRef.current?.toggleModelVisibility();
     };
 
     const handleDeleteModel = () => {
@@ -689,45 +389,17 @@ const Session = () => {
         }
     };
 
-    const handleToggleVideo = () => {
-        setCameraOn(v => !v);
-        if (videoManagerRef.current) videoManagerRef.current.toggleVideo(!cameraOn);
-    };
-
-    const setVideoEnabled = (enabled: boolean) => {
-        setCameraOn(enabled);
-        if (videoManagerRef.current) videoManagerRef.current.toggleVideo(enabled);
-    };
-
-    const handleToggleAudio = () => {
-        setMicOn(v => !v);
-        if (videoManagerRef.current) videoManagerRef.current.toggleAudio(!micOn);
-    };
-
-    const setAudioEnabled = (enabled: boolean) => {
-        setMicOn(enabled);
-        if (videoManagerRef.current) videoManagerRef.current.toggleAudio(enabled);
-    };
-
     const handleLeave = () => setShowLeaveConfirm(true);
     const confirmLeave = () => {
-        if (isHost && sessionId) {
-            navigate(`/session/${sessionId}/report`);
-        } else {
-            navigate('/dashboard');
-        }
+        if (isHost && sessionId) navigate(`/session/${sessionId}/report`);
+        else navigate('/dashboard');
     };
 
-    // ── AI scene command handler ────────────────────────────────────────────
     const handleAISceneCommand = useCallback((action: string, payload: any) => {
-        if (action === 'ADD_OBJECT') {
-            addObject(payload.type || 'box', payload.color || '#6366f1', payload.position);
-        } else if (action === 'DELETE_OBJECT' && payload.id) {
-            deleteObject(payload.id);
-        }
+        if (action === 'ADD_OBJECT') addObject(payload.type || 'box', payload.color || '#6366f1', payload.position);
+        else if (action === 'DELETE_OBJECT' && payload.id) deleteObject(payload.id);
     }, [addObject, deleteObject]);
 
-    // ── Participants for AI context ─────────────────────────────────────────
     const aiParticipants = [
         { id: 'local', name: user?.name || 'You' },
         ...users.map(u => ({ id: u.id || u.name, name: u.name })),
@@ -850,13 +522,13 @@ const Session = () => {
                                     <>
                                         <input
                                             type="file"
-                                            ref={fileInputRef}
+                                            ref={presentationFileInputRef}
                                             onChange={handleFileUpload}
                                             accept="application/pdf"
                                             className="hidden"
                                         />
                                         <button
-                                            onClick={() => fileInputRef.current?.click()}
+                                            onClick={() => presentationFileInputRef.current?.click()}
                                             disabled={isConverting}
                                             className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold shadow-lg transition-all bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50"
                                         >
@@ -971,14 +643,14 @@ const Session = () => {
                     {/* Center: Primary Controls (Wrapping on Mobile) */}
                     <div className="flex items-center gap-2 md:gap-3 mx-auto md:mx-0 w-full md:w-auto justify-center flex-wrap">
                         <button
-                            onClick={handleToggleAudio}
+                            onClick={toggleMic}
                             className={`p-3 md:p-4 rounded-full transition-all shadow-sm ${!micOn ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}
                         >
                             {!micOn ? <MicOff size={18} /> : <Mic size={18} />}
                         </button>
 
                         <button
-                            onClick={handleToggleVideo}
+                            onClick={toggleCamera}
                             className={`p-3 md:p-4 rounded-full transition-all shadow-sm ${!cameraOn ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}
                         >
                             {!cameraOn ? <VideoOff size={18} /> : <Video size={18} />}
@@ -1228,8 +900,8 @@ const Session = () => {
                     micEnabled={micOn}
                     cameraEnabled={cameraOn}
                     gesturesEnabled={gesturesEnabled}
-                    onMicEnabledChange={setAudioEnabled}
-                    onCameraEnabledChange={setVideoEnabled}
+                    onMicEnabledChange={setMicEnabled}
+                    onCameraEnabledChange={setCameraEnabled}
                     onGesturesEnabledChange={setGesturesEnabled}
                 />
             )}
