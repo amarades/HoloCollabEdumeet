@@ -142,8 +142,8 @@ class RoomManager:
         users = self.room_users.get(room_code, [])
         try:
             await self._redis.setex(self._users_key(room_code), 3600, json.dumps(users))
-        except Exception:
-            logger.exception("Failed syncing user roster for room %s", room_code)
+        except Exception as e:
+            logger.error("Failed syncing user roster for room %s: %s", room_code, str(e))
 
     async def _read_users_from_redis(self, room_code: str) -> Optional[List[dict]]:
         if not self._redis:
@@ -179,8 +179,8 @@ class RoomManager:
                 slot_reserved = True
             except ValueError:
                 raise
-            except Exception:
-                logger.exception("Redis room capacity check failed for %s; falling back to local process check.", room_code)
+            except Exception as e:
+                logger.error("Redis room capacity check failed for %s: %s. Falling back to local process check.", room_code, str(e))
                 if len(room) >= self.max_room_size:
                     raise ValueError("Room has reached max participant capacity")
         elif len(room) >= self.max_room_size:

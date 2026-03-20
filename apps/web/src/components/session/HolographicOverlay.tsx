@@ -12,10 +12,21 @@ export const HolographicOverlay: React.FC<HolographicOverlayProps> = ({ active, 
 
     useEffect(() => {
         if (!active) return;
-        const interval = setInterval(() => {
-            setScanPos(prev => (prev + 1) % 100);
-        }, 50);
-        return () => clearInterval(interval);
+        
+        let frameId: number;
+        let lastTime = performance.now();
+        
+        const animate = (time: number) => {
+            const deltaTime = time - lastTime;
+            if (deltaTime >= 50) {
+                setScanPos(prev => (prev + 1) % 100);
+                lastTime = time;
+            }
+            frameId = requestAnimationFrame(animate);
+        };
+        
+        frameId = requestAnimationFrame(animate);
+        return () => cancelAnimationFrame(frameId);
     }, [active]);
 
     if (!active) return null;

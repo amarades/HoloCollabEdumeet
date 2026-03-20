@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useState, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import { AUTH_TOKEN_KEY } from '../services/api';
 
@@ -60,16 +60,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         localStorage.removeItem(USER_DATA_KEY);
     };
 
+    const authValue = useMemo(() => ({
+        user,
+        token,
+        login,
+        loginAsGuest,
+        logout,
+        isAuthenticated: !!token,
+        loading
+    }), [user, token, loading]);
+
     return (
-        <AuthContext.Provider value={{
-            user,
-            token,
-            login,
-            loginAsGuest,
-            logout,
-            isAuthenticated: !!token,
-            loading
-        }}>
+        <AuthContext.Provider value={authValue}>
             {children}
         </AuthContext.Provider>
     );
