@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type MutableRefObject } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import type { ARScene, SlideData } from '../three/ARScene';
 import { SocketManager } from '../realtime/SocketManager';
 
 interface UsePresentationSessionProps {
-    arSceneRef: React.MutableRefObject<ARScene | null>;
+    arSceneRef: MutableRefObject<ARScene | null>;
     socketInstance: SocketManager | null;
     isHost: boolean;
 }
@@ -74,20 +74,20 @@ export const usePresentationSession = ({
     };
 
     const nextSlide = useCallback(() => {
-        if (!presentationMode || !arSceneRef.current) return;
+        if (!presentationMode || !arSceneRef.current || !isHost) return;
         arSceneRef.current.nextSlide();
         if (socketInstance) {
             socketInstance.emit('SLIDE_CHANGED', { direction: 'next' });
         }
-    }, [presentationMode, arSceneRef, socketInstance]);
+    }, [presentationMode, arSceneRef, socketInstance, isHost]);
 
     const prevSlide = useCallback(() => {
-        if (!presentationMode || !arSceneRef.current) return;
+        if (!presentationMode || !arSceneRef.current || !isHost) return;
         arSceneRef.current.prevSlide();
         if (socketInstance) {
             socketInstance.emit('SLIDE_CHANGED', { direction: 'prev' });
         }
-    }, [presentationMode, arSceneRef, socketInstance]);
+    }, [presentationMode, arSceneRef, socketInstance, isHost]);
 
     useEffect(() => {
         if (!presentationMode) return;
