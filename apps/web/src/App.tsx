@@ -1,17 +1,19 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SettingsProvider } from './context/SettingsContext';
+import { Suspense, lazy } from 'react';
 import type { ReactNode } from 'react';
-import Login from './pages/Login';
-import Signup from './pages/Signup';
-import Dashboard from './pages/Dashboard';
-import Session from './pages/Session';
-import SessionReport from './pages/SessionReport';
-import Home from './pages/Home';
-import JoinSession from './pages/JoinSession';
-import PreJoinLobby from './pages/PreJoinLobby';
-import CreateSession from './pages/CreateSession';
-import TopicPrep from './pages/TopicPrep';
+
+const Login = lazy(() => import('./pages/Login'));
+const Signup = lazy(() => import('./pages/Signup'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Session = lazy(() => import('./pages/Session'));
+const SessionReport = lazy(() => import('./pages/SessionReport'));
+const Home = lazy(() => import('./pages/Home'));
+const JoinSession = lazy(() => import('./pages/JoinSession'));
+const PreJoinLobby = lazy(() => import('./pages/PreJoinLobby'));
+const CreateSession = lazy(() => import('./pages/CreateSession'));
+const TopicPrep = lazy(() => import('./pages/TopicPrep'));
 
 // Protected Route Component
 const ProtectedRoute = ({ children }: { children: ReactNode }) => {
@@ -32,7 +34,8 @@ function App() {
     <AuthProvider>
       <SettingsProvider>
         <Router>
-        <Routes>
+          <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-[#0a0f1c] text-white">Loading EduMeet...</div>}>
+            <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
@@ -56,8 +59,9 @@ function App() {
           <Route path="/create-session" element={<ProtectedRoute><CreateSession /></ProtectedRoute>} />
           <Route path="/topic-prep" element={<ProtectedRoute><TopicPrep /></ProtectedRoute>} />
           <Route path="/session/:sessionId/report" element={<ProtectedRoute><SessionReport /></ProtectedRoute>} />
-        </Routes>
-      </Router>
+            </Routes>
+          </Suspense>
+        </Router>
       </SettingsProvider>
     </AuthProvider>
   );
