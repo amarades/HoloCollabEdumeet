@@ -66,4 +66,4 @@ const HolographicBackground: React.FC = () => {
     );
 };
 
-export default HolographicBackground;
+export default React.memo(HolographicBackground);

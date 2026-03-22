@@ -4,6 +4,18 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'ui-vendor': ['framer-motion', 'lucide-react', 'tailwind-merge', 'clsx'],
+          'media-vendor': ['livekit-client', '@mediapipe/camera_utils', '@mediapipe/hands'],
+          '3d-vendor': ['three']
+        }
+      }
+    }
+  },
   server: {
     proxy: {
       '/api/ai': {

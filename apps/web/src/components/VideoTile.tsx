@@ -9,7 +9,7 @@ interface VideoTileProps {
     isHost?: boolean;
 }
 
-export const VideoTile: React.FC<VideoTileProps> = ({
+export const VideoTile: React.FC<VideoTileProps> = React.memo(({
     stream,
     name,
     muted = false,
@@ -72,4 +72,4 @@ export const VideoTile: React.FC<VideoTileProps> = ({
             </div>
         </div>
     );
-};
+});
