@@ -659,7 +659,7 @@ const Session = () => {
                         <button
                             onClick={() => {
                                 const permissionsService = PermissionsService.getInstance();
-                                if (permissionsService.hasPermission('local', 'canControlGestures')) {
+                                if (permissionsService.canInteract()) {
                                     setGesturesEnabled(g => !g);
                                 }
                             }}

@@ -30,6 +30,16 @@ export const useGestureSession = ({
     const swipeAnimatingRef = useRef(false);
     const swipeCooldownRef = useRef(0);
     const lastGestureEmitRef = useRef<{ type: string; at: number }>({ type: 'none', at: 0 });
+    const gesturesEnabledRef = useRef(gesturesEnabled);
+
+    useEffect(() => {
+        gesturesEnabledRef.current = gesturesEnabled;
+        if (gesturesEnabled) {
+            startTracking();
+        } else {
+            stopTracking();
+        }
+    }, [gesturesEnabled]);
 
     const triggerSwipeSpin = (direction: 1 | -1) => {
         const now = Date.now();
@@ -76,7 +86,8 @@ export const useGestureSession = ({
             }
             gestureServiceRef.current = gestureService;
             
-            if (gesturesEnabled) {
+            // Re-evaluate using the latest active state
+            if (gesturesEnabledRef.current) {
                 startTracking();
             }
         };
@@ -90,16 +101,8 @@ export const useGestureSession = ({
         };
     }, [videoElement, isApproved]);
 
-    useEffect(() => {
-        if (gesturesEnabled) {
-            startTracking();
-        } else {
-            stopTracking();
-        }
-    }, [gesturesEnabled]);
-
     const startTracking = () => {
-        if (!gestureServiceRef.current || !videoElement || !gesturesEnabled) return;
+        if (!gestureServiceRef.current || !videoElement || !gesturesEnabledRef.current) return;
 
         gestureServiceRef.current.start(videoElement, (results: Results) => {
             const landmarks = results.multiHandLandmarks?.[0];

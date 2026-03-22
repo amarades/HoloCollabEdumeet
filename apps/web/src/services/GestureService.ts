@@ -15,8 +15,14 @@ export class GestureService {
     private canvasElement: HTMLCanvasElement | null = null;
     private canvasCtx: CanvasRenderingContext2D | null = null;
     private isRunning = false;
-    private useLocal = true;
+    private useLocal = false;
     private retryCount = 0;
+    
+    // Performance Tracking
+    public currentFps = 0;
+    public currentLatency = 0;
+    private frameCount = 0;
+    private lastFpsTime = 0;
 
     constructor() {
         // Create an off-screen canvas to act as a buffer for the video frames
@@ -80,6 +86,8 @@ export class GestureService {
                 globalHandsInstance.onResults((results) => {
                     if (currentResultsCallback) {
                         try {
+                            // Inject latency into results or pass it alongside if needed. 
+                            // But here we'll just track it via the public property `currentLatency`.
                             currentResultsCallback(results);
                         } catch (err) {
                             console.error('Error in results callback:', err);
@@ -133,11 +141,14 @@ export class GestureService {
         this.videoElement = videoElement;
         currentResultsCallback = onResults;
         this.isRunning = true;
+        this.frameCount = 0;
+        this.lastFpsTime = performance.now();
 
         const processFrame = async () => {
             if (!this.isRunning || !this.videoElement || !globalHandsInstance) return;
 
             if (this.videoElement.readyState >= 2 && this.canvasElement && this.canvasCtx) {
+                const startTime = performance.now();
                 try {
                     // Ensure canvas matches video dimensions
                     if (this.canvasElement.width !== this.videoElement.videoWidth) {
@@ -150,6 +161,18 @@ export class GestureService {
 
                     // Send the CANVAS to MediaPipe, safely isolating the original video element from WASM/WebGL manipulation
                     await globalHandsInstance.send({ image: this.canvasElement });
+                    
+                    const endTime = performance.now();
+                    this.currentLatency = endTime - startTime;
+                    
+                    // Calculate FPS
+                    this.frameCount++;
+                    if (endTime - this.lastFpsTime >= 1000) {
+                        this.currentFps = this.frameCount;
+                        this.frameCount = 0;
+                        this.lastFpsTime = endTime;
+                        console.log(`📊 Performance: ${this.currentFps} FPS | Latency: ${this.currentLatency.toFixed(2)}ms`);
+                    }
                 } catch (err) {
                     console.error('MediaPipe send error:', err);
                 }

@@ -51,6 +51,25 @@ holocollab-edumeet/
 
 See [QUICK_START.md](../QUICK_START.md) for setup instructions.
 
+## Demo Video
+![Demo Video](assets/demo_video.webp)
+
+## Screenshots
+### Landing Page
+![Landing Page](assets/landing_page.png)
+
+### Signup Page
+![Signup Page](assets/signup_page.png)
+
+### Dashboard
+![Dashboard](assets/dashboard_page.png)
+
+### Immersive Session Room
+![Immersive Session](assets/immersive_session_page.png)
+
+## Deployment
+- **Live Link**: [Your Deployment URL Here - Run deploy-free.sh to host]
+
 ## Architecture
 
 See [system_design.md](../brain/system_design.md) for detailed architecture documentation.
