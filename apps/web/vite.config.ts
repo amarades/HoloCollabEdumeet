@@ -18,10 +18,7 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api/ai': {
-        target: 'http://127.0.0.1:8003',
-        changeOrigin: true,
-      },
+
       '/api/gestures': {
         target: 'http://127.0.0.1:8001',
         changeOrigin: true,

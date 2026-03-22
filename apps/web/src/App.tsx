@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { SettingsProvider } from './context/SettingsContext';
 import { Suspense, lazy } from 'react';
 import type { ReactNode } from 'react';
+import { AIChatMenu } from './components/AIChatMenu';
 
 const Login = lazy(() => import('./pages/Login'));
 const Signup = lazy(() => import('./pages/Signup'));
@@ -60,6 +61,7 @@ function App() {
           <Route path="/topic-prep" element={<ProtectedRoute><TopicPrep /></ProtectedRoute>} />
           <Route path="/session/:sessionId/report" element={<ProtectedRoute><SessionReport /></ProtectedRoute>} />
             </Routes>
+            <AIChatMenu />
           </Suspense>
         </Router>
       </SettingsProvider>

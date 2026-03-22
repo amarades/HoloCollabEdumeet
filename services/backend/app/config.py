@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     reload: bool = True
 
     # AI Service
-    ai_service: str = "mock"
+    ai_service: str = "gemini"
     openai_api_key: Optional[str] = None
     openai_model: str = "gpt-4"
     gemini_api_key: Optional[str] = None
