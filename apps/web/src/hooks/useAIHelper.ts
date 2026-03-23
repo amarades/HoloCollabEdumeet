@@ -25,7 +25,7 @@ export const useAIHelper = () => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    'Authorization': `Bearer ${localStorage.getItem('access_token')}`
                 },
                 body: JSON.stringify({
                     history: history,
@@ -34,8 +34,20 @@ export const useAIHelper = () => {
             });
 
             if (!response.ok) {
-                const errData = await response.json();
-                throw new Error(errData.detail || 'Failed to fetch AI response');
+                let errorDetail = 'Failed to fetch AI response';
+                try {
+                    const contentType = response.headers.get('content-type');
+                    if (contentType && contentType.includes('application/json')) {
+                        const errData = await response.json();
+                        errorDetail = errData.detail?.message || errData.detail || errorDetail;
+                    } else {
+                        const text = await response.text();
+                        errorDetail = text || `Error ${response.status}: ${response.statusText}`;
+                    }
+                } catch (e) {
+                    errorDetail = `Error ${response.status}: ${response.statusText}`;
+                }
+                throw new Error(errorDetail);
             }
 
             const data = await response.json();

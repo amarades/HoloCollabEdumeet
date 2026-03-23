@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     openai_api_key: Optional[str] = None
     openai_model: str = "gpt-4"
     gemini_api_key: Optional[str] = None
-    gemini_model: str = "gemini-1.5-pro"
+    gemini_model: str = "gemini-flash-latest"
     deepseek_api_key: Optional[str] = None
     deepseek_model: str = "deepseek-chat"
 

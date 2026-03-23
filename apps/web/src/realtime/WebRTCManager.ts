@@ -116,7 +116,7 @@ class SFUManager {
 
     private async getLiveKitToken(roomName: string): Promise<string> {
         // Request token from backend API
-        const token = localStorage.getItem('auth_token');
+        const token = localStorage.getItem('access_token');
         const response = await fetch('/api/livekit/token', {
             method: 'POST',
             headers: {
