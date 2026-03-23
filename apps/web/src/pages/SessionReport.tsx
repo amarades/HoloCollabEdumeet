@@ -6,7 +6,6 @@ import {
     ChevronLeft, Share2
 } from 'lucide-react';
 import { apiRequest, AUTH_TOKEN_KEY } from '../services/api';
-import { AIAssistant } from '../components/AIAssistant';
 import { useAuth } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -666,27 +665,7 @@ const SessionReport = () => {
                 </motion.div>
             </motion.div>
 
-            {/* AI Assistant Overlay */}
-            <AnimatePresence>
-                {showAI && (
-                    <motion.div 
-                        initial={{ opacity: 0, scale: 0.95, x: 20, y: 20 }}
-                        animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95, x: 20, y: 20 }}
-                        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-                        className="fixed inset-4 md:inset-auto md:bottom-12 md:right-12 md:w-[480px] md:h-[750px] z-[100] drop-shadow-[0_35px_60px_-15px_rgba(0,0,0,0.6)]"
-                    >
-                        <div className="h-full rounded-[48px] overflow-hidden border border-white/10 glass-card">
-                            <AIAssistant 
-                                onClose={() => setShowAI(false)}
-                                modelName="Analytic.Intelligence"
-                                detectedTopic={report.topic}
-                                participants={report.students.map((s, idx) => ({ id: `s_${idx}`, name: s.name }))}
-                            />
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+            {/* AI Assistant Removed */}
         </div>
     );
 };

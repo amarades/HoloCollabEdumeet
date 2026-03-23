@@ -13,7 +13,7 @@ import {
     Hand, Box, Sparkles, Users,
     MessageSquare, X, CheckCircle2, Copy, Check,
     Columns, Maximize2, Monitor, MonitorOff, ShieldCheck,
-    Presentation, AlertTriangle, FileUp
+    Presentation, FileUp
 } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
@@ -123,8 +123,7 @@ const Session = () => {
 
     // Meeting timer
 
-    // Chat history for AI context
-    const [chatHistory, setChatHistory] = useState<{ sender: string; text: string }[]>([]);
+
 
     // ── Feature 6: Persistent 3D Library ────────────────────────────────────
     const [libraryModels, setLibraryModels] = useState<any[]>([]);
@@ -161,10 +160,7 @@ const Session = () => {
 
     const [showHostControls, setShowHostControls] = useState(false);
     const [showReactionPicker, setShowReactionPicker] = useState(false);
-
-    // ── Feature 4: Engagement Tracking ────────────────────────────────────────
-    const [showHostControls, setShowHostControls] = useState(false);
-    const [showReactionPicker, setShowReactionPicker] = useState(false);
+    const [engagementMap, setEngagementMap] = useState<Record<string, number>>({});
 
     const handleCopyCode = async () => {
         if (roomCode) {
@@ -196,6 +192,7 @@ const Session = () => {
         setPresentationMode,
         setVisualFilter,
         setAutoOscillate,
+        setEngagementMap,
     });
 
     // ── Initialization ─────────────────────────────────────────────────────
@@ -257,9 +254,7 @@ const Session = () => {
                     socket.on('JOIN_REJECTED', () => handleRejected());
                 }
 
-                socket.on('CHAT_RECEIVE', (data: any) => {
-                    setChatHistory(prev => [...prev, { sender: data.sender, text: data.text }]);
-                });
+
 
                 // Scene transformation sync
                 let lastTransformEmit = 0;
