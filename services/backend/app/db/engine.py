@@ -59,12 +59,40 @@ async def init_db():
         return
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        
         # Ensure any newly added columns (e.g., is_curated) are present in existing DBs
         await conn.execute(
             text(
                 """
                 ALTER TABLE models
-                ADD COLUMN IF NOT EXISTS is_curated BOOLEAN DEFAULT false
+                ADD COLUMN IF NOT EXISTS is_curated BOOLEAN DEFAULT false;
+                """
+            )
+        )
+
+        # Apply constraints to users table if they don't exist
+        # PostgreSQL doesn't have "ADD CONSTRAINT IF NOT EXISTS" for all types, 
+        # so we use a DO block for safety.
+        await conn.execute(
+            text(
+                """
+                DO $$
+                BEGIN
+                    -- Unique constraint for email
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint WHERE conname = 'users_email_unique'
+                    ) THEN
+                        ALTER TABLE users ADD CONSTRAINT users_email_unique UNIQUE (email);
+                    END IF;
+
+                    -- Check constraint for role
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint WHERE conname = 'check_user_role'
+                    ) THEN
+                        ALTER TABLE users ADD CONSTRAINT check_user_role 
+                        CHECK (role IN ('student', 'teacher', 'admin'));
+                    END IF;
+                END $$;
                 """
             )
         )

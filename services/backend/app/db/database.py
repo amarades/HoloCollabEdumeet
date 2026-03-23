@@ -1,9 +1,23 @@
 from typing import Optional, List
 from datetime import datetime
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, desc
 from sqlalchemy.orm import selectinload
-from app.db.models import Session as PydanticSession, User as PydanticUser, ModelMetadata as PydanticModelMetadata
-from app.db.schema import DBSession, DBUser, DBModelMetadata
+from app.db.models import (
+    Session as PydanticSession, 
+    User as PydanticUser, 
+    ModelMetadata as PydanticModelMetadata,
+    Transcript as PydanticTranscript,
+    AINote as PydanticAINote,
+    Message as PydanticMessage
+)
+from app.db.schema import (
+    DBSession, 
+    DBUser, 
+    DBModelMetadata, 
+    DBTranscript, 
+    DBAINote, 
+    DBMessage
+)
 from app.db.engine import async_session_maker
 import uuid
 
@@ -42,6 +56,35 @@ def _map_model(db_model: DBModelMetadata) -> PydanticModelMetadata:
         url=db_model.url,
         description=db_model.description,
         is_curated=db_model.is_curated,
+    )
+
+
+def _map_transcript(db_obj: DBTranscript) -> PydanticTranscript:
+    return PydanticTranscript(
+        id=db_obj.id,
+        session_id=db_obj.session_id,
+        text=db_obj.text,
+        created_at=db_obj.created_at,
+    )
+
+
+def _map_ai_note(db_obj: DBAINote) -> PydanticAINote:
+    return PydanticAINote(
+        id=db_obj.id,
+        session_id=db_obj.session_id,
+        summary=db_obj.summary,
+        action_items=db_obj.action_items,
+        created_at=db_obj.created_at,
+    )
+
+
+def _map_message(db_obj: DBMessage) -> PydanticMessage:
+    return PydanticMessage(
+        id=db_obj.id,
+        session_id=db_obj.session_id,
+        user_id=db_obj.user_id,
+        message=db_obj.message,
+        created_at=db_obj.created_at,
     )
 
 
@@ -190,6 +233,65 @@ class PersistenceLayer:
                     "left_at": r.left_at
                 } for r in result.scalars().all()
             ]
+
+    # ── Transcripts ───────────────────────────────────────────────────────────
+
+    async def save_transcript(self, transcript: PydanticTranscript):
+        async with async_session_maker() as db:
+            db_obj = DBTranscript(
+                id=transcript.id,
+                session_id=transcript.session_id,
+                text=transcript.text,
+                created_at=transcript.created_at,
+            )
+            db.add(db_obj)
+            await db.commit()
+
+    async def get_transcripts(self, session_id: str) -> List[PydanticTranscript]:
+        async with async_session_maker() as db:
+            stmt = select(DBTranscript).where(DBTranscript.session_id == session_id).order_by(DBTranscript.created_at)
+            result = await db.execute(stmt)
+            return [_map_transcript(t) for t in result.scalars().all()]
+
+    # ── AI Notes ──────────────────────────────────────────────────────────────
+
+    async def save_ai_note(self, note: PydanticAINote):
+        async with async_session_maker() as db:
+            db_obj = DBAINote(
+                id=note.id,
+                session_id=note.session_id,
+                summary=note.summary,
+                action_items=note.action_items,
+                created_at=note.created_at,
+            )
+            db.add(db_obj)
+            await db.commit()
+
+    async def get_ai_notes(self, session_id: str) -> List[PydanticAINote]:
+        async with async_session_maker() as db:
+            stmt = select(DBAINote).where(DBAINote.session_id == session_id).order_by(desc(DBAINote.created_at))
+            result = await db.execute(stmt)
+            return [_map_ai_note(n) for n in result.scalars().all()]
+
+    # ── Messages ──────────────────────────────────────────────────────────────
+
+    async def save_message(self, message: PydanticMessage):
+        async with async_session_maker() as db:
+            db_obj = DBMessage(
+                id=message.id,
+                session_id=message.session_id,
+                user_id=message.user_id,
+                message=message.message,
+                created_at=message.created_at,
+            )
+            db.add(db_obj)
+            await db.commit()
+
+    async def get_messages(self, session_id: str) -> List[PydanticMessage]:
+        async with async_session_maker() as db:
+            stmt = select(DBMessage).where(DBMessage.session_id == session_id).order_by(DBMessage.created_at)
+            result = await db.execute(stmt)
+            return [_map_message(m) for m in result.scalars().all()]
 
     # ── Users ─────────────────────────────────────────────────────────────────
 

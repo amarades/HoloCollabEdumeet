@@ -32,3 +32,27 @@ class ModelMetadata(BaseModel):
     url: str
     description: str = "Custom uploaded model"
     is_curated: bool = False
+
+
+class Transcript(BaseModel):
+    id: str
+    session_id: str
+    text: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class AINote(BaseModel):
+    id: str
+    session_id: str
+    summary: Optional[str] = None
+    action_items: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class Message(BaseModel):
+    id: str
+    session_id: str
+    user_id: str
+    message: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+

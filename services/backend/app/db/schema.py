@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Table
+from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Table, Text, CheckConstraint
 from sqlalchemy.orm import relationship, declarative_base
 from datetime import datetime
 
@@ -21,6 +21,10 @@ class DBUser(Base):
     name = Column(String, nullable=False)
     role = Column(String, default="student")
     hashed_password = Column(String, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(role.in_(['student', 'teacher', 'admin']), name='check_user_role'),
+    )
 
 
 class DBSession(Base):
@@ -62,3 +66,39 @@ class DBAttendanceLog(Base):
     user_name = Column(String, nullable=False)
     joined_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     left_at = Column(DateTime, nullable=True)
+
+
+class DBTranscript(Base):
+    __tablename__ = "transcripts"
+
+    id = Column(String, primary_key=True)
+    session_id = Column(String, ForeignKey("sessions.id"), nullable=False, index=True)
+    text = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    session = relationship("DBSession")
+
+
+class DBAINote(Base):
+    __tablename__ = "ai_notes"
+
+    id = Column(String, primary_key=True)
+    session_id = Column(String, ForeignKey("sessions.id"), nullable=False, index=True)
+    summary = Column(Text, nullable=True)
+    action_items = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    session = relationship("DBSession")
+
+
+class DBMessage(Base):
+    __tablename__ = "messages"
+
+    id = Column(String, primary_key=True)
+    session_id = Column(String, ForeignKey("sessions.id"), nullable=False, index=True)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    message = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    session = relationship("DBSession")
+    user = relationship("DBUser")
