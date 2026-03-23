@@ -21,11 +21,14 @@ export const useAIHelper = () => {
         setHistory(prev => [...prev, userMsg]);
 
         try {
+            const token = localStorage.getItem('access_token');
+            if (!token) throw new Error('Please log in to use the AI Assistant.');
+
             const response = await fetch('/api/ai/chat', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                    'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify({
                     history: history,
@@ -66,11 +69,67 @@ export const useAIHelper = () => {
 
     const clearChat = () => setHistory([]);
 
+    const generateSummary = async (transcript: string) => {
+        if (!transcript.trim()) return;
+        setIsLoading(true);
+        setError(null);
+        try {
+            const token = localStorage.getItem('access_token');
+            if (!token) throw new Error('Please log in to use this feature.');
+
+            const response = await fetch('/api/ai/summarize', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ transcript })
+            });
+            if (!response.ok) throw new Error('Failed to generate summary');
+            const data = await response.json();
+            const aiMsg: ChatMessage = { role: 'model', text: `📋 **Meeting Summary**\n\n${data.response}` };
+            setHistory(prev => [...prev, aiMsg]);
+        } catch (err: any) {
+            setError(err.message || 'Failed to generate summary');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const generateNotes = async (transcript: string) => {
+        if (!transcript.trim()) return;
+        setIsLoading(true);
+        setError(null);
+        try {
+            const token = localStorage.getItem('access_token');
+            if (!token) throw new Error('Please log in to use this feature.');
+
+            const response = await fetch('/api/ai/notes', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ transcript })
+            });
+            if (!response.ok) throw new Error('Failed to generate notes');
+            const data = await response.json();
+            const aiMsg: ChatMessage = { role: 'model', text: `📝 **Meeting Notes**\n\n${data.response}` };
+            setHistory(prev => [...prev, aiMsg]);
+        } catch (err: any) {
+            setError(err.message || 'Failed to generate notes');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     return {
         history,
         isLoading,
         error,
         sendMessage,
+        generateSummary,
+        generateNotes,
         clearChat
     };
 };

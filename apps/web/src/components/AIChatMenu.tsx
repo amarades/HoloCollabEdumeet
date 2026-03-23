@@ -6,7 +6,7 @@ import clsx from 'clsx'; // Assuming clsx is installed based on vite config
 export const AIChatMenu: React.FC = () => {
     const [isOpen, setIsOpen] = useState(false);
     const [inputValue, setInputValue] = useState('');
-    const { history, isLoading, error, sendMessage } = useAIHelper();
+    const { history, isLoading, error, sendMessage, generateSummary, generateNotes } = useAIHelper();
     const chatEndsRef = useRef<HTMLDivElement>(null);
 
     // Auto-scroll to bottom of chat
@@ -107,6 +107,25 @@ export const AIChatMenu: React.FC = () => {
                                 {error}
                             </div>
                         )}
+                        
+                        {/* Quick Actions */}
+                        <div className="pt-2 border-t border-slate-800 flex flex-wrap gap-2">
+                            <button 
+                                onClick={() => generateSummary(history.map(m => `${m.role}: ${m.text}`).join('\n'))}
+                                disabled={isLoading || history.length === 0}
+                                className="text-[10px] px-2 py-1 bg-slate-800 text-slate-300 rounded border border-slate-700 hover:bg-slate-700 hover:text-white transition-colors disabled:opacity-30"
+                            >
+                                📋 Summarize
+                            </button>
+                            <button 
+                                onClick={() => generateNotes(history.map(m => `${m.role}: ${m.text}`).join('\n'))}
+                                disabled={isLoading || history.length === 0}
+                                className="text-[10px] px-2 py-1 bg-slate-800 text-slate-300 rounded border border-slate-700 hover:bg-slate-700 hover:text-white transition-colors disabled:opacity-30"
+                            >
+                                📝 Notes
+                            </button>
+                        </div>
+
                         <div ref={chatEndsRef} />
                     </div>
 

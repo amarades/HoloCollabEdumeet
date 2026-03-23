@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ARScene } from '../three/ARScene';
 
@@ -36,7 +36,6 @@ import { MediaPanel } from '../components/session/tools/MediaPanel';
 import { SettingsPanel } from '../components/session/tools/SettingsPanel';
 import { ScenePanel } from '../components/session/tools/ScenePanel';
 import { HostControls } from '../components/session/tools/HostControls';
-import { AIAssistant } from '../components/AIAssistant';
 import { VideoGrid } from '../components/VideoGrid';
 import { ConnectionQuality } from '../components/ConnectionQuality';
 import { ParticipantApproval } from '../components/session/ParticipantApproval';
@@ -123,7 +122,6 @@ const Session = () => {
     });
 
     // Meeting timer
-    const [meetingStartTime] = useState(Date.now());
 
     // Chat history for AI context
     const [chatHistory, setChatHistory] = useState<{ sender: string; text: string }[]>([]);
@@ -165,10 +163,8 @@ const Session = () => {
     const [showReactionPicker, setShowReactionPicker] = useState(false);
 
     // ── Feature 4: Engagement Tracking ────────────────────────────────────────
-    const [engagementMap, setEngagementMap] = useState<Record<string, number>>({});
-
-    // ── Feature 7: Doubt Detection ────────────────────────────────────────────
-    const [doubtAlert, setDoubtAlert] = useState<{ topic: string; pct: number } | null>(null);
+    const [showHostControls, setShowHostControls] = useState(false);
+    const [showReactionPicker, setShowReactionPicker] = useState(false);
 
     const handleCopyCode = async () => {
         if (roomCode) {
@@ -188,18 +184,6 @@ const Session = () => {
         return () => document.removeEventListener('visibilitychange', handleVisibility);
     }, [socketInstance]);
 
-    // ── Feature 7: Periodic doubt detection (host only) ───────────────────────
-    useEffect(() => {
-        if (!isHost || chatHistory.length < 5) return;
-        apiRequest('/api/ai/detect-doubts', {
-            method: 'POST',
-            body: JSON.stringify({ messages: chatHistory.slice(-20).map(m => `${m.sender}: ${m.text}`) }),
-        }).then((result) => {
-            if (result.confusion_percentage > 25) {
-                setDoubtAlert({ topic: result.confused_topic, pct: result.confusion_percentage });
-            }
-        }).catch(() => { });
-    }, [chatHistory, isHost]);
 
     // ── Feature 3 & 4: Socket listeners for new events ───────────────────────
     useSessionRealtimeListeners({
@@ -210,7 +194,6 @@ const Session = () => {
         currentSlides,
         setCurrentSlides,
         setPresentationMode,
-        setEngagementMap,
         setVisualFilter,
         setAutoOscillate,
     });
@@ -395,15 +378,7 @@ const Session = () => {
         else navigate('/dashboard');
     };
 
-    const handleAISceneCommand = useCallback((action: string, payload: any) => {
-        if (action === 'ADD_OBJECT') addObject(payload.type || 'box', payload.color || '#6366f1', payload.position);
-        else if (action === 'DELETE_OBJECT' && payload.id) deleteObject(payload.id);
-    }, [addObject, deleteObject]);
-
-    const aiParticipants = [
-        { id: 'local', name: user?.name || 'You' },
-        ...users.map(u => ({ id: u.id || u.name, name: u.name })),
-    ];
+    // ── Waiting for Approval logic ──────────────────────────────────────────
 
     return (
         <div className="relative h-screen w-screen overflow-hidden bg-background">
@@ -545,16 +520,6 @@ const Session = () => {
                             </div>
                         )}
 
-                        {/* Feature 7: Doubt Detection Alert (Host only) */}
-                        {isHost && doubtAlert && (
-                            <div className="absolute top-16 left-1/2 -translate-x-1/2 bg-amber-500/95 backdrop-blur-sm text-white px-4 py-2 rounded-xl text-sm font-medium shadow-xl z-50 flex items-center gap-3">
-                                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-                                <span>⚠️ <strong>{doubtAlert.pct}%</strong> confused about <strong>{doubtAlert.topic}</strong></span>
-                                <button onClick={() => setDoubtAlert(null)} className="text-white/70 hover:text-white ml-2">
-                                    <X className="w-4 h-4" />
-                                </button>
-                            </div>
-                        )}
 
                         {/* Main video / canvas area */}
 
@@ -880,19 +845,6 @@ const Session = () => {
                         }
                     }}
                 />
-            )}
-            {activeTool === 'ai' && (
-                <div className="absolute inset-4 md:inset-y-10 md:right-10 md:left-auto md:w-[380px] z-40 animate-in slide-in-from-right duration-200">
-                    <AIAssistant
-                        onClose={() => setActiveTool(null)}
-                        modelName="Session"
-                        sceneObjects={sceneObjects}
-                        participants={aiParticipants}
-                        chatHistory={chatHistory}
-                        meetingStartTime={meetingStartTime}
-                        onSceneCommand={handleAISceneCommand}
-                    />
-                </div>
             )}
             {activeTool === 'settings' && (
                 <SettingsPanel

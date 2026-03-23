@@ -9,11 +9,14 @@ def test_ai_status():
         "Content-Type": "application/json"
     }
     payload = {
-        "history": [],
+        "history": [
+            {"role": "user", "text": "Hi"},
+            {"role": "model", "text": "Hello!"}
+        ],
         "message": "Hello, are you working?"
     }
     
-    url = "http://localhost:8000/api/ai/chat"
+    url = "http://127.0.0.1:8000/api/ai/chat"
     print(f"Testing AI Chat endpoint at {url}...")
     
     try:

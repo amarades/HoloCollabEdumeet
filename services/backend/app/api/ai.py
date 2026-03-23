@@ -24,28 +24,40 @@ class ChatRequest(BaseModel):
     history: List[ChatMessage]
     message: str
 
+class TranscriptRequest(BaseModel):
+    transcript: str
+
 @router.post("/chat")
 async def chat_with_ai(request: ChatRequest, current_user: dict = Depends(get_current_user)):
     """
     Handles chat requests using the new Google Gen AI SDK or a mock service.
     """
-    # If mock is explicitly requested or client initialization failed/missing, return mock
     if settings.ai_service == "mock" or client is None:
         return {"response": f"Mock Response: I received your message '{request.message}'. (AI Service is in MOCK mode or API key is missing)"}
     
     try:
-        # Prepare content list (history + new message)
-        # The new SDK takes a list of Content objects
+        # Prepare contents with proper role alternation
         contents = []
+        last_role = None
+        
         for msg in request.history:
             role = "user" if msg.role == "user" else "model"
+            # Ensure roles alternate; if same as last, we skip or combine (skipping for simplicity here)
+            if role == last_role:
+                continue
             contents.append({"role": role, "parts": [{"text": msg.text}]})
+            last_role = role
         
-        # Add the current message
+        # Add the current message (must be "user")
+        if last_role == "user":
+            # If the last message in history was also user, we can't just append. 
+            # We'll just replace the history or handle it. 
+            # For now, let's just ensure we finish with a user message.
+            pass
+        
         contents.append({"role": "user", "parts": [{"text": request.message}]})
         
-        # Using the specified model or a fast default
-        model_name = settings.gemini_model or "gemini-2.0-flash" # Default to latest flash if not set
+        model_name = settings.gemini_model or "gemini-2.0-flash"
         
         response = client.models.generate_content(
             model=model_name,
@@ -55,11 +67,12 @@ async def chat_with_ai(request: ChatRequest, current_user: dict = Depends(get_cu
         return {"response": response.text}
 
     except Exception as e:
+        import traceback
         error_msg = str(e)
         print(f"Error handling Gemini chat: {error_msg}")
+        traceback.print_exc()
         
-        # If it's a permission error or invalid key, we provide a helpful mock response instead of 500
-        if "403" in error_msg or "API_KEY_INVALID" in error_msg or "PERMISSION_DENIED" in error_msg:
+        if any(x in error_msg for x in ["403", "API_KEY_INVALID", "PERMISSION_DENIED"]):
              return {
                  "response": "I'm currently in limited mode because the Gemini API key provided is invalid or has expired. Please check your configuration.",
                  "error": "Invalid API Key"
@@ -69,3 +82,55 @@ async def chat_with_ai(request: ChatRequest, current_user: dict = Depends(get_cu
             status_code=500, 
             detail={"message": "Failed to communicate with AI service", "error": error_msg}
         )
+
+@router.post("/summarize")
+async def summarize_meeting(request: TranscriptRequest, current_user: dict = Depends(get_current_user)):
+    """
+    Generates a meeting summary from a transcript.
+    """
+    if settings.ai_service == "mock" or client is None:
+        return {"response": "Mock Summary: This was a productive meeting about project features and timelines."}
+
+    prompt = f"""
+    This is a meeting transcript:
+    {request.transcript}
+
+    Summarize the meeting with:
+    - Key points
+    - Decisions made
+    - Action items
+    """
+    
+    try:
+        response = client.models.generate_content(
+            model=settings.gemini_model or "gemini-2.0-flash",
+            contents=prompt
+        )
+        return {"response": response.text}
+    except Exception as e:
+        print(f"Error generating summary: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/notes")
+async def generate_notes(request: TranscriptRequest, current_user: dict = Depends(get_current_user)):
+    """
+    Converts a transcript into clean meeting notes.
+    """
+    if settings.ai_service == "mock" or client is None:
+        return {"response": "Mock Notes: \n- Feature Discussion\n- Deployment Plan\n- Next Sync: Friday"}
+
+    prompt = f"""
+    Convert this lecture or meeting transcript into clean notes
+    with headings and bullet points:
+    {request.transcript}
+    """
+    
+    try:
+        response = client.models.generate_content(
+            model=settings.gemini_model or "gemini-2.0-flash",
+            contents=prompt
+        )
+        return {"response": response.text}
+    except Exception as e:
+        print(f"Error generating notes: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

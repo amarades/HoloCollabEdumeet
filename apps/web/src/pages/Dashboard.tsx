@@ -1,14 +1,12 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LogOut, Video, Plus, Bot, Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { AIAssistant } from '../components/AIAssistant';
+import { Video, Plus, Loader2 } from 'lucide-react';
 import { apiRequest, API_BASE_URL } from '../services/api';
 
 const Dashboard = () => {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
-    const [showAI, setShowAI] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
 
     useEffect(() => {
@@ -125,21 +123,6 @@ const Dashboard = () => {
                     </div>
                 </div>
 
-                {/* AI Assistant Floating UI */}
-                <div className="fixed bottom-6 right-6 md:bottom-10 md:right-10 z-50 flex flex-col items-end gap-6 w-full pointer-events-none">
-                    {showAI && (
-                        <div className="w-[calc(100%-3rem)] sm:w-[400px] h-[70vh] sm:h-[600px] rounded-[32px] sm:rounded-[40px] overflow-hidden glass-card pointer-events-auto">
-                            <AIAssistant onClose={() => setShowAI(false)} />
-                        </div>
-                    )}
-
-                    <button
-                        onClick={() => setShowAI(!showAI)}
-                        className={`w-14 h-14 md:w-16 md:h-16 rounded-full shadow-2xl transition-all hover:scale-110 active:scale-95 flex items-center justify-center pointer-events-auto ${showAI ? 'bg-white text-gray-900' : 'bg-purple-500 text-white shadow-purple-200'}`}
-                    >
-                        {showAI ? <LogOut className="w-5 h-5 md:w-6 md:h-6 rotate-180" /> : <Bot className="w-5 h-5 md:w-6 md:h-6" />}
-                    </button>
-                </div>
             </main>
         </div>
     );

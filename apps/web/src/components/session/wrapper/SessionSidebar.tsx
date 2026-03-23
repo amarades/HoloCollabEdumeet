@@ -5,7 +5,6 @@ import {
     MonitorPlay,
     Settings,
     Box,
-    Bot,
 } from 'lucide-react';
 
 interface SessionSidebarProps {
@@ -22,7 +21,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         { id: 'quiz', icon: MessageSquare, label: 'Quiz / Poll' },
         { id: 'media', icon: MonitorPlay, label: 'Media' },
         { id: '3d', icon: Box, label: '3D Scene' },
-        { id: 'ai', icon: Bot, label: 'AI Assistant' },
         { id: 'settings', icon: Settings, label: 'Settings' },
     ];
 
@@ -33,7 +31,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 {tools.map((tool) => {
                     const isActive = activeTool === tool.id;
                     const Icon = tool.icon;
-                    const isAI = tool.id === 'ai';
 
                     return (
                         <button
@@ -41,9 +38,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                             onClick={() => onSelectTool(isActive ? null : tool.id)}
                             className={`p-3 rounded-xl transition-all duration-200 group relative flex items-center justify-center
                                 ${isActive
-                                    ? isAI
-                                        ? 'bg-violet-100 text-violet-600 scale-105 shadow-sm'
-                                        : 'bg-primary/10 text-primary scale-105 shadow-sm'
+                                    ? 'bg-primary/10 text-primary scale-105 shadow-sm'
                                     : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
                                 }`}
                             title={tool.label}
