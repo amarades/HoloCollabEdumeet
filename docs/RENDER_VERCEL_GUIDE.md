@@ -33,8 +33,13 @@ Render is ideal for the Python FastAPI backend and the Realtime service.
 
 ### 2. Realtime Service (`services/realtime`)
 - **Service Type**: Web Service.
-- **Build Command**: `pip install -r requirements.txt` (or appropriate for the language).
-- **Start Command**: `python main.py` (adjust based on the entry point).
+- **Build Command**: `pip install -r requirements.txt`.
+- **Start Command**: `python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
+- **Root Directory**: `services/realtime`.
+- **Environment Variables**:
+  - `INTERNAL_API_KEY`: Set a secure random string (REQUIRED for production).
+  - `REDIS_URL`: Your Redis connection string (e.g., from Upstash).
+  - `CORS_ORIGINS`: Your Vercel frontend URL.
 
 ---
 
