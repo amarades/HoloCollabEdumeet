@@ -16,7 +16,7 @@ interface SessionPanelsProps {
     socketInstance: any;
 }
 
-export const SessionPanels: React.FC<SessionPanelsProps> = ({
+export const SessionPanels: React.FC<SessionPanelsProps> = React.memo(({
     showParticipants,
     setShowParticipants,
     // showChat, // Managed inside Session.tsx for now or passed
@@ -67,4 +67,4 @@ export const SessionPanels: React.FC<SessionPanelsProps> = ({
             </div>
         </div>
     );
-};
+});

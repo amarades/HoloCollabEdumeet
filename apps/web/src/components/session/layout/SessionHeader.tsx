@@ -11,7 +11,7 @@ interface SessionHeaderProps {
     handRaised: boolean;
 }
 
-export const SessionHeader: React.FC<SessionHeaderProps> = ({
+export const SessionHeader: React.FC<SessionHeaderProps> = React.memo(({
     isConnected,
     connectionQuality,
     gesturesEnabled,
@@ -53,4 +53,4 @@ export const SessionHeader: React.FC<SessionHeaderProps> = ({
             )}
         </div>
     );
-};
+});

@@ -41,7 +41,7 @@ interface SessionControlBarProps {
 
 const REACTIONS = ['❤️', '👍', '🔥', '😮', '👏', '🤔', '🎉', '😢'];
 
-export const SessionControlBar: React.FC<SessionControlBarProps> = ({
+export const SessionControlBar: React.FC<SessionControlBarProps> = React.memo(({
     roomCode,
     codeCopied,
     onCopyCode,
@@ -219,4 +219,4 @@ export const SessionControlBar: React.FC<SessionControlBarProps> = ({
             </div>
         </div>
     );
-};
+});

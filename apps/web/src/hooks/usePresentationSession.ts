@@ -22,7 +22,7 @@ export const usePresentationSession = ({
     ]);
     const [isConverting, setIsConverting] = useState(false);
 
-    const handleFileUpload = async (file: File) => {
+    const handleFileUpload = useCallback(async (file: File) => {
         if (!file || file.type !== 'application/pdf') return;
 
         setIsConverting(true);
@@ -67,7 +67,7 @@ export const usePresentationSession = ({
         } finally {
             setIsConverting(false);
         }
-    };
+    }, [arSceneRef]);
 
     const nextSlide = useCallback(() => {
         if (!presentationMode || !arSceneRef.current || !isHost) return;

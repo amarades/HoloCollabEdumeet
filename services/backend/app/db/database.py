@@ -123,12 +123,19 @@ class PersistenceLayer:
 
     async def save_session(self, session: PydanticSession):
         async with async_session_maker() as db:
-            # Ensure all participants exist in the users table first
+            # 1. Fetch all existing participants in one bulk query
+            participant_ids = [p.id for p in session.participants]
+            existing_users = []
+            if participant_ids:
+                stmt_existing = select(DBUser).where(DBUser.id.in_(participant_ids))
+                result_existing = await db.execute(stmt_existing)
+                existing_users = list(result_existing.scalars().all())
+
+            existing_ids = {u.id for u in existing_users}
+            
+            # 2. Bulk add only missing users
             for p in session.participants:
-                existing = await db.execute(select(DBUser).where(DBUser.id == p.id))
-                existing_user = existing.scalar_one_or_none()
-                if not existing_user:
-                    # Ensure unique email — guests get a unique email based on their ID
+                if p.id not in existing_ids:
                     email = p.email if p.email else f"{p.id}@guest.local"
                     new_user = DBUser(
                         id=p.id,

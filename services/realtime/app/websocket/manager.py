@@ -114,13 +114,12 @@ def build_router(max_room_size: int = 12) -> APIRouter:
         
         # Call backend to validate room and get canonical ID
         try:
-            async with httpx.AsyncClient(timeout=3.0) as client:
-                resp = await client.get(f"{settings.backend_base_url}/api/sessions/validate/{room_code_input}")
-                if resp.status_code == 200:
-                    payload = resp.json()
-                    session_id = payload.get("session_id")
-                    if authenticated_user and payload.get("host_id") == authenticated_user.get("id"):
-                        is_verified_host = True
+            resp = await http_client.get(f"{settings.backend_base_url}/api/sessions/validate/{room_code_input}")
+            if resp.status_code == 200:
+                payload = resp.json()
+                session_id = payload.get("session_id")
+                if authenticated_user and payload.get("host_id") == authenticated_user.get("id"):
+                    is_verified_host = True
         except Exception as exc:
             logger.warning("Session validation failed for %s: %s", room_code_input, exc)
 
