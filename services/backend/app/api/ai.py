@@ -30,7 +30,7 @@ class TranscriptRequest(BaseModel):
 @router.post("/chat")
 async def chat_with_ai(request: ChatRequest, current_user: dict = Depends(get_current_user)):
     """
-    Handles chat requests using the new Google Gen AI SDK or a mock service.
+    Handles chat requests using the new Google Gen AI SDK (Async) or a mock service.
     """
     if settings.ai_service == "mock" or client is None:
         return {"response": f"Mock Response: I received your message '{request.message}'. (AI Service is in MOCK mode or API key is missing)"}
@@ -42,24 +42,19 @@ async def chat_with_ai(request: ChatRequest, current_user: dict = Depends(get_cu
         
         for msg in request.history:
             role = "user" if msg.role == "user" else "model"
-            # Ensure roles alternate; if same as last, we skip or combine (skipping for simplicity here)
+            # Ensure roles alternate
             if role == last_role:
                 continue
             contents.append({"role": role, "parts": [{"text": msg.text}]})
             last_role = role
         
-        # Add the current message (must be "user")
-        if last_role == "user":
-            # If the last message in history was also user, we can't just append. 
-            # We'll just replace the history or handle it. 
-            # For now, let's just ensure we finish with a user message.
-            pass
-        
+        # Add the current message
         contents.append({"role": "user", "parts": [{"text": request.message}]})
         
         model_name = settings.gemini_model or "gemini-2.0-flash"
         
-        response = client.models.generate_content(
+        # Use asynchronous generation
+        response = await client.aio.models.generate_content(
             model=model_name,
             contents=contents
         )
@@ -86,7 +81,7 @@ async def chat_with_ai(request: ChatRequest, current_user: dict = Depends(get_cu
 @router.post("/summarize")
 async def summarize_meeting(request: TranscriptRequest, current_user: dict = Depends(get_current_user)):
     """
-    Generates a meeting summary from a transcript.
+    Generates a meeting summary (Async).
     """
     if settings.ai_service == "mock" or client is None:
         return {"response": "Mock Summary: This was a productive meeting about project features and timelines."}
@@ -102,7 +97,7 @@ async def summarize_meeting(request: TranscriptRequest, current_user: dict = Dep
     """
     
     try:
-        response = client.models.generate_content(
+        response = await client.aio.models.generate_content(
             model=settings.gemini_model or "gemini-2.0-flash",
             contents=prompt
         )
@@ -114,7 +109,7 @@ async def summarize_meeting(request: TranscriptRequest, current_user: dict = Dep
 @router.post("/notes")
 async def generate_notes(request: TranscriptRequest, current_user: dict = Depends(get_current_user)):
     """
-    Converts a transcript into clean meeting notes.
+    Converts a transcript into clean meeting notes (Async).
     """
     if settings.ai_service == "mock" or client is None:
         return {"response": "Mock Notes: \n- Feature Discussion\n- Deployment Plan\n- Next Sync: Friday"}
@@ -126,7 +121,7 @@ async def generate_notes(request: TranscriptRequest, current_user: dict = Depend
     """
     
     try:
-        response = client.models.generate_content(
+        response = await client.aio.models.generate_content(
             model=settings.gemini_model or "gemini-2.0-flash",
             contents=prompt
         )

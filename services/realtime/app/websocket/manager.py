@@ -30,29 +30,30 @@ def build_router(max_room_size: int = 12) -> APIRouter:
         state_ttl_seconds=settings.scene_state_ttl_seconds,
     )
 
+    # Persistent client for identity resolution
+    http_client = httpx.AsyncClient(timeout=3.0)
+
     async def _resolve_user(token: Optional[str], ws_ticket: Optional[str], room_code: str):
         if ws_ticket:
             try:
-                async with httpx.AsyncClient(timeout=3.0) as client:
-                    response = await client.post(
-                        f"{settings.backend_base_url}/api/auth/ws-ticket/verify",
-                        json={"ws_ticket": ws_ticket, "room_code": room_code},
-                        headers={"x-internal-api-key": settings.internal_api_key},
-                    )
-                    if response.status_code == 200:
-                        return response.json()
+                response = await http_client.post(
+                    f"{settings.backend_base_url}/api/auth/ws-ticket/verify",
+                    json={"ws_ticket": ws_ticket, "room_code": room_code},
+                    headers={"x-internal-api-key": settings.internal_api_key},
+                )
+                if response.status_code == 200:
+                    return response.json()
             except Exception as exc:
                 logger.warning("Failed to verify websocket ticket: %s", exc)
         if not token:
             return None
         try:
-            async with httpx.AsyncClient(timeout=3.0) as client:
-                response = await client.get(
-                    f"{settings.backend_base_url}/api/auth/me",
-                    headers={"Authorization": f"Bearer {token}"},
-                )
-                if response.status_code == 200:
-                    return response.json()
+            response = await http_client.get(
+                f"{settings.backend_base_url}/api/auth/me",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            if response.status_code == 200:
+                return response.json()
         except Exception as exc:
             logger.warning("Failed to resolve websocket user from backend auth: %s", exc)
         return None
@@ -61,12 +62,11 @@ def build_router(max_room_size: int = 12) -> APIRouter:
         if not user:
             return False
         try:
-            async with httpx.AsyncClient(timeout=3.0) as client:
-                response = await client.get(f"{settings.backend_base_url}/api/sessions/validate/{room_code}")
-                if response.status_code != 200:
-                    return False
-                payload = response.json()
-                return payload.get("host_id") == user.get("id")
+            response = await http_client.get(f"{settings.backend_base_url}/api/sessions/validate/{room_code}")
+            if response.status_code != 200:
+                return False
+            payload = response.json()
+            return payload.get("host_id") == user.get("id")
         except Exception as exc:
             logger.warning("Failed to resolve host status for room %s: %s", room_code, exc)
             return False
@@ -75,29 +75,27 @@ def build_router(max_room_size: int = 12) -> APIRouter:
         if not host_token:
             return None
         try:
-            async with httpx.AsyncClient(timeout=3.0) as client:
-                response = await client.post(
-                    f"{settings.backend_base_url}/api/sessions/verify-host-token",
-                    json={"room_code": room_code, "host_token": host_token},
-                    headers={"x-internal-api-key": settings.internal_api_key},
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    return {"id": data.get("host_id"), "name": data.get("host_name", "Host")}
-                else:
-                    logger.warning("verify-host-token failed (%s) for room %s: %s", response.status_code, room_code, response.text)
+            response = await http_client.post(
+                f"{settings.backend_base_url}/api/sessions/verify-host-token",
+                json={"room_code": room_code, "host_token": host_token},
+                headers={"x-internal-api-key": settings.internal_api_key},
+            )
+            if response.status_code == 200:
+                data = response.json()
+                return {"id": data.get("host_id"), "name": data.get("host_name", "Host")}
+            else:
+                logger.warning("verify-host-token failed (%s) for room %s: %s", response.status_code, room_code, response.text)
         except Exception as exc:
             logger.warning("Failed to resolve guest host token for room %s: %s", room_code, exc)
         return None
 
     async def _log_attendance(room_code: str, user_name: str, action: str):
         try:
-            async with httpx.AsyncClient(timeout=3.0) as client:
-                await client.post(
-                    f"{settings.backend_base_url}/api/sessions/{room_code}/attendance/log",
-                    json={"user_name": user_name, "action": action},
-                    headers={"x-internal-api-key": settings.internal_api_key},
-                )
+            await http_client.post(
+                f"{settings.backend_base_url}/api/sessions/{room_code}/attendance/log",
+                json={"user_name": user_name, "action": action},
+                headers={"x-internal-api-key": settings.internal_api_key},
+            )
         except Exception as exc:
             logger.warning("Attendance log failed (%s) for room %s user %s: %s", action, room_code, user_name, exc)
 
