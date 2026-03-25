@@ -1,7 +1,7 @@
 import React from 'react';
 import { VideoGrid } from '../../VideoGrid';
 import { SessionSidebar } from '../wrapper/SessionSidebar';
-import { Monitor } from 'lucide-react';
+import { Monitor, Presentation, FileUp } from 'lucide-react';
 
 interface SessionMainAreaProps {
     user: any;
@@ -19,6 +19,12 @@ interface SessionMainAreaProps {
     videoRef: React.RefObject<HTMLVideoElement | null>;
     canvasRef: React.RefObject<HTMLCanvasElement | null>;
     modelVisible: boolean;
+    isHost: boolean;
+    presentationMode: boolean;
+    setPresentationMode: (mode: boolean) => void;
+    onTogglePresentation: () => void;
+    onUploadPresentation: (file: File) => void;
+    isConverting: boolean;
 }
 
 export const SessionMainArea: React.FC<SessionMainAreaProps> = ({
@@ -36,11 +42,17 @@ export const SessionMainArea: React.FC<SessionMainAreaProps> = ({
     onSelectTool,
     videoRef,
     canvasRef,
-    modelVisible
+    modelVisible,
+    isHost,
+    presentationMode,
+    onTogglePresentation,
+    onUploadPresentation,
+    isConverting
 }) => {
+    const presentationFileInputRef = React.useRef<HTMLInputElement>(null);
+
     return (
         <div className={`flex-1 relative p-4 md:p-6 pb-0 flex ${splitView ? 'gap-4' : ''}`}>
-
             {/* Video column (split-view only) */}
             {splitView && !fullscreen3D && (
                 <div className="w-64 flex-shrink-0 rounded-[20px] overflow-hidden bg-gray-900 border border-gray-200/30">
@@ -83,6 +95,32 @@ export const SessionMainArea: React.FC<SessionMainAreaProps> = ({
                     <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-4 py-2 rounded-full text-sm font-medium shadow-lg z-50 flex items-center gap-2">
                         <Monitor className="w-4 h-4" />
                         Sharing your screen
+                    </div>
+                )}
+
+                {/* Feature 4 + 2: Voice Detection & Presentation Buttons (Host only) */}
+                {isHost && (
+                    <div className="absolute bottom-20 left-4 z-50 flex flex-col gap-2">
+                        <button
+                            onClick={onTogglePresentation}
+                            className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold shadow-lg transition-all ${presentationMode ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-gray-800/80 hover:bg-gray-700 text-white'}`}
+                        >
+                            <Presentation className="w-3.5 h-3.5" />
+                            {presentationMode ? 'Exit Slides' : '🖥 Slide Mode'}
+                        </button>
+                        
+                        <button
+                            onClick={() => presentationFileInputRef.current?.click()}
+                            disabled={isConverting}
+                            className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold shadow-lg transition-all bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50"
+                        >
+                            <FileUp className="w-3.5 h-3.5" />
+                            {isConverting ? 'Processing...' : 'Upload PDF'}
+                        </button>
+
+                        {presentationMode && (
+                            <div className="bg-black/60 text-white/70 text-xs px-2 py-1 rounded-lg text-center">← → to navigate</div>
+                        )}
                     </div>
                 )}
 
@@ -145,6 +183,15 @@ export const SessionMainArea: React.FC<SessionMainAreaProps> = ({
                     </div>
                 </div>
             </div>
+
+            {/* Hidden presentation file input */}
+            <input
+                type="file"
+                ref={presentationFileInputRef}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) onUploadPresentation(f); e.target.value = ''; }}
+                accept="application/pdf"
+                className="hidden"
+            />
         </div>
     );
 };

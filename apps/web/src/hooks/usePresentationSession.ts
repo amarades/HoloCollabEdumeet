@@ -22,8 +22,7 @@ export const usePresentationSession = ({
     ]);
     const [isConverting, setIsConverting] = useState(false);
 
-    const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
+    const handleFileUpload = async (file: File) => {
         if (!file || file.type !== 'application/pdf') return;
 
         setIsConverting(true);
@@ -58,11 +57,8 @@ export const usePresentationSession = ({
             }
 
             setCurrentSlides(newSlides);
-            if (presentationMode) {
-                arSceneRef.current?.startPresentationMode(newSlides);
-                if (socketInstance) {
-                    socketInstance.emit('PRESENTATION_STARTED', { slides: newSlides });
-                }
+            if (arSceneRef.current) {
+                arSceneRef.current.startPresentationMode(newSlides);
             }
             console.log('[PDF] Conversion complete');
         } catch (error: any) {

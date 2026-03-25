@@ -10,7 +10,6 @@ interface Params {
   currentSlides: SlideData[];
   setCurrentSlides: Dispatch<SetStateAction<SlideData[]>>;
   setPresentationMode: Dispatch<SetStateAction<boolean>>;
-  setEngagementMap: Dispatch<SetStateAction<Record<string, number>>>;
   setVisualFilter: Dispatch<SetStateAction<'realistic' | 'blue_glow' | 'red_glow'>>;
   setAutoOscillate: Dispatch<SetStateAction<boolean>>;
 }
@@ -23,7 +22,6 @@ export function useSessionRealtimeListeners({
   currentSlides,
   setCurrentSlides,
   setPresentationMode,
-  setEngagementMap,
   setVisualFilter,
   setAutoOscillate,
 }: Params) {
@@ -33,9 +31,6 @@ export function useSessionRealtimeListeners({
 
     const unsubTopic = socket.on('TOPIC_DETECTED', () => {
       // Topic detection handled via AI workflows and host notifications.
-    });
-    const unsubEngagement = socket.on('ENGAGEMENT_UPDATE', (data: any) => {
-      setEngagementMap((prev) => ({ ...prev, [data.userId]: data.score }));
     });
     const unsubSlide = socket.on('SLIDE_CHANGED', (data: any) => {
       if (!isHost) {
@@ -70,7 +65,6 @@ export function useSessionRealtimeListeners({
 
     return () => {
       unsubTopic();
-      unsubEngagement();
       unsubSlide();
       unsubModelUpdate();
       unsubPresentationStart();
@@ -84,7 +78,6 @@ export function useSessionRealtimeListeners({
     currentSlides,
     setCurrentSlides,
     setPresentationMode,
-    setEngagementMap,
     setVisualFilter,
     setAutoOscillate,
   ]);

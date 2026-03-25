@@ -1,10 +1,10 @@
 import React from 'react';
-import { CheckCircle2, Hand, Sparkles } from 'lucide-react';
+import { CheckCircle2, Hand } from 'lucide-react';
 import { ConnectionQuality } from '../../ConnectionQuality';
 
 interface SessionHeaderProps {
     isConnected: boolean;
-    connectionQuality: number;
+    connectionQuality: 'good' | 'fair' | 'poor';
     gesturesEnabled: boolean;
     currentGesture: string;
     sceneObjectCount: number;
