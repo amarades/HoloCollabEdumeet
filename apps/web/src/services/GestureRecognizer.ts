@@ -50,8 +50,8 @@ export class GestureRecognizer {
                 type: 'pointing',
                 confidence: 0.9,
                 position: {
-                    x: (0.5 - indexTip.x) * 2 - 1, // Normalized to NDC [-1, 1]
-                    y: (0.5 - indexTip.y) * 2 - 1,
+                    x: (0.5 - indexTip.x) * 2, // Corrected Mirroring to NDC [-1, 1]
+                    y: (0.5 - indexTip.y) * 2, // Corrected Y-axis to NDC [-1, 1]
                     z: indexTip.z
                 }
             };

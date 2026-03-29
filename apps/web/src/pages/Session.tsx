@@ -64,6 +64,7 @@ const Session = () => {
     const [modelLoaded, setModelLoaded] = useState(false);
     const [visualFilter, setVisualFilter] = useState<'realistic' | 'blue_glow' | 'red_glow'>('realistic');
     const [autoOscillate, setAutoOscillate] = useState(false);
+    const [engagementMap, setEngagementMap] = useState<Record<string, number>>({});
 
     // Layout state
     const [splitView, setSplitView] = useState(false);
@@ -201,7 +202,17 @@ const Session = () => {
         };
 
         const cleanup = socketInstance.on('USER_SPEAKING', handleSpeaking);
-        return () => cleanup();
+        
+        const handleEngagement = (data: any) => {
+            const updates = data.payload?.updates || data.updates || {};
+            setEngagementMap(prev => ({ ...prev, ...updates }));
+        };
+        const unsubEngagement = socketInstance.on('ENGAGEMENT_UPDATE', handleEngagement);
+
+        return () => {
+            cleanup();
+            unsubEngagement();
+        };
     }, [socketInstance]);
 
 
@@ -542,6 +553,7 @@ const Session = () => {
                 socketInstance={socketInstance}
                 ChatPanel={ChatPanel}
                 HostControls={HostControls}
+                engagementMap={engagementMap}
             />
 
             {/* ── Tool Panels ── */}

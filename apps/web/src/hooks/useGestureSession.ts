@@ -31,6 +31,7 @@ export const useGestureSession = ({
     const swipeCooldownRef = useRef(0);
     const lastGestureEmitRef = useRef<{ type: string; at: number }>({ type: 'none', at: 0 });
     const gesturesEnabledRef = useRef(gesturesEnabled);
+    const lastPointingPosRef = useRef<{ x: number; y: number } | null>(null);
 
     useEffect(() => {
         gesturesEnabledRef.current = gesturesEnabled;
@@ -125,12 +126,24 @@ export const useGestureSession = ({
                     arSceneRef.current.resetTransform();
                     arSceneRef.current.resetView();
                 } else if (detected.type === 'pointing' && detected.position) {
+                    if (lastPointingPosRef.current) {
+                        const deltaX = detected.position.x - lastPointingPosRef.current.x;
+                        const deltaY = detected.position.y - lastPointingPosRef.current.y;
+                        // Multiply by a sensitivity factor, e.g., 200, to make rotation responsive
+                        arSceneRef.current.rotateModelByDelta(deltaX * 200, deltaY * 200);
+                    }
+                    lastPointingPosRef.current = { x: detected.position.x, y: detected.position.y };
                     arSceneRef.current.selectAt(detected.position.x, detected.position.y);
                 } else if (detected.type === 'fist_left') {
                     triggerSwipeSpin(-1);
                 } else if (detected.type === 'fist_right') {
                     triggerSwipeSpin(1);
                 }
+            }
+
+            // Reset pointing position if gesture is no longer pointing
+            if (detected.type !== 'pointing') {
+                lastPointingPosRef.current = null;
             }
 
             const now = Date.now();

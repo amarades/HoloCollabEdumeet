@@ -1018,6 +1018,14 @@ export class ARScene {
         this.notifyStateChange();
     }
 
+    public rotateModelByDelta(deltaX: number, deltaY: number) {
+        if (!this.currentModel) return;
+        this.baseRotation.y += deltaX * 0.01;
+        this.baseRotation.x += deltaY * 0.01;
+        this.currentModel.rotation.copy(this.baseRotation);
+        this.notifyStateChange();
+    }
+
     public dispose() {
         if (this.animationId) cancelAnimationFrame(this.animationId);
 
