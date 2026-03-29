@@ -41,53 +41,45 @@ export class GestureService {
         globalInitPromise = new Promise<void>((resolve, reject) => {
             const timeout = setTimeout(() => {
                 if (this.useLocal && this.retryCount === 0) {
-                    console.log('⏱️ Local files timeout, switching to CDN...');
+                    console.warn('⏱️ MediaPipe Local initialization timeout, switching to CDN...');
                     clearTimeout(timeout);
                     this.useLocal = false;
                     this.retryCount++;
                     globalInitPromise = null;
                     this.initialize().then(resolve).catch(reject);
                 } else {
-                    reject(new Error('MediaPipe initialization timeout'));
+                    const error = new Error('MediaPipe initialization timeout. Please check your internet connection or browser compatibility.');
+                    console.error('❌ GestureService Timeout:', error);
+                    reject(error);
                 }
-            }, 10000);
+            }, 15000); // Increased timeout for slower connections
 
             try {
                 const source = this.useLocal ? 'local files' : 'CDN';
-                console.log(`🔄 Initializing MediaPipe from ${source}...`);
+                console.log(`🔄 Initializing MediaPipe Hands (${source})...`);
 
-                if (typeof Hands === 'undefined') {
-                    clearTimeout(timeout);
-                    reject(new Error('MediaPipe Hands not available'));
-                    return;
+                // Ensure Hands constructor is valid
+                if (!Hands) {
+                    throw new Error('MediaPipe Hands module could not be loaded.');
                 }
 
                 globalHandsInstance = new Hands({
                     locateFile: (file) => {
-                        if (this.useLocal) {
-                            return `/mediapipe/hands/${file}`;
-                        } else {
-                            return `${MEDIAPIPE_CDN}/${file}`;
-                        }
+                        const path = this.useLocal ? `/mediapipe/hands/${file}` : `${MEDIAPIPE_CDN}/${file}`;
+                        return path;
                     }
                 });
-
-                if (!globalHandsInstance) {
-                    throw new Error('Failed to create Hands instance');
-                }
 
                 globalHandsInstance.setOptions({
                     maxNumHands: 1,
                     modelComplexity: 1,
-                    minDetectionConfidence: 0.7,
+                    minDetectionConfidence: 0.6, // Slightly lowered for better initial detection
                     minTrackingConfidence: 0.5
                 });
 
                 globalHandsInstance.onResults((results) => {
-                    if (currentResultsCallback) {
+                    if (currentResultsCallback && this.isRunning) {
                         try {
-                            // Inject latency into results or pass it alongside if needed. 
-                            // But here we'll just track it via the public property `currentLatency`.
                             currentResultsCallback(results);
                         } catch (err) {
                             console.error('Error in results callback:', err);
@@ -95,16 +87,16 @@ export class GestureService {
                     }
                 });
 
-                // Crucial: initialize MediaPipe completely before resolving
                 globalHandsInstance.initialize().then(() => {
-                    console.log(`✅ GestureService MediaPipe WASM initialized (${source})`);
+                    console.log(`✅ GestureService MediaPipe WASM initialized successfully (${source})`);
                     clearTimeout(timeout);
                     resolve();
                 }).catch((initErr) => {
                     clearTimeout(timeout);
-                    console.error('❌ Init failed:', initErr);
+                    console.error('❌ MediaPipe initialize() failed:', initErr);
+                    
                     if (this.useLocal && this.retryCount === 0) {
-                        console.log('🔄 Retrying with CDN...');
+                        console.log('🔄 Retrying initialization using CDN...');
                         this.useLocal = false;
                         this.retryCount++;
                         globalInitPromise = null;
@@ -115,10 +107,9 @@ export class GestureService {
                 });
             } catch (error) {
                 clearTimeout(timeout);
-                console.error('❌ Init failed:', error);
+                console.error('❌ GestureService constructor failed:', error);
 
                 if (this.useLocal && this.retryCount === 0) {
-                    console.log('🔄 Retrying with CDN...');
                     this.useLocal = false;
                     this.retryCount++;
                     globalInitPromise = null;
@@ -133,10 +124,21 @@ export class GestureService {
     }
 
     async start(videoElement: HTMLVideoElement, onResults: (results: Results) => void) {
-        if (this.isRunning) return;
-        if (!globalHandsInstance) throw new Error('Not initialized');
+        if (this.isRunning) {
+            console.warn('GestureService is already running, updating callback and video element.');
+            this.videoElement = videoElement;
+            currentResultsCallback = onResults;
+            return;
+        }
+        
+        if (!globalHandsInstance) {
+            console.log('🔄 Lazy-initializing GestureService...');
+            await this.initialize();
+        }
 
-        console.log('🎥 Starting gesture detection tracking...');
+        if (!globalHandsInstance) throw new Error('MediaPipe not initialized after attempt.');
+
+        console.log('🎥 Starting gesture detection tracking loop...');
 
         this.videoElement = videoElement;
         currentResultsCallback = onResults;
@@ -147,46 +149,49 @@ export class GestureService {
         const processFrame = async () => {
             if (!this.isRunning || !this.videoElement || !globalHandsInstance) return;
 
-            if (this.videoElement.readyState >= 2 && this.canvasElement && this.canvasCtx) {
+            // Only process if video is ready and has dimensions
+            if (this.videoElement.readyState >= 2 && this.videoElement.videoWidth > 0 && this.canvasElement && this.canvasCtx) {
                 const startTime = performance.now();
                 try {
-                    // Ensure canvas matches video dimensions
-                    if (this.canvasElement.width !== this.videoElement.videoWidth) {
+                    // Update canvas dimensions if they changed
+                    if (this.canvasElement.width !== this.videoElement.videoWidth || 
+                        this.canvasElement.height !== this.videoElement.videoHeight) {
                         this.canvasElement.width = this.videoElement.videoWidth;
                         this.canvasElement.height = this.videoElement.videoHeight;
                     }
 
-                    // Draw the current video frame to our hidden off-screen canvas buffer
-                    this.canvasCtx.drawImage(this.videoElement, 0, 0, this.canvasElement.width, this.canvasElement.height);
+                    // Draw video to off-screen buffer
+                    this.canvasCtx.drawImage(this.videoElement, 0, 0);
 
-                    // Send the CANVAS to MediaPipe, safely isolating the original video element from WASM/WebGL manipulation
+                    // Process input
                     await globalHandsInstance.send({ image: this.canvasElement });
                     
                     const endTime = performance.now();
                     this.currentLatency = endTime - startTime;
                     
-                    // Calculate FPS
                     this.frameCount++;
-                    if (endTime - this.lastFpsTime >= 1000) {
-                        this.currentFps = this.frameCount;
+                    if (endTime - this.lastFpsTime >= 5000) { // Log performance every 5 seconds instead of 1
+                        this.currentFps = Math.round(this.frameCount / 5);
                         this.frameCount = 0;
                         this.lastFpsTime = endTime;
-                        console.log(`📊 Performance: ${this.currentFps} FPS | Latency: ${this.currentLatency.toFixed(2)}ms`);
+                        console.log(`📊 Gesture Perf: ${this.currentFps} FPS | ${this.currentLatency.toFixed(1)}ms`);
                     }
                 } catch (err) {
-                    console.error('MediaPipe send error:', err);
+                    console.error('MediaPipe processing error:', err);
                 }
             }
 
-            if (this.videoElement && 'requestVideoFrameCallback' in this.videoElement) {
-                (this.videoElement as HTMLVideoElement & { requestVideoFrameCallback: (callback: any) => void }).requestVideoFrameCallback(processFrame);
-            } else {
-                requestAnimationFrame(processFrame);
+            if (this.isRunning) {
+                if ('requestVideoFrameCallback' in (this.videoElement as any)) {
+                    (this.videoElement as any).requestVideoFrameCallback(processFrame);
+                } else {
+                    requestAnimationFrame(processFrame);
+                }
             }
         };
 
         processFrame();
-        console.log('👋 Gesture tracking started');
+        console.log('👋 Gesture tracking active');
     }
 
     stop() {

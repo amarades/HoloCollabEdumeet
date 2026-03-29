@@ -86,12 +86,14 @@ async def init_db():
                     END IF;
 
                     -- Check constraint for role
-                    IF NOT EXISTS (
+                    IF EXISTS (
                         SELECT 1 FROM pg_constraint WHERE conname = 'check_user_role'
                     ) THEN
-                        ALTER TABLE users ADD CONSTRAINT check_user_role 
-                        CHECK (role IN ('student', 'teacher', 'admin'));
+                        ALTER TABLE users DROP CONSTRAINT check_user_role;
                     END IF;
+                    
+                    ALTER TABLE users ADD CONSTRAINT check_user_role 
+                    CHECK (role IN ('student', 'teacher', 'instructor', 'admin'));
                 END $$;
                 """
             )

@@ -121,7 +121,7 @@ export const useGestureSession = ({
             if (canInteract && arSceneRef.current) {
                 if (detected.type === 'fist') {
                     arSceneRef.current.zoomCamera(0.05);
-                } else if (detected.type === 'open_left') {
+                } else if (detected.type === 'open_left' || detected.type === 'open_right') {
                     arSceneRef.current.resetTransform();
                     arSceneRef.current.resetView();
                 } else if (detected.type === 'pointing' && detected.position) {

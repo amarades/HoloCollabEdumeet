@@ -10,6 +10,8 @@ interface SessionMainAreaProps {
     cameraOn: boolean;
     micOn: boolean;
     remoteStreams: Record<string, MediaStream>;
+    speakingUsers: Set<string>;
+    localUserId?: string;
     splitView: boolean;
     fullscreen3D: boolean;
     isScreenSharing: boolean;
@@ -34,6 +36,8 @@ export const SessionMainArea: React.FC<SessionMainAreaProps> = ({
     cameraOn,
     micOn,
     remoteStreams,
+    speakingUsers,
+    localUserId,
     splitView,
     fullscreen3D,
     isScreenSharing,
@@ -62,6 +66,8 @@ export const SessionMainArea: React.FC<SessionMainAreaProps> = ({
                         localCameraOn={cameraOn}
                         localMicOn={micOn}
                         localIsHost={true}
+                        speakingUsers={speakingUsers}
+                        localUserId={localUserId}
                         participants={users.map(u => ({
                             id: u.id || u.name,
                             name: u.name,

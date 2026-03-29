@@ -3,8 +3,13 @@ import { MessageSquare, X, Send, Bot, User } from 'lucide-react';
 import { useAIHelper } from '../hooks/useAIHelper';
 import clsx from 'clsx'; // Assuming clsx is installed based on vite config
 
-export const AIChatMenu: React.FC = () => {
-    const [isOpen, setIsOpen] = useState(false);
+interface AIChatMenuProps {
+    isStandalone?: boolean;
+    onClose?: () => void;
+}
+
+export const AIChatMenu: React.FC<AIChatMenuProps> = ({ isStandalone = false, onClose }) => {
+    const [isOpen, setIsOpen] = useState(isStandalone);
     const [inputValue, setInputValue] = useState('');
     const { history, isLoading, error, sendMessage, generateSummary, generateNotes } = useAIHelper();
     const chatEndsRef = useRef<HTMLDivElement>(null);
@@ -25,7 +30,7 @@ export const AIChatMenu: React.FC = () => {
     };
 
     return (
-        <div className="fixed bottom-6 right-6 z-50">
+        <div className={isStandalone ? "fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" : "fixed bottom-6 right-6 z-50"}>
             {/* Toggle Button */}
             {!isOpen && (
                 <button
@@ -47,7 +52,10 @@ export const AIChatMenu: React.FC = () => {
                             <h3 className="font-semibold text-white">Gemini AI Assistant</h3>
                         </div>
                         <button 
-                            onClick={() => setIsOpen(false)}
+                            onClick={() => {
+                                setIsOpen(false);
+                                if (onClose) onClose();
+                            }}
                             className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded-md transition-colors"
                         >
                             <X className="w-5 h-5" />

@@ -5,7 +5,7 @@ from typing import List
 class Settings(BaseSettings):
     environment: str = "development"
     cors_origins: str = "http://localhost:5173"
-    backend_base_url: str = "http://127.0.0.1:8000"
+    backend_base_url: str = "http://localhost:8000"
     internal_api_key: str = "change-me-internal-api-key"
     max_room_size: int = 50  # Increased for SFU support
     redis_url: str = ""

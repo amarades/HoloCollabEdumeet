@@ -290,7 +290,6 @@
 }
 
 @keyframes floatOrb {
-
   0%,
   100% {
     transform: translateY(0px) scale(1);
@@ -299,4 +298,19 @@
   50% {
     transform: translateY(-20px) scale(1.05);
   }
+}
+
+@keyframes pulse-subtle {
+  0% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 0 rgba(147, 51, 234, 0.4); }
+  50% { transform: scale(1.05); opacity: 0.9; box-shadow: 0 0 15px 5px rgba(147, 51, 234, 0.2); }
+  100% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 0 rgba(147, 51, 234, 0); }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
 }

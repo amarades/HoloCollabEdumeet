@@ -160,14 +160,29 @@ export class PermissionsService {
         if (this.isHost || !this.socket) return;
         
         if (this.socket.isConnected()) {
-            console.log('[PermissionsService] Socket ready — sending join request.');
+            // Read user name from the standard auth storage location
+            let userName = 'Guest';
+            try {
+                const userData = localStorage.getItem('user_name') || localStorage.getItem('user_data');
+                if (userData) {
+                    // Could be a plain string (user_name) or JSON object (user_data)
+                    if (userData.startsWith('{')) {
+                        const parsed = JSON.parse(userData);
+                        userName = parsed.name || parsed.email || 'Guest';
+                    } else {
+                        userName = userData;
+                    }
+                }
+            } catch { /* ignore parse errors */ }
+
+            console.log('[PermissionsService] Socket ready — sending join request as:', userName);
             this.socket.emit('PARTICIPANT_JOIN_REQUEST', {
                 userId: this.socket.getUserId(),
-                userName: localStorage.getItem('user_name') || 'Guest',
+                userName,
                 requestedAt: Date.now()
             });
-        } else if (attempts < 20) {
-            // Retry every 500ms for up to 10 seconds
+        } else if (attempts < 30) {
+            // Retry every 500ms for up to 15 seconds
             console.log(`[PermissionsService] Waiting for socket connection... (attempt ${attempts + 1})`);
             setTimeout(() => this.requestJoinWhenReady(attempts + 1), 500);
         } else {
@@ -226,7 +241,7 @@ export class PermissionsService {
     }
 
     private notifyJoinRequest(request: ParticipantRequest) {
-        // This would be handled by React components via event system
+        console.log('[PermissionsService] Dispatching participantJoinRequest window event:', request);
         window.dispatchEvent(new CustomEvent('participantJoinRequest', { 
             detail: request 
         }));

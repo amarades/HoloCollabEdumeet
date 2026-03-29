@@ -18,6 +18,9 @@ import pdfWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
 import { useMediaSession } from '../hooks/useMediaSession';
 import { useGestureSession } from '../hooks/useGestureSession';
 import { usePresentationSession } from '../hooks/usePresentationSession';
+import { useSessionTranscription } from '../hooks/useSessionTranscription';
+import { useVoiceActivity } from '../hooks/useVoiceActivity';
+
 
 // Configure PDF.js worker using local Vite asset
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
@@ -38,6 +41,7 @@ import { SessionHeader } from '../components/session/layout/SessionHeader';
 import { SessionMainArea } from '../components/session/layout/SessionMainArea';
 import { SessionControlBar } from '../components/session/layout/SessionControlBar';
 import { SessionPanels } from '../components/session/layout/SessionPanels';
+import { AIChatMenu } from '../components/AIChatMenu';
 
 const Session = () => {
     const { sessionId } = useParams();
@@ -137,6 +141,13 @@ const Session = () => {
         fetchLibraryModels();
     }, []);
 
+    // ── Silent Transcription Hook ──────────────────────────────────────────
+    useSessionTranscription({ 
+        sessionId, 
+        isHost: sessionRole === 'host', 
+        isActive: isConnected 
+    });
+
     // ── Scene sync hook ────────────────────────────────────────────────────
     const {
         sceneObjects,
@@ -153,6 +164,47 @@ const Session = () => {
         isScreenSharing, toggleScreenShare,
         connectionQuality,
     } = useSessionControls(socketInstance, user?.name || 'You');
+
+    // ── Voice Activity Detection (VAD) ─────────────────────────────────────
+    const [speakingUsers, setSpeakingUsers] = useState<Set<string>>(new Set());
+    
+    useVoiceActivity({
+        stream: localStream,
+        enabled: micOn && isApproved,
+        onSpeakingChange: (isSpeaking) => {
+            if (socketInstance && isConnected) {
+                const userId = (user as any)?.id || (user as any)?.email || 'local';
+                socketInstance.emit('USER_SPEAKING', { 
+                    userId, 
+                    isSpeaking 
+                });
+            }
+        }
+    });
+
+    useEffect(() => {
+        if (!socketInstance) return;
+
+        const handleSpeaking = (data: any) => {
+            const { userId, isSpeaking } = data.payload || data;
+            if (!userId) return;
+
+            setSpeakingUsers(prev => {
+                const newSet = new Set(prev);
+                if (isSpeaking) {
+                    newSet.add(userId);
+                } else {
+                    newSet.delete(userId);
+                }
+                return newSet;
+            });
+        };
+
+        const cleanup = socketInstance.on('USER_SPEAKING', handleSpeaking);
+        return () => cleanup();
+    }, [socketInstance]);
+
+
 
     const [showHostControls, setShowHostControls] = useState(false);
     const [showReactionPicker, setShowReactionPicker] = useState(false);
@@ -222,6 +274,17 @@ const Session = () => {
                 });
 
                 socket.on('disconnect', () => setIsConnected(false));
+
+                // Actually initiate the WebSocket connection to the Realtime service
+                socket.connect(
+                    roomCode || sessionId || '',
+                    arSceneRef.current,
+                    user?.name || (user as any)?.email || 'Guest',
+                    isHost,
+                    (updatedUsers: any[]) => {
+                        setUsers(updatedUsers.filter((u: any) => u.id !== (user as any)?.id && u.id !== user?.email));
+                    }
+                );
                 
                 socket.on('SESSION_START', (data: any) => {
                     if (data.users) setUsers(data.users.filter((u: any) => u.id !== (user as any).id && u.id !== user.email));
@@ -261,10 +324,11 @@ const Session = () => {
                     }
                 };
 
-                setSocketInstance(socket);
-
-                // Permissions
+                // Initialize permissions BEFORE setSocketInstance so host listeners
+                // are registered before the socket fully opens and events arrive.
                 PermissionsService.getInstance().initialize(socket, isHost);
+
+                setSocketInstance(socket);
 
                 checkInterval = setInterval(() => {
                     setIsConnected(socket?.isConnected() ?? false);
@@ -318,6 +382,12 @@ const Session = () => {
     }, [isHost, socketInstance]);
 
     const handleModelUpload = async (file: File) => {
+        const token = localStorage.getItem('access_token');
+        if (!token || token === 'guest') {
+            alert('You must be logged in as an instructor or host to upload models.');
+            return;
+        }
+
         if (!file.name.toLowerCase().endsWith('.glb') && !file.name.toLowerCase().endsWith('.gltf')) {
             alert('Only GLB and GLTF files are supported');
             return;
@@ -337,6 +407,7 @@ const Session = () => {
             socketInstance?.emit('MODEL_CHANGED', { model_url: newModel.url, model_name: newModel.name, timestamp: Date.now() });
         } catch (error) {
             console.error('Model upload failed:', error);
+            alert(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     };
 
@@ -364,8 +435,11 @@ const Session = () => {
 
     const handleLeave = () => setShowLeaveConfirm(true);
     const confirmLeave = () => {
-        if (isHost && sessionId) navigate(`/session/${sessionId}/report`);
-        else navigate('/dashboard');
+        if (sessionId) {
+            navigate(`/session/${sessionId}/report`);
+        } else {
+            navigate('/dashboard');
+        }
     };
 
     // ── Waiting for Approval logic ──────────────────────────────────────────
@@ -384,6 +458,8 @@ const Session = () => {
                     cameraOn={cameraOn}
                     micOn={micOn}
                     remoteStreams={remoteStreams}
+                    speakingUsers={speakingUsers}
+                    localUserId={(user as any)?.id || (user as any)?.email || 'local'}
                     splitView={splitView}
                     fullscreen3D={fullscreen3D}
                     isScreenSharing={isScreenSharing}
@@ -448,6 +524,7 @@ const Session = () => {
                     setShowChat={setShowChat}
                     showHostControls={showHostControls}
                     setShowHostControls={setShowHostControls}
+
                 />
             </div>
 
@@ -544,6 +621,9 @@ const Session = () => {
                     onCameraEnabledChange={setCameraEnabled}
                     onGesturesEnabledChange={setGesturesEnabled}
                 />
+            )}
+            {activeTool === 'ai' && (
+                <AIChatMenu isStandalone onClose={() => setActiveTool(null)} />
             )}
 
             {/* Hidden file input for ScenePanel uploads */}

@@ -1,5 +1,5 @@
-from datetime import datetime, timedelta
-from typing import Optional
+from datetime import datetime, timedelta, timezone
+from typing import Optional, List, Dict
 import logging
 
 from fastapi import APIRouter, HTTPException, status, Depends, Request, Query, Header
@@ -174,6 +174,80 @@ async def get_optional_current_user(request: Request) -> Optional[dict]:
 async def get_current_user_info(user: dict = Depends(get_current_user_token)):
     """Return current authenticated user's info."""
     return CurrentUser(id=user["id"], email=user["email"], name=user["name"], role=user.get("role", "student"))
+
+
+@router.get("/profile")
+async def get_user_profile(user: dict = Depends(get_current_user_token)):
+    """Return current authenticated user's detailed performance profile."""
+    # 1. Fetch data
+    sessions = await db.get_user_sessions(user["id"])
+    logs = await db.get_user_attendance_logs(user["id"], user["name"])
+
+    # 2. Aggregate Stats
+    total_sessions = len(sessions)
+    total_seconds = 0
+    session_metrics = {} # session_id -> duration_sec
+
+    for log in logs:
+        joined = log["joined_at"]
+        left = log["left_at"] or datetime.now(timezone.utc)
+        
+        # Normalize/Ensure TZ awareness
+        if joined.tzinfo is None:
+            joined = joined.replace(tzinfo=timezone.utc)
+        if left.tzinfo is None:
+            left = left.replace(tzinfo=timezone.utc)
+
+        duration = (left - joined).total_seconds()
+        total_seconds += max(0, duration)
+        
+        sid = log["session_id"]
+        session_metrics[sid] = session_metrics.get(sid, 0) + duration
+
+    total_minutes = round(total_seconds / 60, 1) if total_seconds > 0 else 0
+    
+    # 3. Calculate Individual Session Performance
+    history = []
+    topics_engagement = {} # topic -> total_duration
+    
+    for s in sessions:
+        user_duration_sec = session_metrics.get(s.id, 0)
+        user_duration_min = round(user_duration_sec / 60, 1)
+        
+        # Simplified focus score based on expected session length (fallback to 60 min if active/unknown)
+        score = min(100, round((user_duration_min / 60) * 100)) if user_duration_min > 0 else 0
+        
+        history.append({
+            "session_id": s.id,
+            "name": s.name,
+            "topic": s.topic or "General",
+            "date": s.created_at.isoformat(),
+            "duration": user_duration_min,
+            "score": score
+        })
+        
+        topic = s.topic or "General"
+        topics_engagement[topic] = topics_engagement.get(topic, 0) + user_duration_sec
+
+    avg_score = round(sum(h["score"] for h in history) / len(history), 1) if history else 0
+    
+    # 4. Final Response
+    return {
+        "user_id": user["id"],
+        "name": user["name"],
+        "email": user["email"],
+        "role": user.get("role", "student"),
+        "analytics": {
+            "total_sessions": total_sessions,
+            "total_learning_minutes": total_minutes,
+            "average_focus_score": avg_score,
+            "recent_trend": [h["score"] for h in history[-10:]], # Last 10 sessions
+            "topics_engagement": [
+                {"topic": t, "minutes": round(secs / 60, 1)} for t, secs in topics_engagement.items()
+            ]
+        },
+        "history": sorted(history, key=lambda x: x["date"], reverse=True)
+    }
 
 
 @router.post("/ws-ticket", response_model=WebSocketTicketResponse)

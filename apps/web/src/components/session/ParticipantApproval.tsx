@@ -13,10 +13,24 @@ export const ParticipantApproval: React.FC<ParticipantApprovalProps> = ({ isHost
     useEffect(() => {
         if (!isHost) return;
 
+        // Initialize with any already pending requests from PermissionsService
+        const permissionsService = PermissionsService.getInstance();
+        const existingRequests = permissionsService.getPendingRequests();
+        if (existingRequests.length > 0) {
+            console.log('[ParticipantApproval] Initializing with existing requests:', existingRequests);
+            setPendingRequests(existingRequests);
+            setShow(true);
+        }
+
         const handleJoinRequest = (event: CustomEvent) => {
             const request = event.detail as ParticipantRequest;
             console.log('[ParticipantApproval] Received join request event:', request);
-            setPendingRequests(prev => [...prev, request]);
+            setPendingRequests(prev => {
+                // Prevent duplicate entries for the same user
+                if (prev.some(r => r.userId === request.userId)) return prev;
+                return [...prev, request];
+            });
+            // Always expand the panel when a new request arrives
             setShow(true);
         };
 
@@ -48,19 +62,23 @@ export const ParticipantApproval: React.FC<ParticipantApprovalProps> = ({ isHost
     if (!isHost || pendingRequests.length === 0) return null;
 
     return (
-        <div className="fixed top-4 right-4 z-50 max-w-sm">
-            <div className="bg-white border border-gray-200 rounded-xl shadow-lg p-4 space-y-3">
+        <div className="fixed top-4 right-4 z-50 max-w-sm" style={{ animation: 'slideInRight 0.3s ease' }}>
+            <div className="bg-white border-2 border-blue-400 rounded-xl shadow-2xl p-4 space-y-3">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                        <Users className="w-5 h-5 text-blue-500" />
+                        <div className="relative">
+                            <Users className="w-5 h-5 text-blue-500" />
+                            <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-ping" />
+                        </div>
                         <h3 className="font-semibold text-gray-900">Join Requests</h3>
-                        <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full">
+                        <span className="bg-red-100 text-red-700 text-xs font-bold px-2 py-1 rounded-full">
                             {pendingRequests.length}
                         </span>
                     </div>
                     <button
                         onClick={() => setShow(!show)}
                         className="text-gray-400 hover:text-gray-600"
+                        title={show ? 'Collapse' : 'Expand'}
                     >
                         <Settings className="w-4 h-4" />
                     </button>

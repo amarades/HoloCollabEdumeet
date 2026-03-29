@@ -7,6 +7,7 @@ interface VideoTileProps {
     isLocal?: boolean;
     cameraOn?: boolean;
     isHost?: boolean;
+    isSpeaking?: boolean;
 }
 
 export const VideoTile: React.FC<VideoTileProps> = React.memo(({
@@ -16,6 +17,7 @@ export const VideoTile: React.FC<VideoTileProps> = React.memo(({
     isLocal = false,
     cameraOn = true,
     isHost = false,
+    isSpeaking = false,
 }) => {
     const videoRef = React.useRef<HTMLVideoElement>(null);
 
@@ -33,7 +35,11 @@ export const VideoTile: React.FC<VideoTileProps> = React.memo(({
     const colorIndex = name.charCodeAt(0) % bgColors.length;
 
     return (
-        <div className="relative rounded-xl overflow-hidden bg-gray-800 aspect-video shadow-sm border border-white/10 group">
+        <div className={`relative rounded-xl overflow-hidden bg-gray-800 aspect-video shadow-sm border transition-all duration-300 group ${isSpeaking ? 'border-emerald-500 ring-2 ring-emerald-500/50 shadow-emerald-500/20' : 'border-white/10'}`}>
+            {/* Speaking Indicator Pulse (Overlay) */}
+            {isSpeaking && (
+                <div className="absolute inset-0 pointer-events-none z-20 animate-pulse-fast ring-inset ring-2 ring-emerald-400/30" />
+            )}
             {cameraOn && stream ? (
                 <video
                     ref={videoRef}
@@ -69,7 +75,17 @@ export const VideoTile: React.FC<VideoTileProps> = React.memo(({
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
                     </svg>
                 )}
-            </div>
-        </div>
+             </div>
+ 
+             <style>{`
+                 @keyframes pulse-fast {
+                     0%, 100% { opacity: 0.3; }
+                     50% { opacity: 0.8; }
+                 }
+                 .animate-pulse-fast {
+                     animation: pulse-fast 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+                 }
+             `}</style>
+         </div>
     );
 });

@@ -5,6 +5,7 @@ import {
     MonitorPlay,
     Settings,
     Box,
+    Sparkles
 } from 'lucide-react';
 
 interface SessionSidebarProps {
@@ -17,6 +18,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     onSelectTool,
 }) => {
     const tools = [
+        { id: 'ai', icon: Sparkles, label: 'AI Assistant' },
         { id: 'whiteboard', icon: Pencil, label: 'Whiteboard' },
         { id: 'quiz', icon: MessageSquare, label: 'Quiz / Poll' },
         { id: 'media', icon: MonitorPlay, label: 'Media' },

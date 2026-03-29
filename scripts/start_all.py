@@ -20,18 +20,6 @@ SERVICES = [
         "color": "\033[92m"  # Green
     },
     {
-        "name": "AI Service",
-        "dir": PROJECT_ROOT / "services" / "ai-service",
-        "port": 8003,
-        "color": "\033[95m"  # Magenta
-    },
-    {
-        "name": "CV Service",
-        "dir": PROJECT_ROOT / "services" / "cv-service",
-        "port": 8001,
-        "color": "\033[94m"  # Blue
-    },
-    {
         "name": "Realtime Service",
         "dir": PROJECT_ROOT / "services" / "realtime",
         "port": 8002,
@@ -50,7 +38,7 @@ def start_service(service):
         "app.main:app",
         "--reload",
         "--host",
-        "127.0.0.1",
+        "0.0.0.0",
         "--port",
         str(service["port"])
     ]

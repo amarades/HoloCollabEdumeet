@@ -272,7 +272,7 @@ def build_router(max_room_size: int = 12) -> APIRouter:
                 elif msg_type == "CHAT_SEND":
                     score = room_manager.update_engagement(real_room_id, user_id, "chat_msg")
                     await room_manager.send_to_host({"event": "ENGAGEMENT_UPDATE", "userId": user_id, "score": score}, real_room_id)
-                    await room_manager.broadcast({"event": "CHAT_MESSAGE", "message": payload}, real_room_id)
+                    await room_manager.broadcast({"event": "CHAT_MESSAGE", "message": payload}, real_room_id, exclude=websocket)
 
                 elif msg_type == "ENGAGEMENT_SIGNAL":
                     signal = payload.get("type")

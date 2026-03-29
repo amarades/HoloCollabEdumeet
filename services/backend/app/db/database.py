@@ -343,6 +343,39 @@ class PersistenceLayer:
             result = await db.execute(select(DBModelMetadata))
             return [_map_model(m) for m in result.scalars().all()]
 
+    async def get_user_sessions(self, user_id: str) -> List[PydanticSession]:
+        """Fetch all sessions where the user is a participant or host."""
+        async with async_session_maker() as db:
+            from app.db.schema import session_participants
+            stmt = (
+                select(DBSession)
+                .join(session_participants, DBSession.id == session_participants.c.session_id, isouter=True)
+                .where((DBSession.host_id == user_id) | (session_participants.c.user_id == user_id))
+                .distinct()
+                .options(selectinload(DBSession.participants))
+            )
+            result = await db.execute(stmt)
+            return [_map_session(s) for s in result.scalars().all()]
+
+    async def get_user_attendance_logs(self, user_id: str, user_name: str) -> List[dict]:
+        """Fetch all attendance records for a user across all sessions."""
+        async with async_session_maker() as db:
+            from app.db.schema import DBAttendanceLog
+            # Note: We match by user_name in attendance logs as per current schema design
+            stmt = (
+                select(DBAttendanceLog)
+                .where(DBAttendanceLog.user_name == user_name)
+                .order_by(DBAttendanceLog.joined_at.desc())
+            )
+            result = await db.execute(stmt)
+            return [
+                {
+                    "session_id": r.session_id,
+                    "joined_at": r.joined_at,
+                    "left_at": r.left_at
+                } for r in result.scalars().all()
+            ]
+
     async def save_model(self, model: PydanticModelMetadata):
         async with async_session_maker() as db:
             # Check by ID first

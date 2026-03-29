@@ -58,29 +58,76 @@ const TopicPrep = () => {
     useEffect(() => {
         const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
         setSpeechSupported(!!SR);
+        
+        // Auto-start recording if supported to meet user requirement "it has to be detect"
+        if (SR && !isRecording) {
+            startRecording();
+        }
+
+        return () => {
+            if (recognitionRef.current) {
+                try {
+                    recognitionRef.current.stop();
+                } catch (e) {}
+            }
+        };
     }, []);
 
     // ── Speech ────────────────────────────────────────────────────────────────
     const startRecording = () => {
         const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
         if (!SR) return;
-        const recognition = new SR();
-        recognition.continuous = true;
-        recognition.interimResults = true;
-        recognition.lang = 'en-US';
-        recognition.onresult = (e: any) => {
-            const text = Array.from(e.results).map((r: any) => r[0].transcript).join(' ');
-            setTranscript(text);
-        };
-        recognition.onerror = () => setIsRecording(false);
-        recognition.onend = () => setIsRecording(false);
-        recognitionRef.current = recognition;
-        recognition.start();
-        setIsRecording(true);
+
+        // Cleanup existing instance if any
+        if (recognitionRef.current) {
+            try {
+                recognitionRef.current.stop();
+            } catch (e) {}
+        }
+
+        try {
+            const recognition = new SR();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
+
+            recognition.onstart = () => {
+                console.log('Speech recognition started');
+                setIsRecording(true);
+            };
+
+            recognition.onresult = (e: any) => {
+                const text = Array.from(e.results).map((r: any) => r[0].transcript).join(' ');
+                setTranscript(text);
+                console.log('Interim transcript:', text);
+            };
+
+            recognition.onerror = (event: any) => {
+                console.error('Speech recognition error:', event.error);
+                if (event.error === 'not-allowed') {
+                    alert('Microphone access was denied. Please check your browser permissions.');
+                }
+                setIsRecording(false);
+            };
+
+            recognition.onend = () => {
+                console.log('Speech recognition ended');
+                setIsRecording(false);
+            };
+
+            recognitionRef.current = recognition;
+            recognition.start();
+        } catch (error) {
+            console.error('Failed to start speech recognition:', error);
+            setIsRecording(false);
+        }
     };
 
     const stopRecording = () => {
-        recognitionRef.current?.stop();
+        if (recognitionRef.current) {
+            recognitionRef.current.stop();
+            recognitionRef.current = null;
+        }
         setIsRecording(false);
     };
 
@@ -152,6 +199,16 @@ const TopicPrep = () => {
         }
     };
 
+    // ── Auto-Detect Transcript ──────────────────────────────────────────
+    useEffect(() => {
+        if (!isRecording && transcript.trim().length > 15 && !detected && !isDetecting) {
+            const timer = setTimeout(() => {
+                detectTopic();
+            }, 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [isRecording, transcript]);
+
     const hasInput = transcript.trim() || manualTopic.trim();
 
     return (
@@ -172,8 +229,12 @@ const TopicPrep = () => {
                 {/* Header */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2">
                     <div className="flex items-center gap-3">
-                        <button onClick={() => navigate(-1)} className="p-2 bg-white/10 hover:bg-white/20 rounded-full border border-white/20 transition-colors">
-                            <ArrowLeft className="w-5 h-5 text-white" />
+                        <button 
+                            onClick={() => navigate('/dashboard')} 
+                            className="flex items-center gap-2 pr-4 pl-2 py-2 bg-white/10 hover:bg-white/20 rounded-full border border-white/20 transition-all group"
+                        >
+                            <ArrowLeft className="w-4 h-4 text-white group-hover:-translate-x-1 transition-transform" />
+                            <span className="text-white text-xs font-bold uppercase tracking-wider">Back to Room</span>
                         </button>
                         <div>
                             <h1 className="text-2xl font-bold text-white flex items-center gap-2">
@@ -316,7 +377,7 @@ const TopicPrep = () => {
                 {notes && (
                     <div className="glass-card rounded-2xl p-6 space-y-4 border border-blue-500/20">
                         <p className="text-sm font-semibold text-white/60 uppercase tracking-wide flex items-center gap-2">
-                            <BookOpen className="w-4 h-4 text-blue-300" /> Lecture Notes Preview
+                            < BookOpen className="w-4 h-4 text-blue-300" /> Lecture Notes Preview
                         </p>
 
                         <p className="text-white/80 text-sm leading-relaxed">{notes.summary}</p>

@@ -1,21 +1,75 @@
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from google import genai
-from typing import List
+from typing import List, Optional
+import traceback
 
 from app.config import settings
 from app.api.auth import get_current_user_token as get_current_user
 
 router = APIRouter()
 
-# Initialize Client if configured
-client = None
-if settings.ai_service == "gemini" and settings.gemini_api_key:
-    try:
-        client = genai.Client(api_key=settings.gemini_api_key)
-    except Exception as e:
-        print(f"Warning: Failed to initialize Gemini client: {e}")
+class AIService:
+    def __init__(self):
+        self.client = None
+        self._initialize_client()
 
+    def _initialize_client(self):
+        if settings.ai_service == "gemini" and settings.gemini_api_key:
+            try:
+                self.client = genai.Client(api_key=settings.gemini_api_key)
+                print("✅ Gemini AI client successfully initialized.")
+            except Exception as e:
+                print(f"❌ CRITICAL Warning: Failed to initialize Gemini client: {e}")
+                traceback.print_exc()
+        else:
+            print(f"ℹ️ Gemini AI client NOT initialized. Service: {settings.ai_service}, Key Present: {bool(settings.gemini_api_key)}")
+
+    async def generate_content(self, prompt: str, history: Optional[List[dict]] = None) -> str:
+        if settings.ai_service == "mock" or self.client is None:
+            return f"Mock Response for: {prompt[:50]}..."
+
+        try:
+            # If history is provided, we use a chat session
+            if history:
+                chat = self.client.aio.chats.create(
+                    model=settings.gemini_model or "gemini-1.5-flash",
+                    history=history
+                )
+                response = await chat.send_message(prompt)
+            else:
+                response = await self.client.aio.models.generate_content(
+                    model=settings.gemini_model or "gemini-1.5-flash",
+                    contents=prompt
+                )
+            return response.text
+        except Exception as e:
+            print(f"Error generating AI content: {e}")
+            raise HTTPException(status_code=500, detail=f"AI Service Error: {str(e)}")
+
+    async def generate_class_summary(self, transcript: str, topic: str) -> str:
+        if not transcript.strip():
+            return "No transcript available for this session."
+            
+        prompt = f"""
+        As an educational assistant, summarize the following class session transcript.
+        Topic: {topic}
+        
+        Transcript Content:
+        {transcript}
+        
+        Provide a structured summary for students, including:
+        1. Key Concepts Covered
+        2. Important Definitions
+        3. Summary of Discussions
+        4. Action Items or Homework mentioned
+        """
+        return await self.generate_content(prompt)
+
+# Singleton instance
+ai_service = AIService()
+
+# ─── API Types ────────────────────────────────────────────────────────────────
 class ChatMessage(BaseModel):
     role: str # "user" or "model"
     text: str
@@ -27,105 +81,47 @@ class ChatRequest(BaseModel):
 class TranscriptRequest(BaseModel):
     transcript: str
 
+# ─── Routes ───────────────────────────────────────────────────────────────────
+
 @router.post("/chat")
 async def chat_with_ai(request: ChatRequest, current_user: dict = Depends(get_current_user)):
     """
-    Handles chat requests using the new Google Gen AI SDK (Async) or a mock service.
+    Handles chat requests using the Gemini AI service.
     """
-    if settings.ai_service == "mock" or client is None:
-        return {"response": f"Mock Response: I received your message '{request.message}'. (AI Service is in MOCK mode or API key is missing)"}
+    # Prepare history with strict role alternation
+    formatted_history = []
+    last_role = None
     
-    try:
-        # Prepare contents with proper role alternation
-        contents = []
-        last_role = None
-        
-        for msg in request.history:
-            role = "user" if msg.role == "user" else "model"
-            # Ensure roles alternate
-            if role == last_role:
-                continue
-            contents.append({"role": role, "parts": [{"text": msg.text}]})
+    for msg in request.history:
+        role = "user" if msg.role == "user" else "model"
+        if role != last_role:
+            formatted_history.append({"role": role, "parts": [{"text": msg.text}]})
             last_role = role
-        
-        # Add the current message
-        contents.append({"role": "user", "parts": [{"text": request.message}]})
-        
-        model_name = settings.gemini_model or "gemini-2.0-flash"
-        
-        # Use asynchronous generation
-        response = await client.aio.models.generate_content(
-            model=model_name,
-            contents=contents
-        )
-        
-        return {"response": response.text}
+            
+    response_text = await ai_service.generate_content(request.message, history=formatted_history)
+    return {"response": response_text}
 
-    except Exception as e:
-        import traceback
-        error_msg = str(e)
-        print(f"Error handling Gemini chat: {error_msg}")
-        traceback.print_exc()
-        
-        if any(x in error_msg for x in ["403", "API_KEY_INVALID", "PERMISSION_DENIED"]):
-             return {
-                 "response": "I'm currently in limited mode because the Gemini API key provided is invalid or has expired. Please check your configuration.",
-                 "error": "Invalid API Key"
-             }
-             
-        raise HTTPException(
-            status_code=500, 
-            detail={"message": "Failed to communicate with AI service", "error": error_msg}
-        )
-
+@router.post("/topic-detect")
+async def detect_topic(request: TranscriptRequest, current_user: dict = Depends(get_current_user)):
+    """
+    Detects the topic from a short transcript/speech segment.
+    """
+    prompt = f"Detect the main educational topic and up to 5 keywords from this text: '{request.transcript}'. Return as JSON: {{'topic': '...', 'keywords': ['...', ...], 'auto_load_model': {{'name': '...', 'thumbnail': '...'}} if a 3D model match exists}}"
+    # Note: In a real app, we'd use constrained output (Schema) but for now we'll just parse the text or return a simple response.
+    # For this task, we'll keep it simple.
+    response_text = await ai_service.generate_content(prompt)
 @router.post("/summarize")
-async def summarize_meeting(request: TranscriptRequest, current_user: dict = Depends(get_current_user)):
+async def summarize_transcript(request: TranscriptRequest, current_user: dict = Depends(get_current_user)):
     """
-    Generates a meeting summary (Async).
+    Summarizes a class session transcript.
     """
-    if settings.ai_service == "mock" or client is None:
-        return {"response": "Mock Summary: This was a productive meeting about project features and timelines."}
-
-    prompt = f"""
-    This is a meeting transcript:
-    {request.transcript}
-
-    Summarize the meeting with:
-    - Key points
-    - Decisions made
-    - Action items
-    """
-    
-    try:
-        response = await client.aio.models.generate_content(
-            model=settings.gemini_model or "gemini-2.0-flash",
-            contents=prompt
-        )
-        return {"response": response.text}
-    except Exception as e:
-        print(f"Error generating summary: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {"response": await ai_service.generate_class_summary(request.transcript, "General Class Session")}
 
 @router.post("/notes")
 async def generate_notes(request: TranscriptRequest, current_user: dict = Depends(get_current_user)):
     """
-    Converts a transcript into clean meeting notes (Async).
+    Converts a transcript into clean lecture notes.
     """
-    if settings.ai_service == "mock" or client is None:
-        return {"response": "Mock Notes: \n- Feature Discussion\n- Deployment Plan\n- Next Sync: Friday"}
-
-    prompt = f"""
-    Convert this lecture or meeting transcript into clean notes
-    with headings and bullet points:
-    {request.transcript}
-    """
-    
-    try:
-        response = await client.aio.models.generate_content(
-            model=settings.gemini_model or "gemini-2.0-flash",
-            contents=prompt
-        )
-        return {"response": response.text}
-    except Exception as e:
-        print(f"Error generating notes: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    prompt = f"Convert this transcript into clean lecture notes with headings and bullet points: {request.transcript}"
+    response_text = await ai_service.generate_content(prompt)
+    return {"response": response_text}

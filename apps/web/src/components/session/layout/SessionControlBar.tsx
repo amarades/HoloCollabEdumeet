@@ -99,9 +99,12 @@ export const SessionControlBar: React.FC<SessionControlBarProps> = React.memo(({
                 <button
                     onClick={toggleMic}
                     className={`p-3 md:p-4 rounded-full transition-all shadow-sm ${!micOn ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+                    title={micOn ? "Mute Microphone" : "Unmute Microphone"}
                 >
                     {!micOn ? <MicOff size={18} /> : <Mic size={18} />}
                 </button>
+
+
 
                 <button
                     onClick={toggleCamera}
@@ -187,7 +190,7 @@ export const SessionControlBar: React.FC<SessionControlBarProps> = React.memo(({
                     onClick={onLeave}
                     className="px-4 md:px-6 py-3 md:py-3.5 rounded-full bg-red-600 hover:bg-red-700 text-white transition-all shadow-md font-bold text-xs md:text-sm flex items-center gap-2"
                 >
-                    <PhoneOff size={16} /> <span className="hidden xs:inline">Leave</span>
+                    <PhoneOff size={16} /> <span className="hidden xs:inline">EXIT SESSION</span>
                 </button>
             </div>
 

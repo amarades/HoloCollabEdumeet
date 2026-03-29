@@ -18,6 +18,8 @@ interface VideoGridProps {
     localIsHost?: boolean;
     participants: Participant[];
     remoteStreams?: Record<string, MediaStream>;
+    speakingUsers?: Set<string>;
+    localUserId?: string;
     /** When true, renders as a compact strip (split-view mode) */
     compact?: boolean;
 }
@@ -30,6 +32,8 @@ export const VideoGrid: React.FC<VideoGridProps> = ({
     localIsHost = false,
     participants,
     remoteStreams = {},
+    speakingUsers = new Set(),
+    localUserId = 'local',
     compact = false,
 }) => {
     const total = participants.length + 1; // +1 for local
@@ -57,6 +61,7 @@ export const VideoGrid: React.FC<VideoGridProps> = ({
                 isLocal
                 cameraOn={localCameraOn}
                 isHost={localIsHost}
+                isSpeaking={speakingUsers.has(localUserId) || speakingUsers.has('local')}
             />
 
             {/* Remote participants */}
@@ -68,6 +73,7 @@ export const VideoGrid: React.FC<VideoGridProps> = ({
                     muted={!p.micOn}
                     cameraOn={p.cameraOn ?? true}
                     isHost={p.isHost}
+                    isSpeaking={speakingUsers.has(p.id)}
                 />
             ))}
 

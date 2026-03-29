@@ -27,16 +27,15 @@ export const usePresentationSession = ({
 
         setIsConverting(true);
         try {
-            console.log('[PDF] Starting conversion for:', file.name);
+            console.log('[Presentation] Starting conversion for:', file.name);
             const arrayBuffer = await file.arrayBuffer();
             const loadingTask = pdfjsLib.getDocument({
                 data: arrayBuffer,
-                useWorkerFetch: true,
                 isEvalSupported: false,
             });
 
             const pdf = await loadingTask.promise;
-            console.log('[PDF] Document loaded, pages:', pdf.numPages);
+            console.log('[Presentation] PDF loaded, pages:', pdf.numPages);
             const newSlides: SlideData[] = [];
 
             for (let i = 1; i <= pdf.numPages; i++) {
@@ -53,21 +52,46 @@ export const usePresentationSession = ({
                     body: `Visual content from ${file.name}`,
                     imageUrl: canvas.toDataURL('image/jpeg', 0.8)
                 });
-                console.log(`[PDF] Rendered page ${i}/${pdf.numPages}`);
             }
 
             setCurrentSlides(newSlides);
-            if (arSceneRef.current) {
-                arSceneRef.current.startPresentationMode(newSlides);
+            setPresentationMode(true);
+            
+            // Broadcast to participants
+            if (socketInstance) {
+                socketInstance.emit('PRESENTATION_STARTED', { slides: newSlides });
             }
-            console.log('[PDF] Conversion complete');
+            console.log('[Presentation] Conversion complete and mode enabled');
         } catch (error: any) {
-            console.error('PDF Conversion error details:', error);
+            console.error('PDF Conversion error:', error);
             alert(`Failed to process PDF: ${error.message || 'Unknown error'}`);
         } finally {
             setIsConverting(false);
         }
-    }, [arSceneRef]);
+    }, [socketInstance]);
+
+    // ── Effect: Sync Presentation Mode with ARScene ───────────────────────
+    useEffect(() => {
+        const scene = arSceneRef.current;
+        if (!scene) return;
+
+        if (presentationMode) {
+            console.log('[Presentation] Initializing 3D presentation mode with', currentSlides.length, 'slides');
+            scene.startPresentationMode(currentSlides);
+            
+            // If host toggles manually without upload, broadcast the default/current slides
+            if (isHost && socketInstance) {
+                socketInstance.emit('PRESENTATION_STARTED', { slides: currentSlides });
+            }
+        } else {
+            console.log('[Presentation] Stopping 3D presentation mode');
+            scene.stopPresentationMode();
+            
+            if (isHost && socketInstance) {
+                socketInstance.emit('PRESENTATION_STOPPED', {});
+            }
+        }
+    }, [presentationMode, arSceneRef, currentSlides, socketInstance, isHost]);
 
     const nextSlide = useCallback(() => {
         if (!presentationMode || !arSceneRef.current || !isHost) return;

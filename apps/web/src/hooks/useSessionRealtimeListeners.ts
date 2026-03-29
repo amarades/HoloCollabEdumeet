@@ -33,14 +33,16 @@ export function useSessionRealtimeListeners({
       // Topic detection handled via AI workflows and host notifications.
     });
     const unsubSlide = socket.on('SLIDE_CHANGED', (data: any) => {
+      const payload = data.payload || data;
       if (!isHost) {
-        if (data.direction === 'next') arSceneRef.current?.nextSlide();
+        if (payload.direction === 'next') arSceneRef.current?.nextSlide();
         else arSceneRef.current?.prevSlide();
       }
     });
 
     const unsubModelUpdate = socket.on('MODEL_UPDATE', (data: any) => {
-      const state = data.state;
+      const payload = data.payload || data;
+      const state = payload.state;
       if (!isHost && state) {
         if (state.visual_filter) setVisualFilter(state.visual_filter);
         if (state.auto_oscillate !== undefined) setAutoOscillate(state.auto_oscillate);
@@ -48,8 +50,9 @@ export function useSessionRealtimeListeners({
     });
 
     const unsubPresentationStart = socket.on('PRESENTATION_STARTED', (data: any) => {
+      const payload = data.payload || data;
       if (!isHost) {
-        const slidesToUse = data.slides || currentSlides;
+        const slidesToUse = payload.slides || currentSlides;
         setCurrentSlides(slidesToUse);
         arSceneRef.current?.startPresentationMode(slidesToUse);
         setPresentationMode(true);

@@ -57,7 +57,7 @@ export class GestureRecognizer {
             };
         }
         // 4. OPEN HAND - All fingers extended (reset)
-        else if (extendedCount >= 4) {
+        else if (extendedCount >= 3) { // Lowered from 4 to 3 for better reliability
             gesture = {
                 type: 'open_left', // Using open_left as the signal for "Open Hand"
                 confidence: 0.8

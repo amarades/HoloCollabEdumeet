@@ -167,6 +167,8 @@ export class SocketManager {
             this.reconnectAttempts = 0;
             this.reconnectDelay = 1000; // Reset delay
             this.flushPendingMessages();
+            // Notify listeners that the connection is open
+            this._fireListeners('connect', {});
         };
 
         this.socket.onmessage = (event) => {
@@ -191,6 +193,7 @@ export class SocketManager {
             if (this.intentionalDisconnect) return;
 
             console.log(`[SocketManager] Disconnected (Code: ${event.code})`);
+            this._fireListeners('disconnect', { code: event.code });
 
             // Attempt reconnect with exponential back-off
             if (this.reconnectAttempts < this.maxReconnectAttempts) {

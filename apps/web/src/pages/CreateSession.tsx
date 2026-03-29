@@ -160,7 +160,7 @@ const CreateSession = () => {
                 {/* Header */}
                 <div className="flex items-center gap-4 bg-gray-50/50 px-8 py-6 border-b border-gray-100">
                     <button
-                        onClick={() => navigate(-1)}
+                        onClick={() => navigate('/dashboard')}
                         className="p-2 bg-white hover:bg-gray-50 rounded-full transition-colors border border-gray-200 shadow-sm"
                     >
                         <ArrowLeft className="w-5 h-5 text-gray-600" />

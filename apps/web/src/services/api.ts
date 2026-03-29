@@ -13,43 +13,42 @@ export async function apiRequest(endpoint: string, options: RequestInit = {}) {
 
     if (token && token !== 'guest') {
         headers.set('Authorization', `Bearer ${token}`);
+    } else if (endpoint !== '/api/auth/login' && endpoint !== '/api/auth/register') {
+        console.warn(`⚠️ API calling protected endpoint [${endpoint}] without a valid token.`);
     }
     headers.set('x-request-id', requestId);
 
     // 2. Body Formatting
-    // If the body is NOT FormData and NOT URLSearchParams, default to JSON
-    // (URLSearchParams automatically sets application/x-www-form-urlencoded)
-    // (FormData automatically sets multipart/form-data with boundaries)
     if (options.body && !(options.body instanceof FormData) && !(options.body instanceof URLSearchParams) && !headers.has('Content-Type')) {
         headers.set('Content-Type', 'application/json');
     }
 
-    // Ensure endpoint starts with a slash
     const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
 
     try {
-        // 3. Network Request
         const response = await fetch(`${API_BASE_URL}${normalizedEndpoint}`, {
             ...options,
             headers,
         });
 
-        // 4. Response Parsing
-        // Handle 204 No Content or empty responses safely without crashing `response.json()`
+        if (response.status === 401) {
+            console.error(`🔒 Authentication Failure (401) on ${normalizedEndpoint}. Token state: ${token ? 'Present' : 'Missing'}`);
+            if (!token || token === 'guest') {
+                throw new Error("You are not logged in. Please log in to complete this action.");
+            }
+        }
+
         const text = await response.text();
         let data;
 
         try {
             data = text ? JSON.parse(text) : {};
         } catch {
-            // This happens if the backend crashes and returns an HTML error page (e.g., 502 Bad Gateway)
             console.error("Non-JSON response received:", text.substring(0, 150));
-            throw new Error(`Invalid JSON response from server (Status: ${response.status}). Expected JSON but got HTML/Text.`);
+            throw new Error(`Invalid JSON response from server (Status: ${response.status}).`);
         }
 
-        // 5. Error Handling
         if (!response.ok) {
-            // FastAPI throws exceptions in `detail`
             const errorMsg = data.detail || data.message || `HTTP Request failed with status ${response.status}`;
             throw new Error(errorMsg);
         }
@@ -57,7 +56,6 @@ export async function apiRequest(endpoint: string, options: RequestInit = {}) {
         return data;
 
     } catch (error: unknown) {
-        // 6. Network/CORS level failures (e.g. backend is completely down)
         console.error(`API Request Error [${options.method || 'GET'} ${normalizedEndpoint}]:`, error);
 
         if (error instanceof Error && error.name === 'TypeError' && error.message === 'Failed to fetch') {

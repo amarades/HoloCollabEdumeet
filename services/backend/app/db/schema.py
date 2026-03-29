@@ -23,7 +23,7 @@ class DBUser(Base):
     hashed_password = Column(String, nullable=True)
 
     __table_args__ = (
-        CheckConstraint(role.in_(['student', 'teacher', 'admin']), name='check_user_role'),
+        CheckConstraint(role.in_(['student', 'teacher', 'instructor', 'admin']), name='check_user_role'),
     )
 
 

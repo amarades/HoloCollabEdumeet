@@ -3,7 +3,6 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { SettingsProvider } from './context/SettingsContext';
 import { Suspense, lazy } from 'react';
 import type { ReactNode } from 'react';
-import { AIChatMenu } from './components/AIChatMenu';
 
 const Login = lazy(() => import('./pages/Login'));
 const Signup = lazy(() => import('./pages/Signup'));
@@ -15,6 +14,7 @@ const JoinSession = lazy(() => import('./pages/JoinSession'));
 const PreJoinLobby = lazy(() => import('./pages/PreJoinLobby'));
 const CreateSession = lazy(() => import('./pages/CreateSession'));
 const TopicPrep = lazy(() => import('./pages/TopicPrep'));
+const Profile = lazy(() => import('./pages/Profile'));
 
 // Protected Route Component
 const ProtectedRoute = ({ children }: { children: ReactNode }) => {
@@ -59,9 +59,9 @@ function App() {
           <Route path="/lobby" element={<PreJoinLobby />} />
           <Route path="/create-session" element={<ProtectedRoute><CreateSession /></ProtectedRoute>} />
           <Route path="/topic-prep" element={<ProtectedRoute><TopicPrep /></ProtectedRoute>} />
+          <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="/session/:sessionId/report" element={<ProtectedRoute><SessionReport /></ProtectedRoute>} />
             </Routes>
-            <AIChatMenu />
           </Suspense>
         </Router>
       </SettingsProvider>

@@ -87,7 +87,7 @@ const cardHover: any = {
 const SessionReport = () => {
     const { sessionId } = useParams<{ sessionId: string }>();
     const navigate = useNavigate();
-    const { token } = useAuth();
+    const { token, user } = useAuth();
     const isGuest = token === 'guest';
 
     const [report, setReport] = useState<ReportData | null>(null);
@@ -95,7 +95,27 @@ const SessionReport = () => {
     const [error, setError] = useState<string | null>(null);
     const [sortConfig, setSortConfig] = useState<{ key: 'name' | 'duration_minutes' | 'attention_score', direction: 'asc' | 'desc' }>({ key: 'attention_score', direction: 'desc' });
     const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
-    const [showAI, setShowAI] = useState(false);
+    const [showAI, setShowAI] = useState(true);
+    const [exporting, setExporting] = useState(false);
+    const [exportError, setExportError] = useState<string | null>(null);
+
+    // More robust host detection: Teacher role, Admin role, or explicit session_role
+    const isHost = 
+        user?.role === 'teacher' || 
+        user?.role === 'instructor' || 
+        user?.role === 'admin' || 
+        sessionStorage.getItem('session_role') === 'host';
+
+    const toggleAI = () => {
+        setShowAI(!showAI);
+        if (!showAI) {
+            // Smooth scroll to the AI section shortly after it expands
+            setTimeout(() => {
+                const aiSection = document.getElementById('ai-insights-section');
+                aiSection?.scrollIntoView({ behavior: 'smooth' });
+            }, 300);
+        }
+    };
 
     const toggleRow = (index: number) => {
         const newExpanded = new Set(expandedRows);
@@ -113,16 +133,21 @@ const SessionReport = () => {
 
     const handleExportCSV = async () => {
         if (!sessionId) return;
+        setExporting(true);
+        setExportError(null);
         try {
             const token = localStorage.getItem(AUTH_TOKEN_KEY);
-            if (!token || token === 'guest') throw new Error('Please sign in to export attendance.');
+            if (!token || token === 'guest') {
+                setExportError('Sign in required for export.');
+                return;
+            }
 
-            const base = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
-            const endpoint = `${base}/api/sessions/${sessionId}/export/csv`;
+            // Always use base path for proxy efficiency
+            const endpoint = `/api/sessions/${sessionId}/export/csv`;
             const response = await fetch(endpoint, {
                 headers: { Authorization: `Bearer ${token}` },
             });
-            if (!response.ok) throw new Error(`Export failed (${response.status})`);
+            if (!response.ok) throw new Error(`Status ${response.status}`);
 
             const blob = await response.blob();
             const url = URL.createObjectURL(blob);
@@ -135,7 +160,9 @@ const SessionReport = () => {
             URL.revokeObjectURL(url);
         } catch (err) {
             console.error(err);
-            setError('Could not export attendance CSV.');
+            setExportError('Export failed.');
+        } finally {
+            setExporting(false);
         }
     };
 
@@ -249,24 +276,13 @@ const SessionReport = () => {
             >
                 {/* Header Section */}
                 <motion.div variants={itemVariants} className="flex flex-col md:flex-row md:items-center gap-6 justify-between">
-                    <div className="flex items-center gap-5">
-                        <button
-                            onClick={() => navigate('/')}
-                            title="Go to Home"
-                            className="p-3.5 bg-white/5 hover:bg-white/10 rounded-2xl transition-all border border-white/10 group flex items-center justify-center"
-                        >
-                            <Home className="w-5 h-5 text-white/50 group-hover:text-white transition-colors" />
-                        </button>
-                        <div className="h-6 w-px bg-white/10" />
+                    <div className="flex items-center gap-4">
                         <button
                             onClick={() => navigate(isGuest ? '/join' : '/dashboard')}
-                            title={isGuest ? "Join Another Session" : "Back to Workspace"}
-                            className="p-3.5 bg-white/5 hover:bg-white/10 rounded-2xl transition-all border border-white/10 group flex items-center gap-2 pr-6"
+                            className="group flex items-center gap-3 px-6 py-3.5 bg-white/5 hover:bg-white/10 text-white/70 hover:text-white rounded-[24px] border border-white/10 transition-all font-black uppercase tracking-widest text-[10px]"
                         >
-                            <ChevronLeft className="w-5 h-5 text-white/50 group-hover:text-white group-hover:-translate-x-1 transition-transform" />
-                            <span className="text-white/70 text-sm font-black uppercase tracking-widest hidden sm:inline">
-                                {isGuest ? 'Join Session' : 'Workspace'}
-                            </span>
+                            <ChevronLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform text-purple-400" />
+                            {isGuest ? 'Session List' : 'Back to Dashboard'}
                         </button>
                         <div className="h-10 w-px bg-white/10 hidden md:block" />
                         <div>
@@ -280,19 +296,31 @@ const SessionReport = () => {
                     
                     <div className="flex items-center gap-3">
                         <button
-                            onClick={() => setShowAI(!showAI)}
-                            className={`flex-1 md:flex-none flex items-center justify-center gap-3 px-8 py-4 rounded-[24px] text-xs font-black uppercase tracking-widest transition-all shadow-2xl ${showAI ? 'bg-white text-gray-900' : 'bg-purple-600/20 text-purple-200 hover:bg-purple-600/30 border border-purple-500/30'}`}
+                            onClick={toggleAI}
+                            className={`flex-1 md:flex-none flex items-center justify-center gap-3 px-8 py-4 rounded-[24px] text-xs font-black uppercase tracking-widest transition-all shadow-2xl ${showAI ? 'bg-purple-600/40 text-white' : 'bg-purple-600/10 text-purple-200 hover:bg-purple-600/20 border border-purple-500/20'}`}
                         >
                             <Bot className={`w-4 h-4 ${showAI ? 'animate-bounce' : ''}`} />
-                            AI Analyst
+                            {showAI ? 'Deep Insights' : 'AI Analyst'}
                         </button>
-                        <button
-                            onClick={handleExportCSV}
-                            className="flex-1 md:flex-none flex items-center justify-center gap-3 px-8 py-4 bg-white/5 hover:bg-white/10 text-white/80 hover:text-white rounded-[24px] text-xs font-black uppercase tracking-widest transition-all border border-white/10"
-                        >
-                            <Share2 className="w-4 h-4" />
-                            Export
-                        </button>
+                        <div className="relative">
+                            <button
+                                onClick={handleExportCSV}
+                                disabled={exporting}
+                                className={`flex-1 md:flex-none flex items-center justify-center gap-3 px-8 py-4 bg-white/5 hover:bg-white/10 text-white/80 hover:text-white rounded-[24px] text-xs font-black uppercase tracking-widest transition-all border border-white/10 ${exporting ? 'opacity-50 cursor-wait' : ''}`}
+                            >
+                                <Share2 className={`w-4 h-4 ${exporting ? 'animate-spin' : ''}`} />
+                                {exporting ? 'Exporting...' : 'Export'}
+                            </button>
+                            {exportError && (
+                                <motion.div 
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="absolute top-full mt-2 left-0 right-0 text-[9px] font-black text-red-400 uppercase tracking-widest text-center"
+                                >
+                                    {exportError}
+                                </motion.div>
+                            )}
+                        </div>
                     </div>
                 </motion.div>
 
@@ -351,9 +379,10 @@ const SessionReport = () => {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div className={`grid grid-cols-1 ${isHost ? 'lg:grid-cols-2' : ''} gap-8`}>
                     {/* Attention Chart Container */}
-                    <motion.div variants={itemVariants} className="glass-card rounded-[48px] p-10 border-white/5">
+                    {isHost && (
+                        <motion.div variants={itemVariants} className="glass-card rounded-[48px] p-10 border-white/5">
                         <div className="flex items-center justify-between mb-10">
                             <div className="flex items-center gap-4">
                                 <div className="p-3 bg-white/5 rounded-2xl border border-white/10 text-white/60">
@@ -413,83 +442,96 @@ const SessionReport = () => {
                             )}
                         </div>
                     </motion.div>
+                    )}
 
                     {/* AI Insights Container */}
-                    <motion.div variants={itemVariants} className="glass-card rounded-[48px] p-0 border-white/5 overflow-hidden flex flex-col">
-                        <div className="p-10 pb-6">
-                            <div className="flex items-center gap-4 mb-8">
-                                <div className="p-3 bg-blue-500/10 rounded-2xl border border-blue-500/20 text-blue-300">
-                                    <Bot size={20} />
-                                </div>
-                                <div>
-                                    <h3 className="text-xl font-black text-white italic tracking-tight">Intelligence Output</h3>
-                                    <p className="text-[10px] font-black text-white/20 uppercase tracking-widest">AI Generated Post-Session Analysis</p>
-                                </div>
-                            </div>
-                            
-                            <div className="space-y-8">
-                                <div className="p-8 bg-white/5 border border-white/10 rounded-[32px] space-y-6 relative overflow-hidden group">
-                                    <div className="absolute -right-6 -top-6 opacity-[0.03] group-hover:opacity-[0.07] transition-opacity duration-1000 rotate-12">
-                                        <TrendingUp size={160} />
+                    <AnimatePresence>
+                        {showAI && (
+                            <motion.div 
+                                id="ai-insights-section"
+                                key="ai-section"
+                                initial={{ opacity: 0, height: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, height: 'auto', scale: 1 }}
+                                exit={{ opacity: 0, height: 0, scale: 0.95 }}
+                                transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                                className={`glass-card rounded-[48px] p-0 border-white/5 overflow-hidden flex flex-col ring-2 ring-purple-500/50 shadow-[0_0_50px_rgba(168,85,247,0.2)]`}
+                            >
+                                <div className="p-10 pb-6">
+                                    <div className="flex items-center gap-4 mb-8">
+                                        <div className="p-3 bg-blue-500/10 rounded-2xl border border-blue-500/20 text-blue-300">
+                                            <Bot size={20} />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-xl font-black text-white italic tracking-tight">Intelligence Output</h3>
+                                            <p className="text-[10px] font-black text-white/20 uppercase tracking-widest">AI Generated Post-Session Analysis</p>
+                                        </div>
                                     </div>
                                     
-                                    <div className="space-y-3 relative z-10">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-4 h-[2px] bg-blue-500" />
-                                            <p className="text-blue-300 text-[10px] font-black uppercase tracking-[0.3em]">Executive Digest</p>
+                                    <div className="space-y-8">
+                                        <div className="p-8 bg-white/5 border border-white/10 rounded-[32px] space-y-6 relative overflow-hidden group">
+                                            <div className="absolute -right-6 -top-6 opacity-[0.03] group-hover:opacity-[0.07] transition-opacity duration-1000 rotate-12">
+                                                <TrendingUp size={160} />
+                                            </div>
+                                            
+                                            <div className="space-y-3 relative z-10">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-4 h-[2px] bg-blue-500" />
+                                                    <p className="text-blue-300 text-[10px] font-black uppercase tracking-[0.3em]">Executive Digest</p>
+                                                </div>
+                                                <p className="text-white/80 text-base leading-relaxed font-medium italic">
+                                                    "{report.insights.summary}"
+                                                </p>
+                                            </div>
+                                            
+                                            <div className="space-y-3 pt-6 border-t border-white/10 relative z-10">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-4 h-[2px] bg-purple-500" />
+                                                    <p className="text-purple-300 text-[10px] font-black uppercase tracking-[0.3em]">Pedagogical Guidance</p>
+                                                </div>
+                                                <p className="text-white/70 text-base leading-relaxed font-semibold">
+                                                    {report.insights.recommendation}
+                                                </p>
+                                            </div>
                                         </div>
-                                        <p className="text-white/80 text-base leading-relaxed font-medium italic">
-                                            "{report.insights.summary}"
-                                        </p>
-                                    </div>
-                                    
-                                    <div className="space-y-3 pt-6 border-t border-white/10 relative z-10">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-4 h-[2px] bg-purple-500" />
-                                            <p className="text-purple-300 text-[10px] font-black uppercase tracking-[0.3em]">Pedagogical Guidance</p>
-                                        </div>
-                                        <p className="text-white/70 text-base leading-relaxed font-semibold">
-                                            {report.insights.recommendation}
-                                        </p>
-                                    </div>
-                                </div>
 
-                                {report.insights.low_engagement_follow_up.length > 0 && (
-                                    <div className="px-2">
-                                        <p className="text-red-400 text-[10px] font-black uppercase tracking-[0.3em] mb-4 flex items-center gap-2">
-                                            <AlertTriangle size={14} /> Critical Attention Required
-                                        </p>
-                                        <div className="flex flex-wrap gap-3">
-                                            {report.insights.low_engagement_follow_up.map((name, i) => (
-                                                <motion.span 
-                                                    key={i} 
-                                                    whileHover={{ scale: 1.05, backgroundColor: 'rgba(239, 68, 68, 0.2)' }}
-                                                    className="px-5 py-2.5 bg-red-500/10 border border-red-500/20 text-red-100 text-[10px] font-black rounded-2xl uppercase tracking-widest transition-all"
-                                                >
-                                                    Follow-up: {name}
-                                                </motion.span>
-                                            ))}
-                                        </div>
+                                        {report.insights.low_engagement_follow_up.length > 0 && (
+                                            <div className="px-2">
+                                                <p className="text-red-400 text-[10px] font-black uppercase tracking-[0.3em] mb-4 flex items-center gap-2">
+                                                    <AlertTriangle size={14} /> Critical Attention Required
+                                                </p>
+                                                <div className="flex flex-wrap gap-3">
+                                                    {report.insights.low_engagement_follow_up.map((name, i) => (
+                                                        <motion.span 
+                                                            key={i} 
+                                                            whileHover={{ scale: 1.05, backgroundColor: 'rgba(239, 68, 68, 0.2)' }}
+                                                            className="px-5 py-2.5 bg-red-500/10 border border-red-500/20 text-red-100 text-[10px] font-black rounded-2xl uppercase tracking-widest transition-all"
+                                                        >
+                                                            Follow-up: {name}
+                                                        </motion.span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                )}
-                            </div>
-                        </div>
-                        
-                        <div className="mt-auto p-6 bg-white/5 border-t border-white/5 grid grid-cols-2 gap-4">
-                            <div className="p-4 rounded-3xl bg-white/5 border border-white/5 flex items-center gap-4 group transition-colors hover:border-emerald-500/30">
-                                <div className="p-2 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
-                                    <CheckCircle className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
                                 </div>
-                                <span className="text-[10px] font-black text-white/40 uppercase tracking-widest leading-none">Integrity Verified</span>
-                            </div>
-                            <div className="p-4 rounded-3xl bg-white/5 border border-white/5 flex items-center gap-4 group transition-colors hover:border-amber-500/30">
-                                <div className="p-2 bg-amber-500/10 rounded-xl border border-amber-500/20">
-                                    <Award className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
+                                
+                                <div className="mt-auto p-6 bg-white/5 border-t border-white/5 grid grid-cols-2 gap-4">
+                                    <div className="p-4 rounded-3xl bg-white/5 border border-white/5 flex items-center gap-4 group transition-colors hover:border-emerald-500/30">
+                                        <div className="p-2 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+                                            <CheckCircle className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
+                                        </div>
+                                        <span className="text-[10px] font-black text-white/40 uppercase tracking-widest leading-none">Integrity Verified</span>
+                                    </div>
+                                    <div className="p-4 rounded-3xl bg-white/5 border border-white/5 flex items-center gap-4 group transition-colors hover:border-amber-500/30">
+                                        <div className="p-2 bg-amber-500/10 rounded-xl border border-amber-500/20">
+                                            <Award className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
+                                        </div>
+                                        <span className="text-[10px] font-black text-white/40 uppercase tracking-widest leading-none">Core Analysis</span>
+                                    </div>
                                 </div>
-                                <span className="text-[10px] font-black text-white/40 uppercase tracking-widest leading-none">Core Analysis</span>
-                            </div>
-                        </div>
-                    </motion.div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </div>
 
                 {/* Table Section */}

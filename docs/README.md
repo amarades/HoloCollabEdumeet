@@ -1,75 +1,53 @@
 # HoloCollab EduMeet Documentation
 
 ## Project Overview
-AI-Powered AR Collaborative Learning Platform
+**HoloCollab EduMeet** is an AI-Powered AR Collaborative Learning Platform that brings immersive 3D education to the web.
 
-## Directory Structure
+## Updated Repository Structure
 ```
-holocollab-edumeet/
-├── frontend/          # Static HTML/CSS/JS frontend
-├── backend/           # FastAPI unified backend
-├── realtime/          # WebSocket/SocketIO real-time services
-├── cv-service/        # Computer Vision & Gesture Recognition
-├── ai-service/        # AI Chat & Quiz Generation
-├── shared/            # Shared models and utilities
-├── docs/              # Documentation
-├── infrastructure/    # Deployment configs (Docker, K8s)
-├── requirements.txt   # Root dependencies
-├── README.md          # Project readme
-├── license.md         # License information
-└── .gitignore         # Git ignore rules
+HoloCollabEduMeet/
+├── apps/
+│   └── web/                # React (Vite) + Tailwind + Three.js
+├── services/
+│   ├── backend/            # FastAPI + SQLAlchemy + Gemini AI
+│   └── realtime/           # Node.js + Socket.io Signaling
+├── infrastructure/         # Deployment & Containerization
+├── docs/                   # Full Manuals & Documentation
+└── brain/                  # AI System Design & Architecture
 ```
 
-## Services
+## Core Educational Services
 
-### Frontend
-- **Location**: `frontend/`
-- **Tech**: HTML, CSS, JavaScript, Three.js
-- **Purpose**: User interface for 3D model viewing, AR sessions, and AI chat
+### 1. Immersive 3D Lobby & Session
+- **Location**: `apps/web/`
+- **Tech**: React, Three.js, WebRTC
+- **Purpose**: A synchronized environment where students can visualize and interact with complex 3D models.
 
-### Backend
-- **Location**: `backend/`
-- **Tech**: FastAPI, Python
-- **Purpose**: Unified API gateway, authentication, database management
+### 2. AI Intelligence Layer
+- **Location**: `services/backend/app/services/ai_service.py`
+- **Tech**: Google Gemini Pro
+- **Purpose**: Handles automated topic detection, lecture note generation, and final session summarization.
 
-### Realtime Service
-- **Location**: `realtime/`
-- **Tech**: Socket.IO, WebSockets
-- **Purpose**: Real-time collaboration, room management, WebRTC signaling
+### 3. Real-time Signaling
+- **Location**: `services/realtime/`
+- **Tech**: Socket.io
+- **Purpose**: Manages room synchronization, video signaling, and metadata broadcast (hand gestures, reactions).
 
-### CV Service
-- **Location**: `cv-service/`
-- **Tech**: MediaPipe, OpenCV
-- **Purpose**: Hand gesture recognition and processing
+### 4. Automated Reporting & Transcription
+- **Location**: `services/backend/app/api/sessions.py`
+- **Tech**: Web Speech API (Browser) + FastAPI
+- **Purpose**: Captures live session dialogue and converts it into structured educational insights for students.
 
-### AI Service
-- **Location**: `ai-service/`
-- **Tech**: Google Gemini API
-- **Purpose**: AI chat assistant, quiz generation, concept explanations
+## Documentation Index
 
-## Getting Started
+- **[Quick Start Guide](../QUICK_START.md)**: Get the project running in 5 minutes.
+- **[Deployment Guide](DEPLOYMENT_GUIDE.md)**: Launch to Render, Vercel, or AWS.
+- **[Testing Protocol](TESTING_GUIDE.md)**: How to verify WebRTC and Gesture recognition.
+- **[Architecture Deep-Dive](../brain/system_design.md)**: Core design patterns and data flows.
 
-See [QUICK_START.md](../QUICK_START.md) for setup instructions.
+## Demo & Assets
+- **Session Preview**: ![Session](assets/immersive_session_page.png)
+- **AI Analytics**: ![Report](assets/landing_page.png)
 
-## Demo Video
-![Demo Video](assets/demo_video.webp)
-
-## Screenshots
-### Landing Page
-![Landing Page](assets/landing_page.png)
-
-### Signup Page
-![Signup Page](assets/signup_page.png)
-
-### Dashboard
-![Dashboard](assets/dashboard_page.png)
-
-### Immersive Session Room
-![Immersive Session](assets/immersive_session_page.png)
-
-## Deployment
-- **Live Link**: [Your Deployment URL Here - Run deploy-free.sh to host]
-
-## Architecture
-
-See [system_design.md](../brain/system_design.md) for detailed architecture documentation.
+---
+© 2026 HoloCollab EduMeet Team. All rights reserved.

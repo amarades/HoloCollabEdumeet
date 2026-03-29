@@ -533,10 +533,11 @@ export class ARScene {
     // ── Feature 10: 3D Presentation Mode ──────────────────────────────────────
 
     public startPresentationMode(slides: SlideData[]) {
+        console.log('[ARScene] Starting presentation mode with', slides.length, 'slides');
         this.isPresentationMode = true;
         // Clear previous slides
-        this.presentationSlides.forEach(s => this.scene.remove(s));
-        this.presentationSlides = [];
+        this.stopPresentationMode();
+        this.isPresentationMode = true; // reset after stop
 
             slides.forEach((slide, index) => {
             const geometry = new THREE.PlaneGeometry(9.6, 5.4); // 16:9 Aspect Ratio (e.g. 9.6 x 5.4)
@@ -546,11 +547,16 @@ export class ARScene {
             if (slide.imageUrl) {
                 // Use provided image/dataURL
                 const img = new Image();
-                img.src = slide.imageUrl;
                 texture = new THREE.Texture(img);
                 img.onload = () => {
+                    console.log(`[ARScene] Slide ${index} texture loaded`);
                     texture.needsUpdate = true;
+                    this.renderer.render(this.scene, this.camera);
                 };
+                img.onerror = (err) => {
+                    console.error(`[ARScene] Slide ${index} failed to load image:`, err);
+                };
+                img.src = slide.imageUrl;
             } else {
                 // Render slide text to an offscreen canvas
                 const offscreen = document.createElement('canvas');
@@ -559,7 +565,7 @@ export class ARScene {
                 const ctx = offscreen.getContext('2d')!;
 
                 ctx.fillStyle = 'rgba(0, 17, 34, 0.9)';
-                ctx.fillRect(0, 0, 1024, 736);
+                ctx.fillRect(0, 0, 1280, 720);
 
                 // Title
                 ctx.fillStyle = '#00d4ff';
@@ -571,7 +577,7 @@ export class ARScene {
                 ctx.lineWidth = 2;
                 ctx.beginPath();
                 ctx.moveTo(48, 160);
-                ctx.lineTo(976, 160);
+                ctx.lineTo(1232, 160);
                 ctx.stroke();
 
                 // Body text (word-wrap) - Adjusted for higher resolution
@@ -582,7 +588,7 @@ export class ARScene {
                 let y = 240;
                 for (const word of words) {
                     const test = line + word + ' ';
-                    if (ctx.measureText(test).width > 920) {
+                    if (ctx.measureText(test).width > 1180) {
                         ctx.fillText(line, 48, y);
                         line = word + ' ';
                         y += 60;
@@ -595,7 +601,7 @@ export class ARScene {
                 // Slide index
                 ctx.fillStyle = 'rgba(0, 212, 255, 0.5)';
                 ctx.font = '32px monospace';
-                ctx.fillText(`${index + 1} / ${slides.length}`, 900, 700);
+                ctx.fillText(`${index + 1} / ${slides.length}`, 1150, 680);
 
                 texture = new THREE.CanvasTexture(offscreen);
             }
@@ -603,40 +609,19 @@ export class ARScene {
             const material = new THREE.MeshBasicMaterial({
                 map: texture,
                 transparent: true,
-                opacity: 0.92,
+                opacity: 0.95,
                 side: THREE.DoubleSide,
             });
 
-            // TV Style Frame / Card Background
-            const frameGeometry = new THREE.PlaneGeometry(9.7, 5.5);
-            const frameMaterial = new THREE.MeshBasicMaterial({
-                color: 0x111111,
-                transparent: true,
-                opacity: 0.95,
-            });
-            const frame = new THREE.Mesh(frameGeometry, frameMaterial);
-            
-            // Bezel / Border (slightly larger)
-            const bezelGeometry = new THREE.PlaneGeometry(9.8, 5.6);
-            const bezelMaterial = new THREE.MeshBasicMaterial({
-                color: 0x444444, // Dark metallic gray
-                transparent: true,
-                opacity: 0.8,
-            });
-            const bezel = new THREE.Mesh(bezelGeometry, bezelMaterial);
-            bezel.position.z = -0.01; // Slightly behind frame
 
             const contentMesh = new THREE.Mesh(geometry, material);
             contentMesh.position.z = 0.01; // Slightly in front of frame
 
             const slideGroup = new THREE.Group();
-            slideGroup.add(bezel);
-            slideGroup.add(frame);
             slideGroup.add(contentMesh);
             
             // Position: Pushed slightly more right and adjusted vertical
             slideGroup.position.set(5.0, 0.5, -4.5);
-            slideGroup.rotation.y = 0; // Facing students straight
             slideGroup.visible = index === 0;
 
             this.scene.add(slideGroup);
@@ -652,6 +637,7 @@ export class ARScene {
         this.presentationSlides[this.currentSlideIndex].visible = false;
         this.currentSlideIndex = (this.currentSlideIndex + 1) % this.presentationSlides.length;
         this.presentationSlides[this.currentSlideIndex].visible = true;
+        this.renderer.render(this.scene, this.camera);
     }
 
     public prevSlide() {
@@ -660,6 +646,7 @@ export class ARScene {
         this.presentationSlides[this.currentSlideIndex].visible = false;
         this.currentSlideIndex = (this.currentSlideIndex - 1 + this.presentationSlides.length) % this.presentationSlides.length;
         this.presentationSlides[this.currentSlideIndex].visible = true;
+        this.renderer.render(this.scene, this.camera);
     }
 
     public getCurrentSlide() {
@@ -667,7 +654,12 @@ export class ARScene {
     }
 
     public stopPresentationMode() {
+        console.log('[ARScene] Stopping presentation mode');
         this.isPresentationMode = false;
+        this.isSlideFullscreen = false;
+        this.slideZoom = 1.0;
+        this.slideOffset.set(0, 0);
+        
         this.presentationSlides.forEach(s => {
             s.traverse((obj: any) => {
                 if (obj.geometry) obj.geometry.dispose();
@@ -682,6 +674,7 @@ export class ARScene {
             this.scene.remove(s);
         });
         this.presentationSlides = [];
+        this.renderer.render(this.scene, this.camera);
     }
 
     public clearModel() {

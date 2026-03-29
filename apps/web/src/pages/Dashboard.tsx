@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useState, useEffect } from 'react';
-import { Video, Plus, Loader2 } from 'lucide-react';
+import { Video, Plus, Loader2, BarChart3, User } from 'lucide-react';
 import { apiRequest, API_BASE_URL } from '../services/api';
 
 const Dashboard = () => {
@@ -76,9 +76,13 @@ const Dashboard = () => {
                         </h1>
                     </div>
                     <div className="flex items-center gap-4 md:gap-8">
-                        <span className="hidden xs:block text-xs md:text-sm font-bold text-white/40">
+                        <button
+                            onClick={() => navigate('/profile')}
+                            className="hidden xs:flex items-center gap-2 text-xs md:text-sm font-bold text-white/40 hover:text-white transition-colors group"
+                        >
+                            <User className="w-4 h-4 text-purple-400 group-hover:scale-110 transition-transform" />
                             Welcome, <span className="text-white">{user?.name}</span>
-                        </span>
+                        </button>
                         <button
                             onClick={handleLogout}
                             className="bg-red-500/20 text-red-300 border border-red-500/30 px-3 md:px-4 py-2 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest transition-all hover:bg-red-500 hover:text-white hover:border-red-500"
@@ -120,6 +124,30 @@ const Dashboard = () => {
                             {isCreating ? 'Initializing...' : 'Start New Session'}
                         </h3>
                         <p className="text-white/40 font-medium leading-relaxed">Host a new interactive 3D laboratory environment for your students.</p>
+                    </div>
+
+                    {/* Performance Profile */}
+                    <div
+                        className="glass-card p-10 cursor-pointer transition-all hover:-translate-y-2 hover:shadow-2xl group rounded-[32px] md:col-span-2"
+                        onClick={() => navigate('/profile')}
+                    >
+                        <div className="flex items-center justify-between mb-8">
+                            <div className="w-16 h-16 rounded-2xl bg-blue-500/15 text-blue-400 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-all duration-500 shadow-lg group-hover:shadow-blue-600/40">
+                                <BarChart3 className="w-8 h-8" />
+                            </div>
+                            <div className="px-4 py-2 bg-blue-500/10 border border-blue-500/20 rounded-xl text-[10px] font-black uppercase tracking-widest text-blue-400">
+                                New Feature
+                            </div>
+                        </div>
+                        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+                            <div className="max-w-xl">
+                                <h3 className="text-2xl font-black text-white mb-2">Performance Analytics</h3>
+                                <p className="text-white/40 font-medium leading-relaxed">Visualize your learning journey, track focus efficiency, and review comprehensive session intelligence.</p>
+                            </div>
+                            <button className="px-8 py-4 bg-white/5 hover:bg-white/10 text-white rounded-2xl border border-white/10 font-black uppercase tracking-widest text-xs transition-all whitespace-nowrap">
+                                View Profile
+                            </button>
+                        </div>
                     </div>
                 </div>
 
