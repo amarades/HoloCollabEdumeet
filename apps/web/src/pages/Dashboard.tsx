@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useState, useEffect } from 'react';
 import { Video, Plus, Loader2, BarChart3, User } from 'lucide-react';
 import { apiRequest, API_BASE_URL } from '../services/api';
+import { AIChatMenu } from '../components/AIChatMenu';
 
 const Dashboard = () => {
     const { user, logout } = useAuth();
@@ -61,6 +62,7 @@ const Dashboard = () => {
 
     return (
         <div className="min-h-screen flex flex-col">
+            <AIChatMenu />
             <div className="premium-bg">
                 <div className="floating-shape circle s1" />
                 <div className="floating-shape square s4" />

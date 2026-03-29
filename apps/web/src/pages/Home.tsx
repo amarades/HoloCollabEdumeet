@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState, useRef } from 'react';
+import { AIChatMenu } from '../components/AIChatMenu';
 import { Brain, Video, Plus, Shield, Globe, Cpu } from 'lucide-react';
 
 const Home = () => {
@@ -24,6 +25,7 @@ const Home = () => {
 
     return (
         <div className="relative min-h-screen flex flex-col">
+            <AIChatMenu />
             {/* ── Premium Background & Floating Shapes ── */}
             <div className="premium-bg">
                 <div className="floating-shape circle s1" />

@@ -11,7 +11,7 @@ import time
 import uuid
 from urllib.parse import parse_qsl, urlencode
 
-from app.api import auth, sessions, models, observability, livekit_routes as livekit, ai
+from app.api import auth, sessions, models, observability, livekit_routes as livekit, ai, summarize
 from app.db.engine import init_db
 from app.config import settings, get_cors_origins
 
@@ -67,6 +67,7 @@ app.include_router(models.router)
 app.include_router(observability.router)
 app.include_router(livekit.router, prefix="/api/livekit", tags=["livekit"])
 app.include_router(ai.router, prefix="/api/ai", tags=["ai"])
+app.include_router(summarize.router, prefix="/api/summarize", tags=["summarize"])
 
 # Serve uploaded files - directory creation is already handled in config.py
 app.mount("/uploads", StaticFiles(directory=settings.upload_dir), name="uploads")

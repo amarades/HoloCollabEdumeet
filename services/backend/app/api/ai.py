@@ -18,28 +18,28 @@ class AIService:
         if settings.ai_service == "gemini" and settings.gemini_api_key:
             try:
                 self.client = genai.Client(api_key=settings.gemini_api_key)
-                print("✅ Gemini AI client successfully initialized.")
+                print("[OK] Gemini AI client successfully initialized.")
             except Exception as e:
-                print(f"❌ CRITICAL Warning: Failed to initialize Gemini client: {e}")
+                print(f"[ERROR] CRITICAL Warning: Failed to initialize Gemini client: {e}")
                 traceback.print_exc()
         else:
-            print(f"ℹ️ Gemini AI client NOT initialized. Service: {settings.ai_service}, Key Present: {bool(settings.gemini_api_key)}")
+            print(f"[INFO] Gemini AI client NOT initialized. Service: {settings.ai_service}, Key Present: {bool(settings.gemini_api_key)}")
 
     async def generate_content(self, prompt: str, history: Optional[List[dict]] = None) -> str:
-        if settings.ai_service == "mock" or self.client is None:
-            return f"Mock Response for: {prompt[:50]}..."
+        if self.client is None:
+            raise HTTPException(status_code=500, detail="AI Service is not initialized. Please ensure your API key and AI_SERVICE environment variables are set.")
 
         try:
             # If history is provided, we use a chat session
             if history:
                 chat = self.client.aio.chats.create(
-                    model=settings.gemini_model or "gemini-1.5-flash",
+                    model=settings.gemini_model or "gemini-2.0-flash",
                     history=history
                 )
                 response = await chat.send_message(prompt)
             else:
                 response = await self.client.aio.models.generate_content(
-                    model=settings.gemini_model or "gemini-1.5-flash",
+                    model=settings.gemini_model or "gemini-2.0-flash",
                     contents=prompt
                 )
             return response.text

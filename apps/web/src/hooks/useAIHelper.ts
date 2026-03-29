@@ -59,7 +59,11 @@ export const useAIHelper = () => {
             setHistory(prev => [...prev, aiMsg]);
         } catch (err: any) {
             console.error('AI Chat Error:', err);
-            setError(err.message || 'Something went wrong.');
+            let userFriendlyError = err.message || 'Something went wrong.';
+            if (userFriendlyError.includes('429') && userFriendlyError.includes('RESOURCE_EXHAUSTED')) {
+                userFriendlyError = 'You have reached the free AI quota limit. Please wait about 1 minute and try your request again!';
+            }
+            setError(userFriendlyError);
             // Remove the user message if it failed or keep it? 
             // Better to keep it and show error.
         } finally {
@@ -90,7 +94,11 @@ export const useAIHelper = () => {
             const aiMsg: ChatMessage = { role: 'model', text: `📋 **Meeting Summary**\n\n${data.response}` };
             setHistory(prev => [...prev, aiMsg]);
         } catch (err: any) {
-            setError(err.message || 'Failed to generate summary');
+            let userFriendlyError = err.message || 'Failed to generate summary';
+            if (userFriendlyError.includes('429') && userFriendlyError.includes('RESOURCE_EXHAUSTED')) {
+                userFriendlyError = 'You have reached the free AI quota limit. Please wait about 1 minute before summarizing!';
+            }
+            setError(userFriendlyError);
         } finally {
             setIsLoading(false);
         }
@@ -117,7 +125,11 @@ export const useAIHelper = () => {
             const aiMsg: ChatMessage = { role: 'model', text: `📝 **Meeting Notes**\n\n${data.response}` };
             setHistory(prev => [...prev, aiMsg]);
         } catch (err: any) {
-            setError(err.message || 'Failed to generate notes');
+            let userFriendlyError = err.message || 'Failed to generate notes';
+            if (userFriendlyError.includes('429') && userFriendlyError.includes('RESOURCE_EXHAUSTED')) {
+                userFriendlyError = 'You have reached the free AI quota limit. Please wait about 1 minute before generating notes!';
+            }
+            setError(userFriendlyError);
         } finally {
             setIsLoading(false);
         }
