@@ -15,11 +15,28 @@ export const usePresentationSession = ({
     isHost
 }: UsePresentationSessionProps) => {
     const [presentationMode, setPresentationMode] = useState(false);
-    const [currentSlides, setCurrentSlides] = useState<SlideData[]>([
-        { title: 'Introduction', body: "Welcome to today's lesson. We will explore the topic using 3D interactive models." },
-        { title: 'Key Concepts', body: 'Observe the 3D model carefully. Notice the structure, orientation, and components.' },
-        { title: 'Discussion', body: 'How does this structure relate to what we studied previously? Share your observations.' },
-    ]);
+    const [currentSlides, setCurrentSlides] = useState<SlideData[]>(() => {
+        try {
+            const stored = sessionStorage.getItem('lecture_notes');
+            if (stored) {
+                const notes = JSON.parse(stored);
+                return [
+                    { title: 'Summary', body: notes.summary || 'Overview of today\'s topic.' },
+                    { title: 'Key Points', body: (notes.key_points || []).map((p: string) => `• ${p}`).join('\n') },
+                    { title: 'Vocabulary', body: (notes.important_terms || []).join(' • ') },
+                    { title: 'Questions', body: (notes.follow_up_questions || []).map((q: string, i: number) => `${i+1}. ${q}`).join('\n') }
+                ];
+            }
+        } catch (e) {
+            console.error('Failed to load lecture notes for slides:', e);
+        }
+        // Fallback default
+        return [
+            { title: 'Introduction', body: "Welcome to today's lesson. We will explore the topic using 3D interactive models." },
+            { title: 'Key Concepts', body: 'Observe the 3D model carefully. Notice the structure, orientation, and components.' },
+            { title: 'Discussion', body: 'How does this structure relate to what we studied previously? Share your observations.' },
+        ];
+    });
     const [isConverting, setIsConverting] = useState(false);
 
     const handleFileUpload = useCallback(async (file: File) => {

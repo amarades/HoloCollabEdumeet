@@ -1,164 +1,275 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageSquare, X, Send, Bot, User } from 'lucide-react';
-import { useAIHelper } from '../hooks/useAIHelper';
-import clsx from 'clsx'; // Assuming clsx is installed based on vite config
+import { MessageSquare, X, Send } from 'lucide-react';
+import './AIChatMenu.css';
+
+// ─── CONFIG ──────────────────────────────────────────────────────────────────
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
+const GEMINI_MODEL   = "gemini-2.5-flash";
+
+const SYSTEM_PROMPT = `You are EduMeet AI, an intelligent assistant embedded inside HoloCollab EduMeet — an immersive AI-powered classroom platform. 
+You help students with:
+- Summarizing lectures and generating timestamped notes
+- Explaining deep learning, AI, and computer science concepts clearly
+- Analyzing whiteboard notes and collaborative sessions
+- Providing study guidance and concept breakdowns
+- Answering questions about neural networks, NLP, transformers, CNNs, and related topics
+
+Be concise, friendly, and educational. Use markdown-style formatting when helpful (bold key terms, use bullet points for lists). Keep responses focused and practical.`;
+
+const SUGGESTIONS = [
+  "Summarize today's lecture",
+  "Explain backpropagation",
+  "How does attention work?",
+  "Quiz me on CNNs",
+];
+
+// ─── GEMINI API CALL ─────────────────────────────────────────────────────────
+async function callGemini(chatHistory: Message[]) {
+  const contents = chatHistory.map(msg => ({
+    role: msg.role === "ai" ? "model" : "user",
+    parts: [{ text: msg.content }],
+  }));
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        contents,
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 1024,
+        },
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error(err?.error?.message || "Gemini API error");
+  }
+
+  const data = await response.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || "Sorry, I couldn't generate a response.";
+}
+
+// ─── COMPONENTS ──────────────────────────────────────────────────────────────
+
+interface Message {
+  id: number;
+  role: 'user' | 'ai';
+  content: string;
+  time: string;
+}
+
+interface ErrorBannerProps {
+  message: string;
+  onDismiss: () => void;
+}
+
+function ErrorBanner({ message, onDismiss }: ErrorBannerProps) {
+  return (
+    <div className="hc-error-banner">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      <span>{message}</span>
+      <button onClick={onDismiss}>✕</button>
+    </div>
+  );
+}
 
 interface AIChatMenuProps {
-    isStandalone?: boolean;
-    onClose?: () => void;
+  isStandalone?: boolean;
+  onClose?: () => void;
 }
 
 export const AIChatMenu: React.FC<AIChatMenuProps> = ({ isStandalone = false, onClose }) => {
-    const [isOpen, setIsOpen] = useState(isStandalone);
-    const [inputValue, setInputValue] = useState('');
-    const { history, isLoading, error, sendMessage, generateSummary, generateNotes } = useAIHelper();
-    const chatEndsRef = useRef<HTMLDivElement>(null);
+  const [isOpen, setIsOpen] = useState(isStandalone);
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      id: 1,
+      role: "ai",
+      content: "Welcome back! I'm your EduMeet AI assistant powered by Gemini. I can help you summarize lectures, explain concepts, and track your learning progress. What would you like to explore today?",
+      time: "Now",
+    }
+  ]);
+  const [input, setInput] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
-    // Auto-scroll to bottom of chat
-    useEffect(() => {
-        if (isOpen && chatEndsRef.current) {
-            chatEndsRef.current.scrollIntoView({ behavior: "smooth" });
-        }
-    }, [history, isOpen, isLoading]);
+  useEffect(() => {
+    if (isOpen) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, isTyping, isOpen, error]);
 
-    const handleSend = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!inputValue.trim() || isLoading) return;
-        
-        sendMessage(inputValue);
-        setInputValue('');
-    };
+  const now = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-    return (
-        <div className={isStandalone ? "fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" : "fixed bottom-6 right-6 z-50"}>
-            {/* Toggle Button */}
-            {!isOpen && (
-                <button
-                    onClick={() => setIsOpen(true)}
-                    className="flex items-center justify-center p-4 bg-purple-600 hover:bg-purple-700 text-white rounded-full shadow-lg shadow-purple-500/30 transition-all hover:scale-105"
-                    title="Ask AI Assistant"
-                >
-                    <MessageSquare className="w-6 h-6" />
-                </button>
-            )}
+  const sendMessage = async (text?: string) => {
+    const content = (text || input).trim();
+    if (!content || isTyping) return;
+    setInput("");
+    setError(null);
 
-            {/* Chat Window */}
-            {isOpen && (
-                <div className="flex flex-col w-80 sm:w-96 max-h-[500px] h-[80vh] bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
-                    {/* Header */}
-                    <div className="flex items-center justify-between px-4 py-3 bg-slate-800 border-b border-slate-700">
-                        <div className="flex items-center gap-2">
-                            <Bot className="w-5 h-5 text-purple-400" />
-                            <h3 className="font-semibold text-white">Hollo AI</h3>
-                        </div>
-                        <button 
-                            onClick={() => {
-                                setIsOpen(false);
-                                if (onClose) onClose();
-                            }}
-                            className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded-md transition-colors"
-                        >
-                            <X className="w-5 h-5" />
-                        </button>
-                    </div>
+    const userMsg: Message = { id: Date.now(), role: "user", content, time: now() };
+    const updatedHistory = [...messages, userMsg];
 
-                    {/* Chat Area */}
-                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                        {history.length === 0 && (
-                            <div className="text-center text-slate-400 mt-10 text-sm">
-                                <Bot className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                                <p>How can I help you with your meeting or models today?</p>
-                            </div>
-                        )}
+    setMessages(updatedHistory);
+    setIsTyping(true);
 
-                        {history.map((msg, idx) => (
-                            <div 
-                                key={idx} 
-                                className={clsx("flex gap-2 max-w-[85%]", 
-                                    msg.role === 'user' ? "ml-auto flex-row-reverse" : ""
-                                )}
-                            >
-                                <div className={clsx(
-                                    "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center",
-                                    msg.role === 'user' ? "bg-blue-600" : "bg-purple-600"
-                                )}>
-                                    {msg.role === 'user' ? <User className="w-4 h-4 text-white" /> : <Bot className="w-4 h-4 text-white" />}
-                                </div>
-                                <div className={clsx(
-                                    "px-4 py-2 rounded-2xl text-sm",
-                                    msg.role === 'user' 
-                                        ? "bg-blue-600 text-white rounded-tr-sm" 
-                                        : "bg-slate-800 text-slate-200 border border-slate-700 rounded-tl-sm whitespace-pre-wrap"
-                                )}>
-                                    {msg.text}
-                                </div>
-                            </div>
-                        ))}
+    try {
+      // Pass full history (excluding the initial greeting for cleaner context)
+      const historyForAPI = updatedHistory.slice(1);
+      const aiText = await callGemini(historyForAPI);
 
-                        {isLoading && (
-                            <div className="flex gap-2 max-w-[85%]">
-                                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center">
-                                    <Bot className="w-4 h-4 text-white animate-pulse" />
-                                </div>
-                                <div className="px-4 py-3 rounded-2xl bg-slate-800 border border-slate-700 rounded-tl-sm">
-                                    <div className="flex gap-1">
-                                        <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                                        <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                                        <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1,
+        role: "ai",
+        content: aiText,
+        time: now(),
+      }]);
+    } catch (err: any) {
+      setError(err.message || "Failed to reach Gemini. Check your API key.");
+    } finally {
+      setIsTyping(false);
+    }
+  };
 
-                        {error && (
-                            <div className="text-xs text-red-400 text-center p-2 bg-red-900/20 rounded-md border border-red-900/50">
-                                {error}
-                            </div>
-                        )}
-                        
-                        {/* Quick Actions */}
-                        <div className="pt-2 border-t border-slate-800 flex flex-wrap gap-2">
-                            <button 
-                                onClick={() => generateSummary(history.map(m => `${m.role}: ${m.text}`).join('\n'))}
-                                disabled={isLoading || history.length === 0}
-                                className="text-[10px] px-2 py-1 bg-slate-800 text-slate-300 rounded border border-slate-700 hover:bg-slate-700 hover:text-white transition-colors disabled:opacity-30"
-                            >
-                                📋 Summarize
-                            </button>
-                            <button 
-                                onClick={() => generateNotes(history.map(m => `${m.role}: ${m.text}`).join('\n'))}
-                                disabled={isLoading || history.length === 0}
-                                className="text-[10px] px-2 py-1 bg-slate-800 text-slate-300 rounded border border-slate-700 hover:bg-slate-700 hover:text-white transition-colors disabled:opacity-30"
-                            >
-                                📝 Notes
-                            </button>
-                        </div>
+  const handleClose = () => {
+    setIsOpen(false);
+    if (onClose) onClose();
+  };
 
-                        <div ref={chatEndsRef} />
-                    </div>
-
-                    {/* Input Area */}
-                    <div className="p-3 bg-slate-800 border-t border-slate-700">
-                        <form onSubmit={handleSend} className="relative flex items-center">
-                            <input 
-                                type="text" 
-                                value={inputValue}
-                                onChange={(e) => setInputValue(e.target.value)}
-                                placeholder="Ask me anything..." 
-                                disabled={isLoading}
-                                className="w-full bg-slate-900 text-white rounded-full pl-4 pr-12 py-3 text-sm border border-slate-700 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 disabled:opacity-50 transition-colors"
-                            />
-                            <button 
-                                type="submit"
-                                disabled={!inputValue.trim() || isLoading}
-                                className="absolute right-2 p-2 text-white bg-purple-600 rounded-full hover:bg-purple-700 disabled:opacity-50 disabled:hover:bg-purple-600 transition-colors"
-                            >
-                                <Send className="w-4 h-4" />
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            )}
+  const chatContent = (
+    <div className={`holocollab-chat-shell ${!isStandalone ? 'holocollab-chat-floating' : ''}`}>
+      {/* HEADER */}
+      <div className="hc-header">
+        <div className="hc-header-left">
+          <div className="hc-logo-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          <div>
+            <div className="hc-header-title">Holo AI</div>
+            <div className="hc-header-sub">Powered by Gemini 2.5 Flash</div>
+          </div>
         </div>
-    );
+        <div className="flex items-center gap-3">
+          <div className="hc-model-badge">
+            <div className="hc-status-dot" />
+            gemini-2.5-flash
+          </div>
+          <button 
+            onClick={handleClose}
+            className="p-1 text-slate-400 hover:text-white transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+
+      {/* ERROR */}
+      {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}
+
+      {/* MESSAGES */}
+      <div className="hc-messages">
+        {messages.map(msg => (
+          <div key={msg.id} className={`hc-message-row ${msg.role === 'user' ? 'user' : ''}`}>
+            {msg.role === 'ai' && (
+              <div className="hc-avatar hc-ai-avatar">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </div>
+            )}
+            <div className={`hc-bubble ${msg.role === 'user' ? 'hc-user-bubble' : 'hc-ai-bubble'}`}>
+              <p style={{ whiteSpace: "pre-wrap" }}>{msg.content}</p>
+              <span className="hc-timestamp">{msg.time}</span>
+            </div>
+            {msg.role === 'user' && (
+              <div className="hc-avatar hc-user-avatar">U</div>
+            )}
+          </div>
+        ))}
+        {isTyping && (
+          <div className="hc-typing-row">
+            <div className="hc-avatar hc-ai-avatar">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <div className="hc-typing-indicator">
+              <span /><span /><span />
+            </div>
+          </div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* SUGGESTIONS */}
+      <div className="hc-suggestions">
+        {SUGGESTIONS.map(s => (
+          <button 
+            key={s} 
+            className="hc-suggestion-chip" 
+            onClick={() => sendMessage(s)}
+            disabled={isTyping}
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+
+      {/* INPUT */}
+      <div className="hc-input-area">
+        <div className="hc-input-bar">
+          <div className="hc-input-actions">
+            <button className="hc-icon-btn" title="Attach file">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
+              </svg>
+            </button>
+          </div>
+          <input
+            type="text"
+            placeholder="Ask about lectures, concepts..."
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendMessage()}
+            disabled={isTyping}
+          />
+          <button 
+            className="hc-send-btn" 
+            onClick={() => sendMessage()} 
+            disabled={!input.trim() || isTyping}
+          >
+            <Send className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className={isStandalone ? "fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" : "fixed bottom-6 right-6 z-50 flex flex-col items-end"}>
+      {/* Toggle Button */}
+      {!isOpen && !isStandalone && (
+        <button
+          onClick={() => setIsOpen(true)}
+          className="flex items-center justify-center p-4 bg-purple-600 hover:bg-purple-700 text-white rounded-full shadow-lg shadow-purple-500/30 transition-all hover:scale-105"
+          title="Ask AI Assistant"
+        >
+          <MessageSquare className="w-6 h-6" />
+        </button>
+      )}
+
+      {/* Chat Window */}
+      {isOpen && chatContent}
+    </div>
+  );
 };

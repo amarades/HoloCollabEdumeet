@@ -98,6 +98,8 @@ const SessionReport = () => {
     const [showAI, setShowAI] = useState(true);
     const [exporting, setExporting] = useState(false);
     const [exportError, setExportError] = useState<string | null>(null);
+    const [aiSummary, setAiSummary] = useState<string | null>(null);
+    const [isGeneratingAI, setIsGeneratingAI] = useState(false);
 
     // More robust host detection: Teacher role, Admin role, or explicit session_role
     const isHost = 
@@ -163,6 +165,71 @@ const SessionReport = () => {
             setExportError('Export failed.');
         } finally {
             setExporting(false);
+        }
+    };
+
+    const generateDirectAISummary = async () => {
+        if (!sessionId || !report) return;
+        setIsGeneratingAI(true);
+        try {
+            // 1. Fetch Transcripts
+            const tokenResponse = localStorage.getItem(AUTH_TOKEN_KEY);
+            const res = await fetch(`/api/sessions/${sessionId}/transcripts`, {
+                headers: { Authorization: `Bearer ${tokenResponse}` }
+            });
+            if (!res.ok) throw new Error("Failed to fetch transcripts");
+            const data = await res.json();
+            const transcriptText = data.text;
+
+            if (!transcriptText || transcriptText.trim() === '') {
+                setAiSummary("No transcript data was recorded for this session. Make sure the microphone is unmuted during the class.");
+                setIsGeneratingAI(false);
+                return;
+            }
+
+            // 2. Call Gemini Direct
+            const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+            if (!GEMINI_API_KEY) throw new Error("Missing VITE_GEMINI_API_KEY in frontend");
+
+            const prompt = `As an educational assistant, summarize the following class session transcript.
+Topic: ${report?.topic || "General Study"}
+
+Transcript Content:
+${transcriptText}
+
+Provide a structured summary for students. Format nicely using markdown headings (##), bullet points, and bold text. Include:
+1. Executive Summary
+2. Key Concepts Covered
+3. Important Definitions
+4. Summary of Discussions
+5. Action Items or Homework mentioned`;
+
+            const aiRes = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                        systemInstruction: { parts: [{ text: "You are HoloCollab's educational assistant. You output highly structured, professional, beautiful summary notes. Use markdown formatting. Be exceptionally pedagogical." }]}
+                    })
+                }
+            );
+
+            if (!aiRes.ok) throw new Error("Gemini API failed");
+            const aiData = await aiRes.json();
+            const textResponse = aiData.candidates?.[0]?.content?.parts?.[0]?.text;
+            
+            if (textResponse) {
+                setAiSummary(textResponse);
+            } else {
+                setAiSummary("Could not generate summary from transcripts.");
+            }
+        } catch (err: any) {
+            console.error(err);
+            setAiSummary(`Generation failed: ${err.message}`);
+        } finally {
+            setIsGeneratingAI(false);
         }
     };
 
@@ -474,13 +541,47 @@ const SessionReport = () => {
                                             </div>
                                             
                                             <div className="space-y-3 relative z-10">
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-4 h-[2px] bg-blue-500" />
-                                                    <p className="text-blue-300 text-[10px] font-black uppercase tracking-[0.3em]">Executive Digest</p>
+                                                <div className="flex flex-col md:flex-row md:items-center gap-4 justify-between mb-4">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-4 h-[2px] bg-blue-500" />
+                                                        <p className="text-blue-300 text-[10px] font-black uppercase tracking-[0.3em]">AI Summary Notes</p>
+                                                    </div>
+                                                    {!aiSummary && (
+                                                        <button 
+                                                            onClick={generateDirectAISummary}
+                                                            disabled={isGeneratingAI}
+                                                            className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-blue-600/20 to-purple-600/20 hover:from-blue-600/40 hover:to-purple-600/40 border border-blue-500/30 text-white rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all shadow-xl"
+                                                        >
+                                                            {isGeneratingAI ? <Bot size={14} className="animate-spin" /> : <Bot size={14} />}
+                                                            {isGeneratingAI ? 'Analyzing...' : 'Generate AI Notes'}
+                                                        </button>
+                                                    )}
                                                 </div>
-                                                <p className="text-white/80 text-base leading-relaxed font-medium italic">
-                                                    "{report.insights.summary}"
-                                                </p>
+                                                
+                                                {isGeneratingAI ? (
+                                                    <div className="py-8 flex flex-col items-center justify-center space-y-4">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-2 h-2 rounded-full bg-blue-500 animate-bounce" />
+                                                            <div className="w-2 h-2 rounded-full bg-blue-500 animate-bounce [animation-delay:0.2s]" />
+                                                            <div className="w-2 h-2 rounded-full bg-blue-500 animate-bounce [animation-delay:0.4s]" />
+                                                        </div>
+                                                        <p className="text-blue-300/50 text-xs italic font-black uppercase tracking-widest">Synthesizing raw transcripts...</p>
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-white/80 text-sm leading-relaxed font-medium max-w-none">
+                                                        {aiSummary ? (
+                                                            <div style={{ whiteSpace: "pre-wrap" }} className="prose prose-invert prose-p:text-white/80 prose-headings:text-white prose-a:text-purple-400">
+                                                                {aiSummary}
+                                                            </div>
+                                                        ) : (
+                                                            <p className="italic text-white/50 border-l-2 border-white/10 pl-4 py-2">
+                                                                Click 'Generate AI Notes' to synthesize the raw class audio into structured study notes for participants.
+                                                                <br/><br/>
+                                                                Backend Core Diagnostic Status: {report.insights.summary}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                             
                                             <div className="space-y-3 pt-6 border-t border-white/10 relative z-10">

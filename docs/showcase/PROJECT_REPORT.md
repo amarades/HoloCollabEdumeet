@@ -44,5 +44,5 @@ The core of the application where users interact with 3D models, engage with the
 - **Frontend**: Vite + React + Three.js
 - **Backend**: FastAPI + SQLAlchemy
 - **Realtime**: WebSockets + LiveKit
-- **AI**: Google Gemini (google-genai SDK)
+- **AI**: Google Gemini 2.5 Flash (Direct REST Integration & google-genai)
 - **Deployment**: Ready for deployment via `deploy-free.sh`

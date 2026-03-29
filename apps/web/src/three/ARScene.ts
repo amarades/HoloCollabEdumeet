@@ -633,19 +633,31 @@ export class ARScene {
 
     public nextSlide() {
         if (this.presentationSlides.length === 0) return;
-        if (this.isSlideFullscreen) this.toggleFullscreenSlide();
+        
+        const wasFullscreen = this.isSlideFullscreen;
+        if (wasFullscreen) this.toggleFullscreenSlide(); // Restore previous slide
+
         this.presentationSlides[this.currentSlideIndex].visible = false;
         this.currentSlideIndex = (this.currentSlideIndex + 1) % this.presentationSlides.length;
         this.presentationSlides[this.currentSlideIndex].visible = true;
+
+        if (wasFullscreen) this.toggleFullscreenSlide(); // Bring new slide front and center
+
         this.renderer.render(this.scene, this.camera);
     }
 
     public prevSlide() {
         if (this.presentationSlides.length === 0) return;
-        if (this.isSlideFullscreen) this.toggleFullscreenSlide();
+        
+        const wasFullscreen = this.isSlideFullscreen;
+        if (wasFullscreen) this.toggleFullscreenSlide(); // Restore previous slide
+
         this.presentationSlides[this.currentSlideIndex].visible = false;
         this.currentSlideIndex = (this.currentSlideIndex - 1 + this.presentationSlides.length) % this.presentationSlides.length;
         this.presentationSlides[this.currentSlideIndex].visible = true;
+
+        if (wasFullscreen) this.toggleFullscreenSlide(); // Bring new slide front and center
+
         this.renderer.render(this.scene, this.camera);
     }
 

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Mic, MicOff, Sparkles, Loader2, ArrowRight, ArrowLeft, Brain, Tag, HelpCircle, BookOpen, Lightbulb } from 'lucide-react';
 import { apiRequest } from '../services/api';
+import { AIChatMenu } from '../components/AIChatMenu';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface LectureNotes {
@@ -9,6 +10,38 @@ interface LectureNotes {
     key_points: string[];
     important_terms: string[];
     follow_up_questions: string[];
+}
+
+// ─── Config & AI Helper ─────────────────────────────────────────────────────
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
+const GEMINI_MODEL   = "gemini-2.5-flash";
+
+async function callGeminiDirect(prompt: string, systemInstruction: string) {
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: systemInstruction }] },
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.7,
+          responseMimeType: "application/json",
+        },
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error(err?.error?.message || "Gemini API error");
+  }
+
+  const data = await response.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error("No text generated");
+  return JSON.parse(text);
 }
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -140,10 +173,15 @@ const TopicPrep = () => {
         setAutoModel(null);
         setNotes(null);
         try {
-            const result = await apiRequest('/api/ai/topic-detect', {
-                method: 'POST',
-                body: JSON.stringify({ transcript: input }),
-            });
+            const systemPrompt = `You are an educational topic detector. Extract the core educational topic and up to 5 keywords from the given transcript/text. 
+Return ONLY a JSON dictionary with the keys:
+- "topic": string (the core topic)
+- "keywords": string[] (up to 5 keywords)
+- "auto_load_model": { "name": string, "thumbnail": string } (ONLY if there is a highly relevant, highly visual 3D model that should be loaded. Select an emoji for the thumbnail. If no visual model is relevant, omit this key entirely.)
+Do not wrap in markdown blocks if using responseMimeType JSON.`;
+
+            const result = await callGeminiDirect(`Transcript: "${input}"`, systemPrompt);
+
             setDetected(result);
             if (result.auto_load_model) {
                 setAutoModel(result.auto_load_model);
@@ -153,7 +191,8 @@ const TopicPrep = () => {
             }
             // Auto-save to sessionStorage
             if (result.topic) sessionStorage.setItem('detected_topic', result.topic);
-        } catch {
+        } catch (err: any) {
+            console.error("Gemini API Error (Topic Detect):", err);
             // Simple keyword fallback
             const words = input.split(/\s+/).filter(w => w.length > 3);
             const topic = words.slice(0, 3).join(' ');
@@ -171,17 +210,23 @@ const TopicPrep = () => {
         setIsGenerating(true);
         try {
             const input = detected.topic || manualTopic || transcript;
-            const result = await apiRequest('/api/ai/generate-notes', {
-                method: 'POST',
-                body: JSON.stringify({ topic: input, transcript }),
-            });
+            const systemPrompt = `You are an educational AI assistant. Convert the provided user topic/transcript into structured, clean lecture notes.
+Return ONLY a JSON dictionary with the exact keys:
+- "summary": string (a comprehensive summary)
+- "key_points": string[] (bullet points of core concepts)
+- "important_terms": string[] (vocabulary terms)
+- "follow_up_questions": string[] (questions to ask students)`;
+
+            const result = await callGeminiDirect(`Topic/Transcript: "${input}"`, systemPrompt);
+
             setNotes(result);
             sessionStorage.setItem('lecture_notes', JSON.stringify(result));
-        } catch {
+        } catch (err: any) {
+            console.error("Gemini API Error (Notes Generate):", err);
             const n: LectureNotes = {
                 summary: `Introduction to ${detected.topic}.`,
                 key_points: [`Overview of ${detected.topic}`, 'Core concepts', 'Practical applications'],
-                important_terms: detected.keywords.slice(0, 5),
+                important_terms: detected.keywords?.slice(0, 5) || [],
                 follow_up_questions: [`What are the fundamentals of ${detected.topic}?`],
             };
             setNotes(n);
@@ -429,6 +474,8 @@ const TopicPrep = () => {
                     <ArrowRight className="w-5 h-5" />
                 </button>
             </div>
+
+            <AIChatMenu />
         </div>
     );
 };

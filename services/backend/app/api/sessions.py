@@ -316,6 +316,24 @@ async def save_session_transcript(session_id: str, text: str, user: dict = Depen
     return {"status": "success"}
 
 
+@router.get("/{session_id}/transcripts")
+async def get_session_transcripts(session_id: str, user: dict = Depends(get_current_user_token)):
+    """Retrieve full transcript text for a session."""
+    session = await db.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+        
+    participants = await db.list_attendance(session_id)
+    is_host = (session.host_id == user.get("id")) or (user.get("role") in {"teacher", "instructor", "admin"})
+    is_participant = any(p.get("user_id") == user.get("id") or p.get("user_name") == user.get("name") for p in participants)
+    
+    if not is_host and not is_participant:
+         raise HTTPException(status_code=403, detail="Only session participants can view transcripts")
+
+    transcripts = await db.get_transcripts(session_id)
+    return {"text": " ".join([t.text for t in transcripts])}
+
+
 @router.get("/{session_id}/report")
 async def get_session_report(session_id: str, user: dict = Depends(get_current_user_token)):
     """Return a post-session analytics report. Only host access is allowed."""
