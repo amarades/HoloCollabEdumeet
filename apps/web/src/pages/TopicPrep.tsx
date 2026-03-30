@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Mic, MicOff, Sparkles, Loader2, ArrowRight, ArrowLeft, Brain, Tag, HelpCircle, BookOpen, Lightbulb } from 'lucide-react';
-import { apiRequest } from '../services/api';
 import { AIChatMenu } from '../components/AIChatMenu';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -14,7 +13,7 @@ interface LectureNotes {
 
 // ─── Config & AI Helper ─────────────────────────────────────────────────────
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
-const GEMINI_MODEL   = "gemini-2.5-flash";
+const GEMINI_MODEL   = "gemini-2.5-flash-lite";
 
 async function callGeminiDirect(prompt: string, systemInstruction: string) {
   const response = await fetch(

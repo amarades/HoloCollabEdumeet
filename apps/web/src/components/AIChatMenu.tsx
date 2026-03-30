@@ -4,7 +4,7 @@ import './AIChatMenu.css';
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
-const GEMINI_MODEL   = "gemini-2.5-flash";
+const GEMINI_MODEL   = "gemini-2.5-flash-lite";
 
 const SYSTEM_PROMPT = `You are EduMeet AI, an intelligent assistant embedded inside HoloCollab EduMeet — an immersive AI-powered classroom platform. 
 You help students with:
@@ -156,13 +156,13 @@ export const AIChatMenu: React.FC<AIChatMenuProps> = ({ isStandalone = false, on
           </div>
           <div>
             <div className="hc-header-title">Holo AI</div>
-            <div className="hc-header-sub">Powered by Gemini 2.5 Flash</div>
+            <div className="hc-header-sub">Powered by Gemini 2.5 Flash-Lite</div>
           </div>
         </div>
         <div className="flex items-center gap-3">
           <div className="hc-model-badge">
             <div className="hc-status-dot" />
-            gemini-2.5-flash
+            gemini-2.5-flash-lite
           </div>
           <button 
             onClick={handleClose}
