@@ -3,7 +3,7 @@ import { MessageSquare, X, Send } from 'lucide-react';
 import './AIChatMenu.css';
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "AIzaSyAarkXMp1O7UqsMspE9iy2ltJaNqZt_QS8";
 const GEMINI_MODEL   = "gemini-2.5-flash-lite";
 
 const SYSTEM_PROMPT = `You are EduMeet AI, an intelligent assistant embedded inside HoloCollab EduMeet — an immersive AI-powered classroom platform. 

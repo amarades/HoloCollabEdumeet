@@ -58,7 +58,7 @@ def _get_gemini_client() -> genai.Client:
 async def _call_gemini(text: str, mode: SummarizeMode) -> str:
     """Build the prompt and call the Gemini API."""
     prompt = _PROMPTS[mode].format(text=text)
-    model = settings.gemini_model or "gemini-1.5-flash"
+    model = settings.gemini_model or "gemini-2.5-flash-lite"
 
     try:
         client = _get_gemini_client()

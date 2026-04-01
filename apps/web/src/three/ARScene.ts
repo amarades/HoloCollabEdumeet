@@ -368,6 +368,8 @@ export class ARScene {
                 uGlowColor: { value: new THREE.Color(0x6366f1) }, // Indigo glow
                 uOpacity: { value: 0.8 },
                 uFilterMode: { value: 0.0 }, // 0: Blue, 1: Red, 2: Realistic
+                uMainTexture: { value: null },
+                uHasTexture: { value: 0.0 },
             },
             vertexShader: `
                 varying vec3 vNormal;
@@ -386,13 +388,13 @@ export class ARScene {
                 uniform vec3 uGlowColor;
                 uniform float uOpacity;
                 uniform float uFilterMode;
+                uniform sampler2D uMainTexture;
+                uniform float uHasTexture;
                 varying vec3 vNormal;
                 varying vec3 vPosition;
                 varying vec2 vUv;
 
                 void main() {
-                    // Glow colors based on mode
-
                     // Glow colors based on mode
                     vec3 coreColor = uColor;
                     vec3 glowColor = uGlowColor;
@@ -414,8 +416,21 @@ export class ARScene {
                     // Grid Pattern (Subtle)
                     float grid = (sin(vPosition.x * 40.0) * sin(vPosition.z * 40.0)) * 0.05 + 0.95;
                     
-                    vec3 finalColor = mix(coreColor, glowColor, fresnel);
+                    // Texture Sampling (for labels/writing)
+                    vec4 texColor = vec4(1.0);
+                    if (uHasTexture > 0.5) {
+                        texColor = texture2D(uMainTexture, vUv);
+                    }
+
+                    vec3 baseColor = mix(coreColor, glowColor, fresnel);
+                    
+                    // Mix hologram color with texture (preserving details/writing)
+                    vec3 finalColor = mix(baseColor, texColor.rgb * baseColor * 1.5, uHasTexture * 0.6);
+                    
                     float alpha = (uOpacity * 0.5 + fresnel * 0.5) * scanline * flicker * grid;
+                    if (uHasTexture > 0.5) {
+                        alpha *= (0.7 + texColor.a * 0.3);
+                    }
                     
                     gl_FragColor = vec4(finalColor, alpha);
                 }
@@ -439,7 +454,7 @@ export class ARScene {
                         }
                         
                         // Create and store hologram material
-                        child.userData.hologramMaterial = new THREE.ShaderMaterial({
+                        const mat = new THREE.ShaderMaterial({
                             uniforms: THREE.UniformsUtils.clone(hologramShader.uniforms),
                             vertexShader: hologramShader.vertexShader,
                             fragmentShader: hologramShader.fragmentShader,
@@ -448,6 +463,15 @@ export class ARScene {
                             depthWrite: false,
                             blending: THREE.AdditiveBlending
                         });
+
+                        // Map original texture to shader
+                        const originalMaterial = child.userData.originalMaterial;
+                        if (originalMaterial.map) {
+                            mat.uniforms.uMainTexture.value = originalMaterial.map;
+                            mat.uniforms.uHasTexture.value = 1.0;
+                        }
+
+                        child.userData.hologramMaterial = mat;
 
                         // Initialize with current filter (swaps material if needed)
                         this.applyFilterToMesh(child);
@@ -520,6 +544,9 @@ export class ARScene {
                     child.material.uniforms.uTime.value = time;
                 }
             });
+
+            // Keep model within screen boundaries
+            this.clampModelPosition();
         }
 
         // Animate point light intensity for pulsing glow
@@ -874,6 +901,14 @@ export class ARScene {
         }
     }
 
+    public deselectPart() {
+        if (this.selectedPart) {
+            (this.selectedPart.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.2;
+            this.selectedPart = null;
+            if (this.onPartSelected) this.onPartSelected('');
+        }
+    }
+
     public selectPart(partName: string) {
         if (!this.currentModel) return;
 
@@ -1036,6 +1071,51 @@ export class ARScene {
         this.baseRotation.x += deltaY * 0.01;
         this.currentModel.rotation.copy(this.baseRotation);
         this.notifyStateChange();
+    }
+
+    public moveModelByDelta(deltaX: number, deltaY: number) {
+        if (!this.currentModel) return;
+        
+        // Convert screen-space delta to 3D world delta
+        // Sensitivity factor for smooth movement
+        const moveSpeed = 0.012; 
+        
+        this.basePosition.x += deltaX * moveSpeed;
+        this.basePosition.y -= deltaY * moveSpeed; // Invert Y for screen-to-world mapping
+        
+        this.currentModel.position.copy(this.basePosition);
+        this.notifyStateChange();
+    }
+
+    /**
+     * Clamps the model position to keep it within the screen boundaries.
+     * Uses the camera view frustum to define the limits.
+     */
+    private clampModelPosition() {
+        if (!this.currentModel) return;
+
+        // Approximate boundaries at the model's Z depth
+        // Camera is usually at z=5, model roughly at z=0
+        const distance = Math.abs(this.camera.position.z - this.currentModel.position.z);
+        const vFOV = (this.camera.fov * Math.PI) / 180;
+        const height = 2 * Math.tan(vFOV / 2) * distance;
+        const width = height * this.camera.aspect;
+
+        const margin = 0.8; // Safe margin to keep model fully visible
+        const maxX = (width / 2) - margin;
+        const maxY = (height / 2) - margin;
+
+        const oldX = this.basePosition.x;
+        const oldY = this.basePosition.y;
+
+        this.basePosition.x = THREE.MathUtils.clamp(this.basePosition.x, -maxX, maxX);
+        this.basePosition.y = THREE.MathUtils.clamp(this.basePosition.y, -maxY, maxY);
+
+        // sync model position back if clamped
+        if (oldX !== this.basePosition.x || oldY !== this.basePosition.y) {
+            this.currentModel.position.x = this.basePosition.x;
+            this.currentModel.position.y = this.basePosition.y;
+        }
     }
 
     public dispose() {

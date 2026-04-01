@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle2, Hand } from 'lucide-react';
+import { Hand } from 'lucide-react';
 import { ConnectionQuality } from '../../ConnectionQuality';
 
 interface SessionHeaderProps {
@@ -9,6 +9,7 @@ interface SessionHeaderProps {
     currentGesture: string;
     sceneObjectCount: number;
     handRaised: boolean;
+    isTranscribing: boolean;
 }
 
 export const SessionHeader: React.FC<SessionHeaderProps> = React.memo(({
@@ -17,40 +18,54 @@ export const SessionHeader: React.FC<SessionHeaderProps> = React.memo(({
     gesturesEnabled,
     currentGesture,
     sceneObjectCount,
-    handRaised
+    handRaised,
+    isTranscribing
 }) => {
     return (
-        <div className="absolute top-6 left-6 flex flex-col gap-3 z-30 pointer-events-none">
+        <div className="absolute top-8 left-8 flex flex-col gap-4 z-30 pointer-events-none">
             {/* Connection Status */}
-            <div className="flex items-center gap-2 bg-white/90 border border-gray-200 shadow-sm backdrop-blur-md rounded-full px-4 py-2">
+            <div className="flex items-center gap-3 bg-[#1a1919]/60 border border-white/5 shadow-[0_8px_32px_rgba(0,0,0,0.3)] backdrop-blur-xl rounded-full px-5 py-2.5 transition-all">
                 {isConnected
-                    ? <CheckCircle2 className="w-4 h-4 text-green-500" />
-                    : <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />}
-                <span className="text-gray-700 text-sm font-medium">
-                    {isConnected ? 'Connected' : 'Reconnecting…'}
+                    ? <div className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]" />
+                    : <div className="w-2 h-2 rounded-full bg-red-400 animate-pulse shadow-[0_0_10px_rgba(248,113,113,0.5)]" />}
+                <span className="text-white text-xs font-black uppercase tracking-[0.15em]">
+                    {isConnected ? 'Nexus Connected' : 'Wait... Protocol Offline'}
                 </span>
+                <div className="ml-2 h-3 w-[1px] bg-white/10" />
                 <ConnectionQuality quality={connectionQuality} />
             </div>
 
-            {/* Gesture Detection Status */}
-            <div className={`flex items-center gap-2 bg-white/90 border ${gesturesEnabled ? 'border-primary/30 text-primary' : 'border-gray-200 text-gray-500'} shadow-sm backdrop-blur-md rounded-full px-3 md:px-4 py-1.5 md:py-2 transition-colors`}>
-                <Hand className="w-3 md:w-4 h-3 md:h-4" />
-                <span className="text-xs md:text-sm font-medium">{currentGesture}</span>
+            <div className="flex flex-wrap gap-3">
+                {/* Gesture Detection Status */}
+                <div className={`flex items-center gap-2.5 bg-[#1a1919]/60 border shadow-[0_8px_32px_rgba(0,0,0,0.3)] backdrop-blur-xl rounded-full px-4 py-2 transition-all ${gesturesEnabled ? 'border-primary/40' : 'border-white/5'}`}>
+                    <Hand className={`w-3.5 h-3.5 ${gesturesEnabled ? 'text-primary' : 'text-white/40'}`} />
+                    <span className={`text-[10px] font-black uppercase tracking-widest ${gesturesEnabled ? 'text-white' : 'text-white/40'}`}>
+                        {currentGesture || (gesturesEnabled ? 'Ready' : 'Gestures Off')}
+                    </span>
+                </div>
+
+                {/* Scene Object Count */}
+                {sceneObjectCount > 0 && (
+                    <div className="flex items-center gap-2.5 bg-[#1a1919]/60 border border-white/5 shadow-[0_8px_32px_rgba(0,0,0,0.3)] backdrop-blur-xl rounded-full px-4 py-2">
+                        <span className="text-[10px] font-black text-secondary tracking-widest uppercase">{sceneObjectCount} Modules Linked</span>
+                    </div>
+                )}
+
+                {/* Hand Raised Indicator */}
+                {handRaised && (
+                    <div className="flex items-center gap-2.5 bg-primary/20 border border-primary/40 shadow-[0_0_20px_rgba(168,85,247,0.2)] backdrop-blur-xl rounded-full px-4 py-2 animate-pulse">
+                        <span className="text-[10px] font-black text-white tracking-widest uppercase">✋ Intent Flagged</span>
+                    </div>
+                )}
+
+                {/* Transcription Status */}
+                {isTranscribing && (
+                    <div className="flex items-center gap-2.5 bg-secondary/20 border border-secondary/40 shadow-[0_0_20px_rgba(236,72,153,0.2)] backdrop-blur-xl rounded-full px-4 py-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
+                        <span className="text-[10px] font-black text-white uppercase tracking-widest">Live Flow Active</span>
+                    </div>
+                )}
             </div>
-
-            {/* Scene Object Count */}
-            {sceneObjectCount > 0 && (
-                <div className="flex items-center gap-2 bg-white/90 border border-violet-200 text-violet-600 shadow-sm backdrop-blur-md rounded-full px-4 py-2">
-                    <span className="text-sm font-medium">{sceneObjectCount} object{sceneObjectCount !== 1 ? 's' : ''} in scene</span>
-                </div>
-            )}
-
-            {/* Hand Raised Indicator */}
-            {handRaised && (
-                <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 shadow-sm backdrop-blur-md rounded-full px-4 py-2">
-                    <span className="text-sm font-medium">✋ Hand raised</span>
-                </div>
-            )}
         </div>
     );
 });

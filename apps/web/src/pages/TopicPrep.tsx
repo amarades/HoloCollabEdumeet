@@ -12,7 +12,7 @@ interface LectureNotes {
 }
 
 // ─── Config & AI Helper ─────────────────────────────────────────────────────
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "AIzaSyAarkXMp1O7UqsMspE9iy2ltJaNqZt_QS8";
 const GEMINI_MODEL   = "gemini-2.5-flash-lite";
 
 async function callGeminiDirect(prompt: string, systemInstruction: string) {

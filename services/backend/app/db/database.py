@@ -8,7 +8,8 @@ from app.db.models import (
     ModelMetadata as PydanticModelMetadata,
     Transcript as PydanticTranscript,
     AINote as PydanticAINote,
-    Message as PydanticMessage
+    Message as PydanticMessage,
+    VoiceRecording as PydanticVoiceRecording
 )
 from app.db.schema import (
     DBSession, 
@@ -16,7 +17,8 @@ from app.db.schema import (
     DBModelMetadata, 
     DBTranscript, 
     DBAINote, 
-    DBMessage
+    DBMessage,
+    DBVoiceRecording
 )
 from app.db.engine import async_session_maker
 import uuid
@@ -86,7 +88,14 @@ def _map_message(db_obj: DBMessage) -> PydanticMessage:
         message=db_obj.message,
         created_at=db_obj.created_at,
     )
-
+def _map_voice_recording(db_obj: DBVoiceRecording) -> PydanticVoiceRecording:
+    return PydanticVoiceRecording(
+        id=db_obj.id,
+        session_id=db_obj.session_id,
+        file_path=db_obj.file_path,
+        duration_seconds=db_obj.duration_seconds,
+        created_at=db_obj.created_at,
+    )
 
 class PersistenceLayer:
     """PostgreSQL-backed persistence layer using SQLAlchemy async."""
@@ -335,6 +344,27 @@ class PersistenceLayer:
                 if "hashed_password" in user_data:
                     obj.hashed_password = user_data["hashed_password"]
             await db.commit()
+
+
+    # ── Voice Recordings ──────────────────────────────────────────────────────
+
+    async def save_voice_recording(self, rec: PydanticVoiceRecording):
+        async with async_session_maker() as db:
+            db_obj = DBVoiceRecording(
+                id=rec.id,
+                session_id=rec.session_id,
+                file_path=rec.file_path,
+                duration_seconds=rec.duration_seconds,
+                created_at=rec.created_at,
+            )
+            db.add(db_obj)
+            await db.commit()
+
+    async def get_voice_recordings(self, session_id: str) -> List[PydanticVoiceRecording]:
+        async with async_session_maker() as db:
+            stmt = select(DBVoiceRecording).where(DBVoiceRecording.session_id == session_id).order_by(DBVoiceRecording.created_at)
+            result = await db.execute(stmt)
+            return [_map_voice_recording(r) for r in result.scalars().all()]
 
     # ── Models ────────────────────────────────────────────────────────────────
 

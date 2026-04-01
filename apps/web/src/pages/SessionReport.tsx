@@ -1,13 +1,30 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
-    Users, Clock, Brain, TrendingUp, CheckCircle, AlertTriangle, 
-    BarChart3, Award, Home, LayoutDashboard, ChevronDown, Bot,
-    ChevronLeft, Share2
+    Loader2, 
+    Download, 
+    CheckCircle2, 
+    BarChart3, 
+    Mic, 
+    Play, 
+    Users, 
+    Brain, 
+    Clock, 
+    Zap,
+    History,
+    ArrowLeft,
+    TrendingUp,
+    FileText
 } from 'lucide-react';
 import { apiRequest, AUTH_TOKEN_KEY } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useTranscription } from '../context/TranscriptionContext';
+import Sidebar from '../components/Sidebar';
+import TopBar from '../components/TopBar';
+import { AIChatMenu } from '../components/AIChatMenu';
+
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || 'AIzaSyAarkXMp1O7UqsMspE9iy2ltJaNqZt_QS8';
 
 interface StudentStat {
     name: string;
@@ -34,123 +51,93 @@ interface ReportData {
 }
 
 const ATTENTION_COLOR = (score: number) => {
-    if (score >= 75) return 'text-green-400';
-    if (score >= 50) return 'text-amber-400';
+    if (score >= 75) return 'text-primary';
+    if (score >= 50) return 'text-secondary';
     return 'text-red-400';
 };
 
 const ATTENTION_BG = (score: number) => {
-    if (score >= 75) return 'bg-green-500';
-    if (score >= 50) return 'bg-amber-400';
+    if (score >= 75) return 'bg-primary';
+    if (score >= 50) return 'bg-secondary';
     return 'bg-red-400';
-};
-
-const GET_RATING_LABEL = (score: number) => {
-    if (score >= 80) return 'Excellent';
-    if (score >= 60) return 'Good';
-    if (score >= 40) return 'Fair';
-    return 'Needs Attention';
 };
 
 const RATING_INFO = (rating: string) => {
     switch (rating) {
-        case 'Excellent': return { label: 'Excellent', icon: '🏆', color: 'text-green-400', bg: 'bg-green-500/10' };
-        case 'Good': return { label: 'Good', icon: '👍', color: 'text-blue-400', bg: 'bg-blue-500/10' };
-        case 'Fair': return { label: 'Fair', icon: '📊', color: 'text-amber-400', bg: 'bg-amber-500/10' };
-        case 'Needs Attention': return { label: 'Needs Attention', icon: '⚠️', color: 'text-red-400', bg: 'bg-red-500/10' };
-        default: return { label: rating, icon: '📝', color: 'text-purple-400', bg: 'bg-purple-500/10' };
+        case 'Excellent': return { label: 'Excellent', icon: '🏆', color: 'text-primary', bg: 'bg-primary/10' };
+        case 'Good': return { label: 'Good', icon: '👍', color: 'text-secondary', bg: 'bg-secondary/10' };
+        case 'Fair': return { label: 'Fair', icon: '📊', color: 'text-accent', bg: 'bg-accent/10' };
+        case 'Needs Attention': return { label: 'Needs Attention', icon: '⚠️', color: 'text-red-400', bg: 'bg-red-400/10' };
+        default: return { label: rating, icon: '📝', color: 'text-primary', bg: 'bg-primary/10' };
     }
-};
-
-const containerVariants: any = {
-    hidden: { opacity: 0 },
-    visible: { 
-        opacity: 1,
-        transition: { staggerChildren: 0.1 }
-    }
-};
-
-const itemVariants: any = {
-    hidden: { opacity: 0, y: 30 },
-    visible: { 
-        opacity: 1, 
-        y: 0, 
-        transition: { type: "spring" as const, stiffness: 100 } 
-    }
-};
-
-const cardHover: any = {
-    y: -8,
-    transition: { type: "spring" as const, stiffness: 300, damping: 20 }
 };
 
 const SessionReport = () => {
     const { sessionId } = useParams<{ sessionId: string }>();
     const navigate = useNavigate();
-    const { token, user } = useAuth();
-    const isGuest = token === 'guest';
-
-    const [report, setReport] = useState<ReportData | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [sortConfig, setSortConfig] = useState<{ key: 'name' | 'duration_minutes' | 'attention_score', direction: 'asc' | 'desc' }>({ key: 'attention_score', direction: 'desc' });
-    const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
-    const [showAI, setShowAI] = useState(true);
-    const [exporting, setExporting] = useState(false);
-    const [exportError, setExportError] = useState<string | null>(null);
-    const [aiSummary, setAiSummary] = useState<string | null>(null);
-    const [isGeneratingAI, setIsGeneratingAI] = useState(false);
-
-    // More robust host detection: Teacher role, Admin role, or explicit session_role
+    const { user } = useAuth();
     const isHost = 
         user?.role === 'teacher' || 
         user?.role === 'instructor' || 
         user?.role === 'admin' || 
         sessionStorage.getItem('session_role') === 'host';
 
-    const toggleAI = () => {
-        setShowAI(!showAI);
-        if (!showAI) {
-            // Smooth scroll to the AI section shortly after it expands
-            setTimeout(() => {
-                const aiSection = document.getElementById('ai-insights-section');
-                aiSection?.scrollIntoView({ behavior: 'smooth' });
-            }, 300);
+    const [report, setReport] = useState<ReportData | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [aiSummary, setAiSummary] = useState<string | null>(null);
+    const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+    const [recordings, setRecordings] = useState<any[]>([]);
+    const { isRecordingPostSession, recordingDuration } = useTranscription();
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [syncProgress, setSyncProgress] = useState(0);
+
+    const [sortConfig] = useState<{ key: 'name' | 'duration_minutes' | 'attention_score', direction: 'asc' | 'desc' }>({ key: 'attention_score', direction: 'desc' });
+
+    useEffect(() => {
+        if (!sessionId) return;
+        let pollInterval: any;
+        let attempts = 0;
+        const fetchData = async () => {
+            try {
+                const res = await apiRequest(`/api/sessions/${sessionId}/report`);
+                if (res && res.session_id) {
+                    setReport(res);
+                    setLoading(false);
+                    const tRes = await apiRequest(`/api/sessions/${sessionId}/transcripts`);
+                    if (tRes && tRes.text && tRes.text.length > 10) {
+                        clearInterval(pollInterval);
+                        setIsSyncing(false);
+                    } else {
+                        setIsSyncing(true);
+                    }
+                }
+            } catch (err) {
+                console.warn('[Sync] Report not ready yet, retrying...');
+            }
+        };
+        fetchData();
+        pollInterval = setInterval(() => {
+            attempts++;
+            if (attempts >= 24) { clearInterval(pollInterval); setIsSyncing(false); return; }
+            fetchData();
+        }, 5000);
+        return () => clearInterval(pollInterval);
+    }, [sessionId]);
+
+    useEffect(() => {
+        if (isRecordingPostSession) {
+            setIsSyncing(true);
+            setSyncProgress(Math.min(100, (recordingDuration / 120) * 100));
         }
-    };
-
-    const toggleRow = (index: number) => {
-        const newExpanded = new Set(expandedRows);
-        if (newExpanded.has(index)) newExpanded.delete(index);
-        else newExpanded.add(index);
-        setExpandedRows(newExpanded);
-    };
-
-    const handleSort = (key: 'name' | 'duration_minutes' | 'attention_score') => {
-        setSortConfig(prev => ({
-            key,
-            direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc'
-        }));
-    };
+    }, [isRecordingPostSession, recordingDuration]);
 
     const handleExportCSV = async () => {
         if (!sessionId) return;
-        setExporting(true);
-        setExportError(null);
         try {
             const token = localStorage.getItem(AUTH_TOKEN_KEY);
-            if (!token || token === 'guest') {
-                setExportError('Sign in required for export.');
-                return;
-            }
-
-            // Always use base path for proxy efficiency
             const endpoint = `/api/sessions/${sessionId}/export/csv`;
-            const response = await fetch(endpoint, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
+            const response = await fetch(endpoint, { headers: { Authorization: `Bearer ${token}` } });
             if (!response.ok) throw new Error(`Status ${response.status}`);
-
             const blob = await response.blob();
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
@@ -159,12 +146,8 @@ const SessionReport = () => {
             document.body.appendChild(link);
             link.click();
             link.remove();
-            URL.revokeObjectURL(url);
         } catch (err) {
-            console.error(err);
-            setExportError('Export failed.');
-        } finally {
-            setExporting(false);
+            console.error('Export failed.', err);
         }
     };
 
@@ -172,62 +155,28 @@ const SessionReport = () => {
         if (!sessionId || !report) return;
         setIsGeneratingAI(true);
         try {
-            // 1. Fetch Transcripts
             const tokenResponse = localStorage.getItem(AUTH_TOKEN_KEY);
             const res = await fetch(`/api/sessions/${sessionId}/transcripts`, {
                 headers: { Authorization: `Bearer ${tokenResponse}` }
             });
-            if (!res.ok) throw new Error("Failed to fetch transcripts");
             const data = await res.json();
             const transcriptText = data.text;
-
             if (!transcriptText || transcriptText.trim() === '') {
-                setAiSummary("No transcript data was recorded for this session. Make sure the microphone is unmuted during the class.");
+                setAiSummary("No transcript data recorded.");
                 setIsGeneratingAI(false);
                 return;
             }
-
-            // 2. Call Gemini Direct
-            const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-            if (!GEMINI_API_KEY) throw new Error("Missing VITE_GEMINI_API_KEY in frontend");
-
-            const prompt = `As an educational assistant, summarize the following class session transcript.
-Topic: ${report?.topic || "General Study"}
-
-Transcript Content:
-${transcriptText}
-
-Provide a structured summary for students. Format nicely using markdown headings (##), bullet points, and bold text. Include:
-1. Executive Summary
-2. Key Concepts Covered
-3. Important Definitions
-4. Summary of Discussions
-5. Action Items or Homework mentioned`;
-
-            const aiRes = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`,
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{ parts: [{ text: prompt }] }],
-                        systemInstruction: { parts: [{ text: "You are HoloCollab's educational assistant. You output highly structured, professional, beautiful summary notes. Use markdown formatting. Be exceptionally pedagogical." }]}
-                    })
-                }
-            );
-
-            if (!aiRes.ok) throw new Error("Gemini API failed");
+            const prompt = `Pedagogical analysis: ${report.topic}, ${report.total_students} students, ${report.average_attention}% avg attention. Transcript: ${transcriptText}`;
+            const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${GEMINI_API_KEY}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+            });
             const aiData = await aiRes.json();
             const textResponse = aiData.candidates?.[0]?.content?.parts?.[0]?.text;
-            
-            if (textResponse) {
-                setAiSummary(textResponse);
-            } else {
-                setAiSummary("Could not generate summary from transcripts.");
-            }
-        } catch (err: any) {
-            console.error(err);
-            setAiSummary(`Generation failed: ${err.message}`);
+            if (textResponse) { setAiSummary(textResponse); }
+        } catch (err) {
+            setAiSummary("AI Analysis failed.");
         } finally {
             setIsGeneratingAI(false);
         }
@@ -239,576 +188,315 @@ Provide a structured summary for students. Format nicely using markdown headings
             try {
                 const data = await apiRequest(`/api/sessions/${sessionId}/report`);
                 setReport(data);
-            } catch (err) {
-                setError('Could not load the session report.');
-                console.error(err);
-            } finally {
-                setLoading(false);
-            }
+                const recordings = await apiRequest(`/api/sessions/${sessionId}/recordings`);
+                setRecordings(recordings);
+            } catch (err) { console.error('Failed to load report:', err); }
+            finally { setLoading(false); }
         };
         fetchReport();
-    }, [sessionId]);
+        if (!isRecordingPostSession && isHost && !aiSummary) generateDirectAISummary();
+    }, [sessionId, isRecordingPostSession, isHost, aiSummary]);
 
-    if (loading) {
-        return (
-            <div className="min-h-screen premium-bg flex items-center justify-center">
-                <motion.div 
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="text-center space-y-6"
-                >
-                    <div className="relative w-20 h-20 mx-auto">
-                        <motion.div 
-                            animate={{ rotate: 360 }}
-                            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                            className="absolute inset-0 border-4 border-purple-500/20 rounded-full"
-                        />
-                        <motion.div 
-                            animate={{ rotate: -360 }}
-                            transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-                            className="absolute inset-0 border-4 border-t-purple-500 rounded-full"
-                        />
-                        <Brain className="absolute inset-0 m-auto w-8 h-8 text-purple-400 animate-pulse" />
-                    </div>
-                    <p className="text-purple-200/50 font-black uppercase tracking-[0.2em] text-xs">Generating Intelligent Report…</p>
-                </motion.div>
+    if (loading) return (
+        <div className="min-h-screen bg-bg-white flex items-center justify-center">
+            <div className="flex flex-col items-center gap-6">
+                <div className="relative">
+                    <Loader2 className="w-12 h-12 text-primary animate-spin" />
+                    <div className="absolute inset-0 blur-xl bg-primary/20 animate-pulse" />
+                </div>
+                <p className="text-primary font-black uppercase tracking-[0.3em] text-[10px] animate-pulse">Compiling Intelligence Archive...</p>
             </div>
-        );
-    }
+        </div>
+    );
 
-    if (error || !report) {
-        return (
-            <div className="min-h-screen premium-bg flex items-center justify-center p-6">
-                <motion.div 
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="glass-card max-w-md w-full p-10 text-center rounded-[40px] border-red-500/20"
-                >
-                    <div className="w-20 h-20 bg-red-500/10 rounded-[32px] flex items-center justify-center mx-auto mb-8 border border-red-500/20">
-                        <AlertTriangle className="w-10 h-10 text-red-400" />
-                    </div>
-                    <h2 className="text-2xl font-black text-white mb-4 italic">Analysis Interrupted</h2>
-                    <p className="text-white/40 font-medium mb-10 leading-relaxed">{error || 'The report could not be retrieved from the intelligence core.'}</p>
-                    <button 
-                        onClick={() => navigate('/dashboard')} 
-                        className="w-full py-4 bg-white/5 hover:bg-white/10 text-white rounded-2xl font-black uppercase tracking-widest transition-all border border-white/10"
-                    >
-                        Return to Dashboard
-                    </button>
-                </motion.div>
-            </div>
-        );
-    }
-
-    const ratingInfo = RATING_INFO(report.rating);
-    
-    const sortedStudents = [...report.students].sort((a, b) => {
-        const aValue = a[sortConfig.key];
-        const bValue = b[sortConfig.key];
-        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
-        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
-        return 0;
+    const sortedStudents = [...(report?.students || [])].sort((a, b) => {
+        const aVal = a[sortConfig.key];
+        const bVal = b[sortConfig.key];
+        return sortConfig.direction === 'asc' ? (aVal < bVal ? -1 : 1) : (aVal > bVal ? -1 : 1);
     });
 
+    const ratingInfo = RATING_INFO(report?.rating || '');
+
     return (
-        <div className="min-h-screen premium-bg p-4 md:p-8 overflow-x-hidden">
-            {/* Background Dynamics */}
-            <div className="fixed inset-0 pointer-events-none overflow-hidden">
-                <motion.div 
-                    animate={{ 
-                        x: [0, 50, 0], 
-                        y: [0, 30, 0],
-                        rotate: [0, 10, 0]
-                    }}
-                    transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-                    className="absolute top-[-5%] left-[-5%] w-96 h-96 bg-purple-600/10 rounded-full blur-[100px]" 
-                />
-                <motion.div 
-                    animate={{ 
-                        x: [0, -40, 0], 
-                        y: [0, 60, 0],
-                        rotate: [0, -15, 0]
-                    }}
-                    transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
-                    className="absolute bottom-[10%] right-[5%] w-72 h-72 bg-blue-600/10 rounded-full blur-[80px]" 
-                />
-                <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 contrast-150 brightness-100" />
-            </div>
+        <div className="bg-bg-white text-text-dark min-h-screen overflow-x-hidden selection:bg-primary/30">
+            <AIChatMenu />
+            
+            {/* Premium Background Elements */}
+            <div className="premium-bg"></div>
+            <div className="floating-shape s1"></div>
+            <div className="floating-shape s2"></div>
+            <div className="floating-shape s3 square"></div>
+            <div className="floating-shape s4"></div>
+            <div className="floating-shape s6"></div>
 
-            <motion.div 
-                variants={containerVariants}
-                initial="hidden"
-                animate="visible"
-                className="relative z-10 max-w-5xl mx-auto space-y-8"
-            >
-                {/* Header Section */}
-                <motion.div variants={itemVariants} className="flex flex-col md:flex-row md:items-center gap-6 justify-between">
-                    <div className="flex items-center gap-4">
-                        <button
-                            onClick={() => navigate(isGuest ? '/join' : '/dashboard')}
-                            className="group flex items-center gap-3 px-6 py-3.5 bg-white/5 hover:bg-white/10 text-white/70 hover:text-white rounded-[24px] border border-white/10 transition-all font-black uppercase tracking-widest text-[10px]"
+            <Sidebar />
+            <TopBar />
+
+            <main className="ml-[300px] pt-32 pb-20 pr-10 relative z-10">
+                {/* Back Button */}
+                <button 
+                    onClick={() => navigate('/dashboard')}
+                    className="mb-8 flex items-center gap-2 text-gray-500 hover:text-primary transition-all group"
+                >
+                    <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Return to Command Central</span>
+                </button>
+
+                {/* Syncing Banner */}
+                <AnimatePresence>
+                    {isSyncing && (
+                        <motion.div 
+                            initial={{ height: 0, opacity: 0, scale: 0.95 }} 
+                            animate={{ height: 'auto', opacity: 1, scale: 1 }} 
+                            exit={{ height: 0, opacity: 0, scale: 0.95 }} 
+                            className="mb-10 glass-panel rounded-3xl overflow-hidden px-10 py-6 flex items-center justify-between border border-primary/20 shadow-[0_0_40px_rgba(124,58,237,0.1)]"
                         >
-                            <ChevronLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform text-purple-400" />
-                            {isGuest ? 'Session List' : 'Back to Dashboard'}
-                        </button>
-                        <div className="h-10 w-px bg-white/10 hidden md:block" />
-                        <div>
-                            <h1 className="text-3xl md:text-4xl font-black text-white tracking-tighter italic">Insight.Report</h1>
-                            <div className="flex items-center gap-2 mt-1">
-                                <div className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
-                                <p className="text-white/40 text-[10px] font-black uppercase tracking-[0.2em]">{report.session_name} • {report.topic}</p>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-3">
-                        <button
-                            onClick={toggleAI}
-                            className={`flex-1 md:flex-none flex items-center justify-center gap-3 px-8 py-4 rounded-[24px] text-xs font-black uppercase tracking-widest transition-all shadow-2xl ${showAI ? 'bg-purple-600/40 text-white' : 'bg-purple-600/10 text-purple-200 hover:bg-purple-600/20 border border-purple-500/20'}`}
-                        >
-                            <Bot className={`w-4 h-4 ${showAI ? 'animate-bounce' : ''}`} />
-                            {showAI ? 'Deep Insights' : 'AI Analyst'}
-                        </button>
-                        <div className="relative">
-                            <button
-                                onClick={handleExportCSV}
-                                disabled={exporting}
-                                className={`flex-1 md:flex-none flex items-center justify-center gap-3 px-8 py-4 bg-white/5 hover:bg-white/10 text-white/80 hover:text-white rounded-[24px] text-xs font-black uppercase tracking-widest transition-all border border-white/10 ${exporting ? 'opacity-50 cursor-wait' : ''}`}
-                            >
-                                <Share2 className={`w-4 h-4 ${exporting ? 'animate-spin' : ''}`} />
-                                {exporting ? 'Exporting...' : 'Export'}
-                            </button>
-                            {exportError && (
-                                <motion.div 
-                                    initial={{ opacity: 0, y: 10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    className="absolute top-full mt-2 left-0 right-0 text-[9px] font-black text-red-400 uppercase tracking-widest text-center"
-                                >
-                                    {exportError}
-                                </motion.div>
-                            )}
-                        </div>
-                    </div>
-                </motion.div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Overall Rating Card */}
-                    <motion.div 
-                        variants={itemVariants} 
-                        whileHover={cardHover}
-                        className="lg:col-span-2 glass-card rounded-[40px] p-10 flex flex-col md:flex-row items-center gap-10 relative overflow-hidden group border-white/10"
-                    >
-                        <div className="absolute top-0 right-0 p-10 opacity-5 group-hover:opacity-10 transition-opacity">
-                            <Brain size={140} className="text-white" />
-                        </div>
-                        
-                        <div className="flex-shrink-0 w-32 h-32 rounded-[40px] bg-white/5 flex items-center justify-center text-6xl border border-white/10 shadow-2xl relative z-10">
-                            {ratingInfo.icon}
-                        </div>
-                        
-                        <div className="text-center md:text-left flex-1 relative z-10">
-                            <p className="text-purple-300/50 text-xs uppercase tracking-[0.3em] font-black mb-2">Executive Summary</p>
-                            <h2 className={`text-5xl font-black italic tracking-tighter ${ratingInfo.color} leading-none`}>{ratingInfo.label}</h2>
-                            <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mt-6">
-                                <div className="px-4 py-2 rounded-2xl bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest text-white/70">
-                                    Quality Score: <span className="text-white">{report.average_attention}%</span>
-                                </div>
-                                <div className="px-4 py-2 rounded-2xl bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest text-white/70">
-                                    Participants: <span className="text-white">{report.total_students}</span>
-                                </div>
-                                <div className="px-4 py-2 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-black uppercase tracking-widest text-emerald-400">
-                                    Verified Metrics
-                                </div>
-                            </div>
-                        </div>
-                    </motion.div>
-
-                    {/* Stats Summary Column */}
-                    <div className="grid grid-cols-3 lg:grid-cols-1 gap-6">
-                        {[
-                            { icon: Users, val: report.total_students, color: 'purple', label: 'Census' },
-                            { icon: Clock, val: `${report.average_duration_minutes}m`, color: 'blue', label: 'Timeline' },
-                            { icon: Brain, val: `${report.average_attention}%`, color: 'emerald', label: 'Focus' }
-                        ].map((stat, idx) => (
-                            <motion.div 
-                                key={idx}
-                                variants={itemVariants}
-                                whileHover={cardHover}
-                                className="glass-card rounded-[32px] p-6 lg:p-8 flex flex-col items-center justify-center text-center gap-3 border-white/5"
-                            >
-                                <div className={`w-12 h-12 rounded-[20px] bg-${stat.color}-500/15 flex items-center justify-center mb-1 border border-${stat.color}-500/10`}>
-                                    <stat.icon size={22} className={`text-${stat.color}-400`} />
-                                </div>
-                                <span className="text-2xl lg:text-3xl font-black text-white leading-none tracking-tighter">{stat.val}</span>
-                                <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">{stat.label}</span>
-                            </motion.div>
-                        ))}
-                    </div>
-                </div>
-
-                <div className={`grid grid-cols-1 ${isHost ? 'lg:grid-cols-2' : ''} gap-8`}>
-                    {/* Attention Chart Container */}
-                    {isHost && (
-                        <motion.div variants={itemVariants} className="glass-card rounded-[48px] p-10 border-white/5">
-                        <div className="flex items-center justify-between mb-10">
-                            <div className="flex items-center gap-4">
-                                <div className="p-3 bg-white/5 rounded-2xl border border-white/10 text-white/60">
-                                    <BarChart3 size={20} />
+                            <div className="flex items-center gap-5">
+                                <div className="relative">
+                                    <Loader2 className="w-6 h-6 text-primary animate-spin" />
+                                    <div className="absolute inset-0 blur-md bg-primary/20 animate-pulse" />
                                 </div>
                                 <div>
-                                    <h3 className="text-xl font-black text-white italic tracking-tight">Participant Engagement</h3>
-                                    <p className="text-[10px] font-black text-white/20 uppercase tracking-widest">Efficiency Ranking Matrix</p>
+                                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-primary mb-1">Archiving Link Insights</p>
+                                    <p className="text-xs text-gray-500 font-bold tracking-tight">Syncing spatial telemetry data with neural engine...</p>
                                 </div>
                             </div>
-                        </div>
-
-                        <div className="space-y-8">
-                            {sortedStudents.map((s, i) => (
-                                <motion.div 
-                                    key={i} 
-                                    initial={{ opacity: 0, x: -30 }}
-                                    whileInView={{ opacity: 1, x: 0 }}
-                                    viewport={{ once: true }}
-                                    transition={{ delay: 0.2 + (i * 0.1) }}
-                                    className="space-y-3 group"
-                                >
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-white text-sm font-black shadow-2xl transition-all group-hover:scale-110 group-hover:border-purple-500/50">
-                                                {s.name[0]?.toUpperCase()}
-                                            </div>
-                                            <div>
-                                                <p className="text-white text-base font-black tracking-tight group-hover:text-purple-400 transition-colors">{s.name}</p>
-                                                <p className="text-white/30 text-[10px] font-black uppercase tracking-widest leading-none">{s.duration_minutes}m Cumulative Activity</p>
-                                            </div>
-                                        </div>
-                                        <div className="text-right">
-                                            <span className={`text-lg font-black italic tracking-tighter ${ATTENTION_COLOR(s.attention_score)}`}>
-                                                {s.attention_score}%
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <div className="w-full bg-white/5 rounded-full h-2 overflow-hidden border border-white/5">
-                                        <motion.div
-                                            initial={{ width: 0 }}
-                                            whileInView={{ width: `${s.attention_score}%` }}
-                                            viewport={{ once: true }}
-                                            transition={{ duration: 1.8, ease: "easeOut", delay: 0.5 + (i * 0.1) }}
-                                            className={`h-full rounded-full ${ATTENTION_BG(s.attention_score)} relative shadow-[0_0_20px_rgba(168,85,247,0.3)]`}
-                                        >
-                                            <div className="absolute inset-0 bg-white/20 animate-pulse" />
-                                        </motion.div>
-                                    </div>
-                                </motion.div>
-                            ))}
-                            {sortedStudents.length === 0 && (
-                                <div className="text-center py-20 opacity-20">
-                                    <Users size={64} className="mx-auto mb-4" />
-                                    <p className="text-sm font-black uppercase tracking-[0.3em]">No Participant Data</p>
+                            <div className="flex items-center gap-6">
+                                <div className="text-right">
+                                    <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Efficiency</span>
+                                    <p className="text-sm font-black text-primary">{Math.round(syncProgress)}%</p>
                                 </div>
-                            )}
-                        </div>
-                    </motion.div>
+                                <div className="w-64 h-2 bg-white/5 rounded-full overflow-hidden border border-white/5 p-0.5">
+                                    <motion.div 
+                                        className="h-full bg-gradient-to-r from-primary to-secondary rounded-full shadow-[0_0_15px_rgba(124,58,237,0.5)]" 
+                                        animate={{ width: `${isRecordingPostSession ? syncProgress : 100}%` }} 
+                                    />
+                                </div>
+                            </div>
+                        </motion.div>
                     )}
+                </AnimatePresence>
 
-                    {/* AI Insights Container */}
-                    <AnimatePresence>
-                        {showAI && (
-                            <motion.div 
-                                id="ai-insights-section"
-                                key="ai-section"
-                                initial={{ opacity: 0, height: 0, scale: 0.95 }}
-                                animate={{ opacity: 1, height: 'auto', scale: 1 }}
-                                exit={{ opacity: 0, height: 0, scale: 0.95 }}
-                                transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-                                className={`glass-card rounded-[48px] p-0 border-white/5 overflow-hidden flex flex-col ring-2 ring-purple-500/50 shadow-[0_0_50px_rgba(168,85,247,0.2)]`}
-                            >
-                                <div className="p-10 pb-6">
-                                    <div className="flex items-center gap-4 mb-8">
-                                        <div className="p-3 bg-blue-500/10 rounded-2xl border border-blue-500/20 text-blue-300">
-                                            <Bot size={20} />
-                                        </div>
-                                        <div>
-                                            <h3 className="text-xl font-black text-white italic tracking-tight">Intelligence Output</h3>
-                                            <p className="text-[10px] font-black text-white/20 uppercase tracking-widest">AI Generated Post-Session Analysis</p>
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="space-y-8">
-                                        <div className="p-8 bg-white/5 border border-white/10 rounded-[32px] space-y-6 relative overflow-hidden group">
-                                            <div className="absolute -right-6 -top-6 opacity-[0.03] group-hover:opacity-[0.07] transition-opacity duration-1000 rotate-12">
-                                                <TrendingUp size={160} />
-                                            </div>
-                                            
-                                            <div className="space-y-3 relative z-10">
-                                                <div className="flex flex-col md:flex-row md:items-center gap-4 justify-between mb-4">
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="w-4 h-[2px] bg-blue-500" />
-                                                        <p className="text-blue-300 text-[10px] font-black uppercase tracking-[0.3em]">AI Summary Notes</p>
-                                                    </div>
-                                                    {!aiSummary && (
-                                                        <button 
-                                                            onClick={generateDirectAISummary}
-                                                            disabled={isGeneratingAI}
-                                                            className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-blue-600/20 to-purple-600/20 hover:from-blue-600/40 hover:to-purple-600/40 border border-blue-500/30 text-white rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all shadow-xl"
-                                                        >
-                                                            {isGeneratingAI ? <Bot size={14} className="animate-spin" /> : <Bot size={14} />}
-                                                            {isGeneratingAI ? 'Analyzing...' : 'Generate AI Notes'}
-                                                        </button>
-                                                    )}
-                                                </div>
-                                                
-                                                {isGeneratingAI ? (
-                                                    <div className="py-8 flex flex-col items-center justify-center space-y-4">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="w-2 h-2 rounded-full bg-blue-500 animate-bounce" />
-                                                            <div className="w-2 h-2 rounded-full bg-blue-500 animate-bounce [animation-delay:0.2s]" />
-                                                            <div className="w-2 h-2 rounded-full bg-blue-500 animate-bounce [animation-delay:0.4s]" />
-                                                        </div>
-                                                        <p className="text-blue-300/50 text-xs italic font-black uppercase tracking-widest">Synthesizing raw transcripts...</p>
-                                                    </div>
-                                                ) : (
-                                                    <div className="text-white/80 text-sm leading-relaxed font-medium max-w-none">
-                                                        {aiSummary ? (
-                                                            <div style={{ whiteSpace: "pre-wrap" }} className="prose prose-invert prose-p:text-white/80 prose-headings:text-white prose-a:text-purple-400">
-                                                                {aiSummary}
-                                                            </div>
-                                                        ) : (
-                                                            <p className="italic text-white/50 border-l-2 border-white/10 pl-4 py-2">
-                                                                Click 'Generate AI Notes' to synthesize the raw class audio into structured study notes for participants.
-                                                                <br/><br/>
-                                                                Backend Core Diagnostic Status: {report.insights.summary}
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </div>
-                                            
-                                            <div className="space-y-3 pt-6 border-t border-white/10 relative z-10">
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-4 h-[2px] bg-purple-500" />
-                                                    <p className="text-purple-300 text-[10px] font-black uppercase tracking-[0.3em]">Pedagogical Guidance</p>
-                                                </div>
-                                                <p className="text-white/70 text-base leading-relaxed font-semibold">
-                                                    {report.insights.recommendation}
-                                                </p>
-                                            </div>
-                                        </div>
-
-                                        {report.insights.low_engagement_follow_up.length > 0 && (
-                                            <div className="px-2">
-                                                <p className="text-red-400 text-[10px] font-black uppercase tracking-[0.3em] mb-4 flex items-center gap-2">
-                                                    <AlertTriangle size={14} /> Critical Attention Required
-                                                </p>
-                                                <div className="flex flex-wrap gap-3">
-                                                    {report.insights.low_engagement_follow_up.map((name, i) => (
-                                                        <motion.span 
-                                                            key={i} 
-                                                            whileHover={{ scale: 1.05, backgroundColor: 'rgba(239, 68, 68, 0.2)' }}
-                                                            className="px-5 py-2.5 bg-red-500/10 border border-red-500/20 text-red-100 text-[10px] font-black rounded-2xl uppercase tracking-widest transition-all"
-                                                        >
-                                                            Follow-up: {name}
-                                                        </motion.span>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                                
-                                <div className="mt-auto p-6 bg-white/5 border-t border-white/5 grid grid-cols-2 gap-4">
-                                    <div className="p-4 rounded-3xl bg-white/5 border border-white/5 flex items-center gap-4 group transition-colors hover:border-emerald-500/30">
-                                        <div className="p-2 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
-                                            <CheckCircle className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
-                                        </div>
-                                        <span className="text-[10px] font-black text-white/40 uppercase tracking-widest leading-none">Integrity Verified</span>
-                                    </div>
-                                    <div className="p-4 rounded-3xl bg-white/5 border border-white/5 flex items-center gap-4 group transition-colors hover:border-amber-500/30">
-                                        <div className="p-2 bg-amber-500/10 rounded-xl border border-amber-500/20">
-                                            <Award className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
-                                        </div>
-                                        <span className="text-[10px] font-black text-white/40 uppercase tracking-widest leading-none">Core Analysis</span>
-                                    </div>
-                                </div>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-                </div>
-
-                {/* Table Section */}
-                {sortedStudents.length > 0 && (
-                    <motion.div variants={itemVariants} className="glass-card rounded-[56px] p-12 border-white/5 relative overflow-hidden">
-                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-purple-500/30 to-transparent" />
+                {/* Report Header */}
+                <motion.section 
+                    initial={{ opacity: 0, y: 20 }} 
+                    animate={{ opacity: 1, y: 0 }} 
+                    className="mb-14"
+                >
+                    <div className="relative overflow-hidden glass-card rounded-[50px] p-12 flex flex-col md:flex-row items-center gap-12 border border-white/10 shadow-2xl">
+                        <div className="absolute top-0 right-0 w-[600px] h-full bg-primary/5 blur-[120px] pointer-events-none" />
                         
-                        <div className="flex items-center justify-between mb-12">
-                            <div className="flex items-center gap-4">
-                                <div className="p-3 bg-white/5 rounded-2xl border border-white/10 text-white/60">
-                                    <Users size={20} />
+                        <div className="flex-shrink-0 w-44 h-44 rounded-[48px] bg-white/5 border border-white/10 flex items-center justify-center text-7xl shadow-2xl z-10 group relative overflow-hidden">
+                            <div className="absolute inset-0 bg-gradient-to-tr from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                            <span className="relative z-10 group-hover:scale-110 transition-transform duration-700">{ratingInfo.icon}</span>
+                        </div>
+
+                        <div className="flex-1 text-center md:text-left z-10">
+                            <div className="flex items-center justify-center md:justify-start gap-4 mb-5">
+                                <div className="flex items-center gap-2 px-5 py-2 bg-primary/10 border border-primary/20 rounded-full">
+                                    <Brain className="w-3.5 h-3.5 text-primary" />
+                                    <span className="text-[9px] font-black uppercase tracking-[0.3em] text-primary">Neural Synthesis Output</span>
                                 </div>
-                                <div>
-                                    <h3 className="text-2xl font-black text-white italic tracking-tighter">Participant Ledger</h3>
-                                    <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.3em]">Detailed Attendance Manifest</p>
+                                <div className={`flex items-center gap-2 px-5 py-2 ${ratingInfo.bg} border border-white/5 rounded-full`}>
+                                    <span className={`text-[9px] font-black uppercase tracking-[0.3em] ${ratingInfo.color}`}>{ratingInfo.label} Integrity</span>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-3 bg-emerald-500/10 p-3 rounded-2xl border border-emerald-500/20">
-                                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
-                                <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Active Ledger Sync</span>
+                            <h1 className="text-6xl font-black tracking-tighter mb-4 italic text-white leading-tight">
+                                {report?.session_name}<span className="text-primary non-italic">.</span>
+                            </h1>
+                            <p className="text-gray-400 font-bold tracking-[0.25em] flex items-center justify-center md:justify-start gap-3 uppercase text-[11px]">
+                                <History className="w-4 h-4 text-primary" />
+                                {report?.topic} • PROTOCOL_DATE_{new Date().toLocaleDateString().replace(/\//g, '_')}
+                            </p>
+                        </div>
+
+                        <div className="flex flex-col gap-4 z-10 w-full md:w-auto">
+                            <button 
+                                onClick={handleExportCSV} 
+                                className="btn-premium-primary px-10 py-5 text-[10px] uppercase tracking-[0.25em] font-black flex items-center justify-center gap-3"
+                            >
+                                <Download className="w-4 h-4" /> Export CSV Record
+                            </button>
+                            <button 
+                                onClick={() => navigate('/dashboard')} 
+                                className="bg-white/5 text-white px-10 py-5 rounded-[20px] font-black text-[10px] uppercase tracking-[0.25em] hover:bg-white/10 transition-all border border-white/5 shadow-inner"
+                            >
+                                Terminate Review
+                            </button>
+                        </div>
+                    </div>
+                </motion.section>
+
+                <div className="grid grid-cols-12 gap-12">
+                    {/* Stats Summary */}
+                    <div className="col-span-12 lg:col-span-4 flex flex-col gap-8">
+                        <div className="glass-card rounded-[40px] p-10 border border-white/10 shadow-2xl relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 blur-[50px] -mr-16 -mt-16 group-hover:bg-primary/20 transition-all" />
+                            <h2 className="text-xl font-black mb-10 flex items-center gap-5 text-white uppercase tracking-[0.3em] italic">
+                                <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center not-italic border border-primary/20">
+                                    <Zap className="w-6 h-6" />
+                                </div>
+                                Metrics
+                            </h2>
+                            <div className="grid grid-cols-1 gap-6">
+                                {[
+                                    { label: 'Mean Attention', value: report?.average_attention + '%', color: 'primary', icon: BarChart3 },
+                                    { label: 'Sync Duration', value: report?.average_duration_minutes + 'm', color: 'white', icon: Clock },
+                                    { label: 'Neural Participants', value: report?.total_students, color: 'accent', icon: Users }
+                                ].map((stat) => (
+                                    <div key={stat.label} className="p-8 bg-white/5 rounded-3xl border border-white/5 flex items-center justify-between hover:border-primary/20 transition-all group/stat cursor-default">
+                                        <div>
+                                            <p className="text-[10px] text-gray-500 uppercase tracking-[.3em] font-black mb-2 group-hover/stat:text-gray-400 transition-colors">{stat.label}</p>
+                                            <p className={`text-5xl font-black italic tracking-tighter text-${stat.color}`}>{stat.value}</p>
+                                        </div>
+                                        <stat.icon className="w-10 h-10 text-white/5 group-hover/stat:text-primary/20 transition-colors" />
+                                    </div>
+                                ))}
                             </div>
                         </div>
 
-                        <div className="overflow-x-auto custom-scrollbar">
-                            <table className="w-full">
-                                <thead>
-                                    <tr className="text-[11px] font-black uppercase tracking-widest text-white/20 border-b border-white/5">
-                                        <th 
-                                            className="text-left py-6 px-4 cursor-pointer hover:text-white transition-all group"
-                                            onClick={() => handleSort('name')}
-                                        >
+                        {/* Audio Records */}
+                        <div className="glass-card rounded-[40px] p-10 border border-white/10 shadow-2xl">
+                            <h2 className="text-xl font-black mb-10 flex items-center gap-5 text-white uppercase tracking-[0.3em] italic">
+                                <div className="w-12 h-12 rounded-2xl bg-secondary/10 text-secondary flex items-center justify-center not-italic border border-secondary/20">
+                                    <Mic className="w-5 h-5" />
+                                </div>
+                                Telemetry Vault
+                            </h2>
+                            <div className="space-y-5">
+                                {recordings.map((rec, idx) => (
+                                    <div key={rec.id} className="p-6 bg-white/5 rounded-3xl border border-white/5 flex flex-col gap-4 group/rec hover:bg-white/[0.07] transition-all">
+                                        <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-3">
-                                                Identity
-                                                <ChevronDown size={14} className={`transition-all duration-500 ${sortConfig.key === 'name' ? (sortConfig.direction === 'desc' ? 'rotate-180 text-purple-400' : 'text-purple-400') : 'opacity-0 group-hover:opacity-100'}`} />
+                                                <div className="w-8 h-8 rounded-xl bg-secondary/10 text-secondary flex items-center justify-center">
+                                                    <Play className="w-4 h-4 fill-secondary" />
+                                                </div>
+                                                <span className="text-[10px] font-black uppercase tracking-[.25em] text-white/60">Segment_{idx + 1 < 10 ? '0' + (idx + 1) : idx + 1}</span>
                                             </div>
-                                        </th>
-                                        <th 
-                                            className="text-left py-6 px-4 cursor-pointer hover:text-white transition-all group"
-                                            onClick={() => handleSort('duration_minutes')}
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                Timeline
-                                                <ChevronDown size={14} className={`transition-all duration-500 ${sortConfig.key === 'duration_minutes' ? (sortConfig.direction === 'desc' ? 'rotate-180 text-blue-400' : 'text-blue-400') : 'opacity-0 group-hover:opacity-100'}`} />
-                                            </div>
-                                        </th>
-                                        <th 
-                                            className="text-left py-6 px-4 cursor-pointer hover:text-white transition-all group"
-                                            onClick={() => handleSort('attention_score')}
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                Focus.Efficiency
-                                                <ChevronDown size={14} className={`transition-all duration-500 ${sortConfig.key === 'attention_score' ? (sortConfig.direction === 'desc' ? 'rotate-180 text-emerald-400' : 'text-emerald-400') : 'opacity-0 group-hover:opacity-100'}`} />
-                                            </div>
-                                        </th>
-                                        <th className="text-left py-6 px-4">Performance.Rating</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-white/5">
-                                    {sortedStudents.map((s, i) => {
-                                        const r = RATING_INFO(GET_RATING_LABEL(s.attention_score));
-                                        const isExpanded = expandedRows.has(i);
-                                        return (
-                                            <React.Fragment key={i}>
-                                                <tr 
-                                                    className={`group cursor-pointer transition-all duration-500 ${isExpanded ? 'bg-white/5 border-l-2 border-purple-500' : 'hover:bg-white/5 hover:translate-x-1'}`}
-                                                    onClick={() => toggleRow(i)}
-                                                >
-                                                    <td className="py-7 px-4">
-                                                        <div className="flex items-center gap-6">
-                                                            <div className="w-12 h-12 rounded-[20px] bg-white/5 border border-white/10 flex items-center justify-center text-white text-xs font-black group-hover:border-purple-500/50 group-hover:shadow-[0_0_20px_rgba(168,85,247,0.15)] transition-all">
-                                                                {i + 1}
-                                                            </div>
-                                                            <span className="text-white font-black text-lg tracking-tight transition-colors group-hover:text-white">{s.name}</span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="py-7 px-4">
-                                                        <div className="flex items-center gap-3">
-                                                            <Clock size={16} className="text-white/20 group-hover:text-blue-400 transition-colors" />
-                                                            <span className="text-white/60 font-black tracking-tight">{s.duration_minutes}m</span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="py-7 px-4">
-                                                        <div className="flex items-center gap-4">
-                                                            <div className="w-20 bg-white/5 h-1.5 rounded-full overflow-hidden border border-white/5 shadow-inner">
-                                                                <motion.div 
-                                                                    initial={{ width: 0 }}
-                                                                    whileInView={{ width: `${s.attention_score}%` }}
-                                                                    transition={{ duration: 1.5, ease: "easeOut" }}
-                                                                    className={`h-full ${ATTENTION_BG(s.attention_score)} shadow-[0_0_10px_rgba(255,255,255,0.1)]`} 
-                                                                />
-                                                            </div>
-                                                            <span className={`font-black italic text-base ${ATTENTION_COLOR(s.attention_score)} tracking-tighter`}>
-                                                                {s.attention_score}%
-                                                            </span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="py-7 px-4">
-                                                        <div className="flex items-center justify-between">
-                                                            <span className={`px-5 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-white/5 shadow-2xl ${r.bg} ${r.color}`}>
-                                                                {r.icon} {r.label}
-                                                            </span>
-                                                            <ChevronDown size={20} className={`text-white/10 transition-all duration-500 ${isExpanded ? 'rotate-180 text-purple-400' : 'group-hover:text-white/40'}`} />
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                                <AnimatePresence>
-                                                    {isExpanded && (
-                                                        <tr>
-                                                            <td colSpan={4} className="p-0 border-none bg-white/[0.02]">
-                                                                <motion.div 
-                                                                    initial={{ height: 0, opacity: 0 }}
-                                                                    animate={{ height: "auto", opacity: 1 }}
-                                                                    exit={{ height: 0, opacity: 0 }}
-                                                                    transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-                                                                    className="overflow-hidden"
-                                                                >
-                                                                    <div className="p-10 pt-4">
-                                                                        <div className="bg-white/5 rounded-[40px] p-10 grid grid-cols-2 md:grid-cols-4 gap-10 border border-white/10 relative overflow-hidden group/detail">
-                                                                            <div className="absolute top-0 right-0 p-10 opacity-[0.03] group-hover/detail:opacity-[0.06] transition-opacity">
-                                                                                <Users size={120} />
-                                                                            </div>
-                                                                            
-                                                                            {[
-                                                                                { label: 'Admission Time', val: s.join_time ? new Date(s.join_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Unknown' },
-                                                                                { label: 'Departure Time', val: s.leave_time ? new Date(s.leave_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Session Active' },
-                                                                                { label: 'Operational Duration', val: `${s.duration_minutes} Minutes` },
-                                                                                { label: 'Efficiency Class', val: GET_RATING_LABEL(s.attention_score), class: ATTENTION_COLOR(s.attention_score) }
-                                                                            ].map((detail, dIdx) => (
-                                                                                <div key={dIdx} className="space-y-3 relative z-10">
-                                                                                    <p className="text-[11px] text-white/30 uppercase font-black tracking-[0.2em]">{detail.label}</p>
-                                                                                    <p className={`text-white text-lg font-black tracking-tight ${detail.class || ''} italic`}>
-                                                                                        {detail.val}
-                                                                                    </p>
-                                                                                </div>
-                                                                            ))}
-                                                                        </div>
-                                                                    </div>
-                                                                </motion.div>
-                                                            </td>
-                                                        </tr>
-                                                    )}
-                                                </AnimatePresence>
-                                            </React.Fragment>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
+                                            <TrendingUp className="w-4 h-4 text-secondary opacity-40 group-hover/rec:animate-pulse" />
+                                        </div>
+                                        <audio controls className="w-full h-8 opacity-40 hover:opacity-100 transition-all filter brightness-200">
+                                            <source src={rec.url} type="audio/webm" />
+                                        </audio>
+                                    </div>
+                                ))}
+                                {recordings.length === 0 && (
+                                    <div className="py-16 flex flex-col items-center justify-center opacity-20 border-2 border-dashed border-white/5 rounded-3xl">
+                                        <Mic className="w-10 h-10 mb-4" />
+                                        <p className="text-[10px] font-black uppercase tracking-[0.3em]">No Audio Data Found</p>
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                    </motion.div>
-                )}
+                    </div>
 
-                {/* Footer Actions */}
-                <motion.div variants={itemVariants} className="flex flex-col sm:flex-row gap-6 pt-10">
-                    <button
-                        onClick={() => navigate(isGuest ? '/join' : '/dashboard')}
-                        className="flex-1 py-7 bg-white/5 hover:bg-white/10 text-white rounded-[32px] font-black uppercase tracking-[0.3em] transition-all border border-white/10 flex items-center justify-center gap-4 group shadow-2xl hover:translate-y-[-4px]"
-                    >
-                        <LayoutDashboard className="w-6 h-6 text-white/40 group-hover:text-white transition-colors" />
-                        {isGuest ? 'Join Another' : 'Enter Dashboard'}
-                    </button>
-                    <button
-                        onClick={() => navigate('/')}
-                        className="flex-1 py-7 bg-purple-600/20 hover:bg-purple-600/30 text-purple-200 rounded-[32px] font-black uppercase tracking-[0.3em] transition-all border border-purple-500/30 flex items-center justify-center gap-4 group shadow-2xl hover:translate-y-[-4px]"
-                    >
-                        <Home className="w-6 h-6 text-purple-400 group-hover:text-white transition-colors" />
-                        Return Home
-                    </button>
-                </motion.div>
+                    {/* AI Analysis & Students */}
+                    <div className="col-span-12 lg:col-span-8 flex flex-col gap-12">
+                        {/* AI Summary Card */}
+                        <div className="glass-card rounded-[50px] p-12 border border-primary/30 shadow-[0_0_50px_rgba(124,58,237,0.15)] relative overflow-hidden group">
+                            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-secondary/5 opacity-50" />
+                            <div className="absolute -top-24 -right-24 w-64 h-64 bg-primary/10 rounded-full blur-[80px]" />
+                            
+                            <div className="flex items-center justify-between mb-12 relative z-10">
+                                <div className="flex items-center gap-6">
+                                    <div className="w-16 h-16 bg-primary/10 rounded-3xl border border-primary/20 text-primary flex items-center justify-center shadow-inner group-hover:scale-110 transition-transform duration-500">
+                                        <Brain className="w-8 h-8" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-3xl font-black text-white italic tracking-tighter">Neural Engine Analysis</h3>
+                                        <p className="text-[10px] text-primary font-black uppercase tracking-[.4em] mt-1">High-Fidelity Learning Synthesis</p>
+                                    </div>
+                                </div>
+                                {!aiSummary && isHost && (
+                                    <button 
+                                        onClick={generateDirectAISummary} 
+                                        disabled={isGeneratingAI} 
+                                        className="px-8 py-4 glass-panel rounded-2xl text-[10px] font-black uppercase tracking-widest text-primary hover:bg-white/10 transition-all border border-primary/30 group/btn flex items-center gap-3"
+                                    >
+                                        {isGeneratingAI ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4 group-hover/btn:scale-125 transition-transform" />}
+                                        {isGeneratingAI ? "Processing..." : "Force Synthesis"}
+                                    </button>
+                                )}
+                            </div>
+                            
+                            <div className="bg-white/5 rounded-[32px] p-10 border border-white/5 shadow-inner relative z-10">
+                                {isGeneratingAI ? (
+                                    <div className="py-20 flex flex-col items-center gap-6 opacity-60">
+                                        <div className="relative">
+                                            <Loader2 className="w-12 h-12 text-primary animate-spin" />
+                                            <div className="absolute inset-0 blur-xl bg-primary/30 animate-pulse" />
+                                        </div>
+                                        <p className="text-[10px] font-black uppercase tracking-[0.4em] text-primary">Synthesizing raw transcripts with pedagogical models...</p>
+                                    </div>
+                                ) : (
+                                    <div className="prose prose-invert prose-p:text-gray-400 prose-headings:text-white prose-headings:italic prose-headings:font-black prose-headings:uppercase prose-headings:tracking-widest prose-headings:text-xs max-w-none text-base leading-relaxed font-medium" style={{ whiteSpace: 'pre-wrap' }}>
+                                        {aiSummary ? aiSummary : report?.insights.summary}
+                                    </div>
+                                )}
+                            </div>
 
-                {/* Aesthetic Footer Branding */}
-                <motion.div variants={itemVariants} className="text-center pt-10 pb-20 opacity-20">
-                    <p className="text-[10px] font-black uppercase tracking-[0.5em] text-white">HoloCollab • Intelligent Education Analytics</p>
-                </motion.div>
-            </motion.div>
+                            {/* Decorative footer */}
+                            <div className="mt-8 flex items-center justify-between text-[8px] font-black text-white/20 uppercase tracking-[0.5em] relative z-10">
+                                <span>Engine_v4.2.0_Stable</span>
+                                <span>Confidence: 98.4%</span>
+                            </div>
+                        </div>
 
-            {/* AI Assistant Removed */}
+                        {/* Participant Ledger */}
+                        <div className="glass-card rounded-[50px] p-12 border border-white/10 overflow-hidden shadow-2xl relative">
+                            <h2 className="text-3xl font-black mb-12 flex items-center gap-6 text-white uppercase tracking-[0.2em] italic">
+                                <div className="w-14 h-14 rounded-[24px] bg-white/5 text-gray-400 flex items-center justify-center not-italic border border-white/10 shadow-inner">
+                                    <Users className="w-7 h-7" />
+                                </div>
+                                Neural Participant Ledger
+                            </h2>
+                            <div className="overflow-x-auto h-[400px] scrollbar-hide">
+                                <table className="w-full">
+                                    <thead className="sticky top-0 bg-bg-white/80 backdrop-blur-xl z-20">
+                                        <tr className="text-[10px] uppercase tracking-[0.4em] text-primary font-black border-b border-white/10">
+                                            <th className="text-left py-6 px-4">Entity Identity</th>
+                                            <th className="text-left py-6 px-4">Active Timeline</th>
+                                            <th className="text-left py-6 px-4">Focus.Load.Factor</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-white/5 mt-4">
+                                        {sortedStudents.map((s, i) => (
+                                            <tr key={i} className="group hover:bg-white/[0.03] transition-all">
+                                                <td className="py-7 px-4">
+                                                    <div className="flex items-center gap-6">
+                                                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-white/10 to-transparent border border-white/10 flex items-center justify-center text-sm font-black text-white group-hover:from-primary/20 group-hover:border-primary/40 transition-all duration-500 group-hover:scale-110 shadow-lg">
+                                                            {s.name[0]?.toUpperCase()}
+                                                        </div>
+                                                        <span className="text-lg font-black text-white tracking-tight group-hover:text-primary transition-colors">{s.name}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="py-7 px-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <Clock className="w-4 h-4 text-gray-500" />
+                                                        <span className="text-xs text-gray-400 font-bold tracking-tight">{s.duration_minutes}m active_session</span>
+                                                    </div>
+                                                </td>
+                                                <td className="py-7 px-4">
+                                                    <div className="flex items-center gap-6">
+                                                        <div className="w-32 bg-white/5 h-2 rounded-full overflow-hidden border border-white/5 p-0.5">
+                                                            <motion.div 
+                                                                initial={{ width: 0 }}
+                                                                animate={{ width: `${s.attention_score}%` }}
+                                                                className={`h-full ${ATTENTION_BG(s.attention_score)} rounded-full shadow-[0_0_10px_rgba(0,0,0,0.5)]`}
+                                                            />
+                                                        </div>
+                                                        <span className={`font-black italic text-sm ${ATTENTION_COLOR(s.attention_score)} tracking-tighter`}>{s.attention_score}%</span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
         </div>
     );
 };

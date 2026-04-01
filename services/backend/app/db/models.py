@@ -56,3 +56,11 @@ class Message(BaseModel):
     message: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
+
+class VoiceRecording(BaseModel):
+    id: str
+    session_id: str
+    file_path: str
+    duration_seconds: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+

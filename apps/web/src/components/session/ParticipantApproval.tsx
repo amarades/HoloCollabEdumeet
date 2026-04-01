@@ -62,53 +62,57 @@ export const ParticipantApproval: React.FC<ParticipantApprovalProps> = ({ isHost
     if (!isHost || pendingRequests.length === 0) return null;
 
     return (
-        <div className="fixed top-4 right-4 z-50 max-w-sm" style={{ animation: 'slideInRight 0.3s ease' }}>
-            <div className="bg-white border-2 border-blue-400 rounded-xl shadow-2xl p-4 space-y-3">
+        <div className="fixed top-8 right-8 z-[60] w-full max-w-sm animate-in slide-in-from-right-8 duration-500">
+            <div className="bg-[#1a1919]/80 backdrop-blur-3xl border border-primary/20 rounded-[32px] shadow-[0_20px_80px_rgba(0,0,0,0.6)] p-6 space-y-4">
                 <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <div className="relative">
-                            <Users className="w-5 h-5 text-blue-500" />
-                            <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-ping" />
+                    <div className="flex flex-col gap-0.5">
+                        <div className="flex items-center gap-3">
+                            <div className="relative">
+                                <Users className="w-5 h-5 text-primary" />
+                                <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-ping" />
+                            </div>
+                            <h3 className="font-black text-xs text-white uppercase tracking-[0.2em]">Join Request</h3>
                         </div>
-                        <h3 className="font-semibold text-gray-900">Join Requests</h3>
-                        <span className="bg-red-100 text-red-700 text-xs font-bold px-2 py-1 rounded-full">
-                            {pendingRequests.length}
-                        </span>
+                        <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold">Inbound Link Request</p>
                     </div>
-                    <button
-                        onClick={() => setShow(!show)}
-                        className="text-gray-400 hover:text-gray-600"
-                        title={show ? 'Collapse' : 'Expand'}
-                    >
-                        <Settings className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-3">
+                        <span className="bg-primary/20 text-primary text-[10px] font-black px-3 py-1 rounded-full border border-primary/30 uppercase tracking-widest leading-none">
+                            {pendingRequests.length} Pending
+                        </span>
+                        <button
+                            onClick={() => setShow(!show)}
+                            className="p-1.5 hover:bg-white/5 rounded-xl transition-colors text-white/40 hover:text-white"
+                        >
+                            <Settings className="w-4 h-4" />
+                        </button>
+                    </div>
                 </div>
 
                 {show && (
-                    <div className="space-y-3">
+                    <div className="space-y-3 pt-2">
                         {pendingRequests.map((request) => (
-                            <div key={request.userId} className="bg-gray-50 rounded-lg p-3">
-                                <div className="flex items-center justify-between mb-2">
-                                    <div>
-                                        <p className="font-medium text-gray-900">{request.userName}</p>
-                                        <p className="text-xs text-gray-500">
-                                            Requested {new Date(request.requestedAt).toLocaleTimeString()}
+                            <div key={request.userId} className="bg-white/5 border border-white/5 rounded-2xl p-4 transition-all hover:bg-white/10">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="overflow-hidden">
+                                        <p className="font-bold text-white text-sm truncate">{request.userName}</p>
+                                        <p className="text-[9px] text-white/30 uppercase tracking-widest font-black">
+                                            Handshake: {new Date(request.requestedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                         </p>
                                     </div>
-                                    <div className="flex items-center gap-1">
-                                        <button
-                                            onClick={() => handleApprove(request.userId)}
-                                            className="p-1.5 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors"
-                                            title="Approve with default permissions"
-                                        >
-                                            <Check className="w-4 h-4" />
-                                        </button>
+                                    <div className="flex items-center gap-2">
                                         <button
                                             onClick={() => handleReject(request.userId)}
-                                            className="p-1.5 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
-                                            title="Reject"
+                                            className="w-10 h-10 flex items-center justify-center bg-red-500/10 text-red-400 rounded-xl border border-red-500/20 hover:bg-red-500 hover:text-white transition-all shadow-lg hover:shadow-red-500/20"
+                                            title="Terminate Link"
                                         >
                                             <X className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                            onClick={() => handleApprove(request.userId)}
+                                            className="w-10 h-10 flex items-center justify-center bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20 hover:bg-emerald-500 hover:text-white transition-all shadow-lg hover:shadow-emerald-500/20"
+                                            title="Initialize Sync"
+                                        >
+                                            <Check className="w-4 h-4" />
                                         </button>
                                     </div>
                                 </div>
@@ -119,18 +123,18 @@ export const ParticipantApproval: React.FC<ParticipantApprovalProps> = ({ isHost
                                             canControlGestures: true,
                                             canUploadModels: true
                                         })}
-                                        className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 transition-colors"
+                                        className="flex-1 py-2 rounded-xl bg-primary/10 border border-primary/20 text-primary text-[9px] font-black uppercase tracking-widest hover:bg-primary hover:text-white transition-all"
                                     >
-                                        + Full Access
+                                        Full Access
                                     </button>
                                     <button
                                         onClick={() => handleApproveWithPermissions(request.userId, {
                                             canControlGestures: false,
                                             canUploadModels: false
                                         })}
-                                        className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-gray-200 transition-colors"
+                                        className="flex-1 py-2 rounded-xl bg-white/5 border border-white/10 text-white/40 text-[9px] font-black uppercase tracking-widest hover:bg-white/10 hover:text-white transition-all"
                                     >
-                                        + View Only
+                                        Observer
                                     </button>
                                 </div>
                             </div>

@@ -74,151 +74,141 @@ export const SessionControlBar: React.FC<SessionControlBarProps> = React.memo(({
     setShowHostControls
 }) => {
     return (
-        <div className="p-4 md:p-6 bg-black/5 md:bg-transparent z-30 flex flex-col md:flex-row items-center justify-between gap-4">
-            {/* Left: Room code / label */}
-            <div className="hidden sm:flex items-center gap-3">
-                {roomCode ? (
-                    <button
-                        onClick={onCopyCode}
-                        className="flex items-center gap-2 px-4 py-2 bg-white rounded-full border border-gray-200 shadow-sm text-gray-700 font-medium text-xs md:text-sm hover:bg-gray-50 transition-all group"
-                        title="Click to copy code"
-                    >
-                        <span className="text-gray-400 text-[10px] md:text-xs">Code:</span>
-                        <span className="font-mono font-bold tracking-widest text-primary">{roomCode}</span>
-                        {codeCopied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 text-gray-400 group-hover:text-primary transition-colors" />}
-                    </button>
-                ) : (
-                    <div className="px-4 py-2 bg-white rounded-full border border-gray-200 shadow-sm text-gray-700 font-medium text-xs md:text-sm">
-                        HoloCollab Secure Room
+        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-6 px-10 py-6 bg-[#1a1919]/40 backdrop-blur-3xl border border-white/5 rounded-[40px] shadow-[0_20px_80px_rgba(0,0,0,0.6)] z-50">
+            {/* Room Identifier */}
+            <div className="hidden lg:flex flex-col gap-1 pr-6 border-r border-white/10">
+                <span className="text-[9px] uppercase font-black tracking-[0.2em] text-white/40 leading-none">Spatial Link</span>
+                <button
+                    onClick={onCopyCode}
+                    className="flex items-center gap-2 text-white hover:text-primary transition-colors group"
+                >
+                    <span className="font-mono font-bold text-sm tracking-widest">{roomCode || 'SECURE'}</span>
+                    <div className="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center">
+                        {codeCopied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-white/40 group-hover:text-primary" />}
                     </div>
-                )}
+                </button>
             </div>
 
-            {/* Center: Primary Controls */}
-            <div className="flex items-center gap-2 md:gap-3 mx-auto md:mx-0 w-full md:w-auto justify-center flex-wrap">
-                <button
-                    onClick={toggleMic}
-                    className={`p-3 md:p-4 rounded-full transition-all shadow-sm ${!micOn ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}
-                    title={micOn ? "Mute Microphone" : "Unmute Microphone"}
-                >
-                    {!micOn ? <MicOff size={18} /> : <Mic size={18} />}
-                </button>
+            {/* Main Interaction Hub */}
+            <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 p-1.5 bg-white/5 rounded-full border border-white/5">
+                    <button
+                        onClick={toggleMic}
+                        className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-500 ${!micOn ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-primary/20 text-white border border-primary/40 shadow-[0_0_20px_rgba(168,85,247,0.3)]'}`}
+                    >
+                        {!micOn ? <MicOff size={20} /> : <Mic size={20} />}
+                    </button>
+                    <button
+                        onClick={toggleCamera}
+                        className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-500 ${!cameraOn ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-secondary/20 text-white border border-secondary/40 shadow-[0_0_20px_rgba(236,72,153,0.3)]'}`}
+                    >
+                        {!cameraOn ? <VideoOff size={20} /> : <Video size={20} />}
+                    </button>
+                </div>
 
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={toggleGestures}
+                        className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${gesturesEnabled ? 'bg-primary/20 text-primary border border-primary/40 shadow-inner' : 'bg-white/5 text-white/40 hover:text-white border border-white/10'}`}
+                        title="AI Gesture Engine"
+                    >
+                        <Sparkles size={20} />
+                    </button>
 
+                    <button
+                        onClick={toggleModel}
+                        className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${modelVisible ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-white/5 text-white/40 hover:text-white border border-white/10'}`}
+                    >
+                        <Box size={20} />
+                    </button>
+                </div>
 
-                <button
-                    onClick={toggleCamera}
-                    className={`p-3 md:p-4 rounded-full transition-all shadow-sm ${!cameraOn ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}
-                >
-                    {!cameraOn ? <VideoOff size={18} /> : <Video size={18} />}
-                </button>
-
-                <button
-                    onClick={toggleGestures}
-                    className={`p-3 md:p-4 rounded-full transition-all shadow-sm border ${gesturesEnabled ? 'bg-primary/10 border-primary/30 text-primary hover:bg-primary/20' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'}`}
-                >
-                    <Sparkles size={18} />
-                </button>
-
-                <button
-                    onClick={toggleModel}
-                    className={`p-3 md:p-4 rounded-full transition-all shadow-sm border ${modelVisible ? 'bg-green-50 border-green-200 text-green-600 hover:bg-green-100' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'}`}
-                >
-                    <Box size={18} className={modelVisible ? "" : "opacity-50"} />
-                </button>
-
-                <div className="flex items-center gap-2 md:gap-3">
+                <div className="flex items-center gap-2 mx-2">
                     <button
                         onClick={() => { setSplitView(!splitView); setFullscreen3D(false); }}
-                        className={`p-3 md:p-4 rounded-full transition-all shadow-sm border ${splitView ? 'bg-blue-50 border-blue-200 text-blue-600 hover:bg-blue-100' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'}`}
-                        title="Split View"
+                        className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${splitView ? 'bg-white/20 text-white border border-white/30' : 'bg-white/5 text-white/40 hover:text-white border border-white/10'}`}
                     >
-                        <Columns size={18} />
+                        <Columns size={20} />
                     </button>
-
                     <button
                         onClick={() => { setFullscreen3D(!fullscreen3D); setSplitView(false); }}
-                        className={`p-3 md:p-4 rounded-full transition-all shadow-sm border ${fullscreen3D ? 'bg-purple-50 border-purple-200 text-purple-600 hover:bg-purple-100' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'}`}
-                        title="Fullscreen 3D"
+                        className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${fullscreen3D ? 'bg-white/20 text-white border border-white/30' : 'bg-white/5 text-white/40 hover:text-white border border-white/10'}`}
                     >
-                        <Maximize2 size={18} />
+                        <Maximize2 size={20} />
                     </button>
                 </div>
 
-                <button
-                    onClick={toggleHand}
-                    className={`p-3 md:p-4 rounded-full transition-all shadow-sm border ${handRaised ? 'bg-amber-50 border-amber-300 text-amber-600 hover:bg-amber-100' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'}`}
-                    title="Raise Hand"
-                >
-                    <Hand size={18} />
-                </button>
-
-                {/* Emoji reactions */}
-                <div className="relative">
+                <div className="flex items-center gap-2">
                     <button
-                        onClick={() => setShowReactionPicker(!showReactionPicker)}
-                        className="p-3 md:p-4 rounded-full transition-all shadow-sm border bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
-                        title="Send Reaction"
+                        onClick={toggleHand}
+                        className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${handRaised ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.2)]' : 'bg-white/5 text-white/40 hover:text-white border border-white/10'}`}
                     >
-                        <span className="text-lg md:text-xl leading-none">😊</span>
+                        <Hand size={20} />
                     </button>
-                    {showReactionPicker && (
-                        <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 bg-white border border-gray-200 rounded-2xl shadow-xl p-2 flex gap-1 z-50 animate-in fade-in slide-in-from-bottom-2">
-                            {REACTIONS.map(emoji => (
-                                <button
-                                    key={emoji}
-                                    onClick={() => { onSendReaction(emoji); setShowReactionPicker(false); }}
-                                    className="text-xl md:text-2xl p-2 hover:bg-gray-100 rounded-xl transition-colors"
-                                >
-                                    {emoji}
-                                </button>
-                            ))}
-                        </div>
-                    )}
+
+                    <div className="relative">
+                        <button
+                            onClick={() => setShowReactionPicker(!showReactionPicker)}
+                            className="w-12 h-12 rounded-full bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-white/10 transition-all flex items-center justify-center"
+                        >
+                            <span className="text-xl">😊</span>
+                        </button>
+                        {showReactionPicker && (
+                            <div className="absolute bottom-full mb-6 left-1/2 -translate-x-1/2 bg-[#1a1919]/90 border border-white/10 rounded-3xl shadow-2xl p-3 flex gap-2 z-[60] backdrop-blur-xl animate-in fade-in zoom-in-75 duration-300">
+                                {REACTIONS.map(emoji => (
+                                    <button
+                                        key={emoji}
+                                        onClick={() => { onSendReaction(emoji); setShowReactionPicker(false); }}
+                                        className="text-2xl p-2 hover:bg-white/10 rounded-2xl transition-all hover:scale-125"
+                                    >
+                                        {emoji}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
-                {/* Screen share */}
                 <button
                     onClick={toggleScreenShare}
-                    className={`p-3 md:p-4 rounded-full transition-all shadow-sm border ${isScreenSharing ? 'bg-blue-50 border-blue-300 text-blue-600 hover:bg-blue-100' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'}`}
-                    title={isScreenSharing ? 'Stop Sharing' : 'Share Screen'}
+                    className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${isScreenSharing ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40' : 'bg-white/5 text-white/40 hover:text-white border border-white/10'}`}
                 >
-                    {isScreenSharing ? <MonitorOff size={18} /> : <Monitor size={18} />}
-                </button>
-
-                <button
-                    onClick={onLeave}
-                    className="px-4 md:px-6 py-3 md:py-3.5 rounded-full bg-red-600 hover:bg-red-700 text-white transition-all shadow-md font-bold text-xs md:text-sm flex items-center gap-2"
-                >
-                    <PhoneOff size={16} /> <span className="hidden xs:inline">EXIT SESSION</span>
+                    {isScreenSharing ? <MonitorOff size={20} /> : <Monitor size={20} />}
                 </button>
             </div>
 
-            {/* Right: Side panel toggles */}
-            <div className="flex md:flex items-center gap-2 md:gap-3">
+            {/* Utility / Side Panels */}
+            <div className="flex items-center gap-3 pl-6 border-l border-white/10">
                 <button
                     onClick={() => { setShowParticipants(!showParticipants); setShowChat(false); setShowHostControls(false); }}
-                    className={`p-3 md:p-3.5 rounded-full transition-all border shadow-sm ${showParticipants ? 'bg-gray-100 border-gray-300 text-gray-900' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                    title="Participants"
+                    className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all ${showParticipants ? 'bg-primary/20 text-primary border border-primary/30' : 'bg-white/5 text-white/40 hover:text-white hover:bg-white/10'}`}
                 >
                     <Users size={18} />
                 </button>
                 <button
                     onClick={() => { setShowChat(!showChat); setShowParticipants(false); setShowHostControls(false); }}
-                    className={`p-3 md:p-3.5 rounded-full transition-all border shadow-sm ${showChat ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                    title="Chat"
+                    className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all ${showChat ? 'bg-secondary/20 text-secondary border border-secondary/30' : 'bg-white/5 text-white/40 hover:text-white hover:bg-white/10'}`}
                 >
                     <MessageSquare size={18} />
                 </button>
                 {isHost && (
                     <button
                         onClick={() => { setShowHostControls(!showHostControls); setShowChat(false); setShowParticipants(false); }}
-                        className={`p-3 md:p-3.5 rounded-full transition-all border shadow-sm ${showHostControls ? 'bg-amber-50 border-amber-300 text-amber-600' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                        title="Host Controls"
+                        className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all ${showHostControls ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-white/5 text-white/40 hover:text-white hover:bg-white/10'}`}
                     >
                         <ShieldCheck size={18} />
                     </button>
                 )}
+                
+                <div className="w-[1px] h-8 bg-white/10 mx-1" />
+
+                <button
+                    onClick={onLeave}
+                    className="h-12 px-6 rounded-2xl bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/30 transition-all font-black text-[10px] tracking-widest uppercase flex items-center gap-3 group"
+                >
+                    <PhoneOff size={16} className="group-hover:rotate-[135deg] transition-transform duration-500" />
+                    Terminate
+                </button>
             </div>
         </div>
     );

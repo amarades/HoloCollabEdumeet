@@ -15,12 +15,9 @@ class Settings(BaseSettings):
 
     # AI Service
     ai_service: str = "gemini"
-    openai_api_key: Optional[str] = None
-    openai_model: str = "gpt-4"
-    gemini_api_key: Optional[str] = None
-    gemini_model: str = "gemini-2.0-flash"
-    deepseek_api_key: Optional[str] = None
-    deepseek_model: str = "deepseek-chat"
+    gemini_api_key: Optional[str] = "AIzaSyAarkXMp1O7UqsMspE9iy2ltJaNqZt_QS8"
+    gemini_model: str = "gemini-2.5-flash-lite"
+ 
 
     # Storage
     upload_dir: str = "./uploads"
@@ -106,5 +103,6 @@ try:
     if not os.path.exists(settings.upload_dir):
         os.makedirs(settings.upload_dir, exist_ok=True)
         os.makedirs(os.path.join(settings.upload_dir, "models"), exist_ok=True)
+        os.makedirs(os.path.join(settings.upload_dir, "recordings"), exist_ok=True)
 except Exception as e:
     print(f"Note: Could not create upload directories ({e}). This is expected on read-only environments.")

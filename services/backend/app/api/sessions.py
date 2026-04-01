@@ -2,15 +2,17 @@ import csv
 import io
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, List
 from collections import defaultdict, deque
 import time
 from datetime import timedelta
 
-from fastapi import APIRouter, HTTPException, Depends, Request, Header, status
+from fastapi import APIRouter, HTTPException, Depends, Request, Header, status, Form, File, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from jose import jwt, JWTError
+import os
+import shutil
 
 from app.services.session_service import SessionService
 from app.services.permission_service import PermissionService
@@ -64,6 +66,10 @@ class AttendanceLogRequest(BaseModel):
 class VerifyHostTokenRequest(BaseModel):
     room_code: str = Field(min_length=4, max_length=64)
     host_token: str = Field(min_length=16)
+
+
+class TranscriptRequest(BaseModel):
+    text: str
 
 
 def _create_guest_host_token(*, room_code: str, host_id: str, host_name: str) -> str:
@@ -300,7 +306,7 @@ async def export_attendance_csv(session_id: str, user: dict = Depends(get_curren
 
 
 @router.post("/{session_id}/transcripts")
-async def save_session_transcript(session_id: str, text: str, user: dict = Depends(get_current_user_token)):
+async def save_session_transcript(session_id: str, data: TranscriptRequest, user: dict = Depends(get_current_user_token)):
     """Save a transcript segment for a session."""
     session = await db.get_session(session_id)
     if not session:
@@ -309,7 +315,7 @@ async def save_session_transcript(session_id: str, text: str, user: dict = Depen
     transcript = PydanticTranscript(
         id=uuid.uuid4().hex,
         session_id=session_id,
-        text=text,
+        text=data.text,
         created_at=datetime.utcnow()
     )
     await db.save_transcript(transcript)
@@ -480,3 +486,69 @@ async def verify_host_token(
         "host_name": decoded.get("host_name") or "Host",
         "session_id": session.id,
     }
+
+
+@router.post("/{session_id}/recordings/upload")
+async def upload_voice_recording(
+    session_id: str,
+    file: UploadFile = File(...),
+    duration: Optional[str] = Form(None),
+    current_user: dict = Depends(get_current_user_token),
+):
+    """Securely upload a post-session voice recording."""
+    session = await db.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Only the host or high-privileged users can upload recordings
+    if session.host_id != current_user.get("id") and current_user.get("role") not in {"teacher", "instructor", "admin"}:
+        raise HTTPException(status_code=403, detail="Only the host can upload recordings")
+
+    # Generate filename and path
+    file_ext = os.path.splitext(file.filename)[1] or ".webm"
+    filename = f"rec_{session_id}_{uuid.uuid4().hex}{file_ext}"
+    rel_path = os.path.join("recordings", filename)
+    abs_path = os.path.join(settings.upload_dir, rel_path)
+
+    # Save file
+    try:
+        with open(abs_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save recording: {str(e)}")
+
+    # Save metadata to DB
+    from app.db.models import VoiceRecording
+    recording = VoiceRecording(
+        id=uuid.uuid4().hex,
+        session_id=session_id,
+        file_path=rel_path,
+        duration_seconds=duration,
+        created_at=datetime.utcnow()
+    )
+    await db.save_voice_recording(recording)
+
+    return {"status": "success", "recording_id": recording.id, "url": f"/uploads/{rel_path}"}
+
+
+@router.get("/{session_id}/recordings")
+async def get_session_recordings(
+    session_id: str,
+    current_user: dict = Depends(get_current_user_token),
+):
+    """Retrieve all voice recordings for a session."""
+    session = await db.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Check if user was a participant or host
+    recordings = await db.get_voice_recordings(session_id)
+    
+    return [
+        {
+            "id": r.id,
+            "url": f"/uploads/{r.file_path}",
+            "duration": r.duration_seconds,
+            "created_at": r.created_at
+        } for r in recordings
+    ]

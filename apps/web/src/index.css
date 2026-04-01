@@ -13,7 +13,7 @@
     --bg-white: #ffffff;
     --bg-gray: #f3f4f6;
     --border-light: #d1d5db;
-    
+
     /* Fluid Typography Foundation */
     --fs-xs: clamp(0.7rem, 0.65rem + 0.25vw, 0.8rem);
     --fs-sm: clamp(0.8rem, 0.75rem + 0.25vw, 0.9rem);
@@ -73,7 +73,7 @@
 }
 
 @keyframes floatShape {
-  0%   { transform: translateY(0)   rotate(0deg);   opacity: 0.6; }
+  0%   { transform: translateY(0) rotate(0deg);   opacity: 0.6; }
   50%  { transform: translateY(-60px) rotate(180deg); opacity: 0.9; }
   100% { transform: translateY(-140vh) rotate(360deg); opacity: 0; }
 }
@@ -179,138 +179,84 @@
   }
 }
 
-/* ── 3D Orbit Graphics ── */
+/* ── 3D Orbit Graphics (Enhanced) ── */
 .hologram-container {
   position: relative;
-  width: 300px;
-  height: 300px;
+  width: 350px;
+  height: 350px;
   display: flex;
   justify-content: center;
   align-items: center;
   transform-style: preserve-3d;
-  animation: floatOrb 6s ease-in-out infinite;
+  animation: floatOrb 8s ease-in-out infinite;
 }
 
 .orb-core {
   position: absolute;
-  width: 70px;
-  height: 70px;
-  background: radial-gradient(circle at 30% 30%, #fff, #a855f7 40%, #581c87 80%);
+  width: 80px;
+  height: 80px;
+  background: radial-gradient(circle at 30% 30%, #fff, #7C3AED 40%, #2A0E5A 90%);
   border-radius: 50%;
-  box-shadow: 0 0 40px rgba(168, 85, 247, 0.8), 0 0 80px rgba(168, 85, 247, 0.4);
-  animation: corePulse 3s ease-in-out infinite alternate;
+  box-shadow: 0 0 50px rgba(124, 58, 237, 0.8), 0 0 100px rgba(168, 85, 247, 0.4);
+  animation: corePulse 4s ease-in-out infinite alternate;
 }
 
 .orb-ring {
   position: absolute;
   width: 100%;
   height: 100%;
-  border: 2px solid rgba(168, 85, 247, 0.3);
+  border: 1.5px solid rgba(124, 58, 237, 0.25);
   border-radius: 50%;
   transform-style: preserve-3d;
 }
 
-.orb-ring::before,
-.orb-ring::after {
+.orb-ring::before {
   content: '';
   position: absolute;
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   background: #fff;
   border-radius: 50%;
-  box-shadow: 0 0 10px #fff, 0 0 20px #a855f7;
-  left: calc(50% - 4px);
+  box-shadow: 0 0 15px #fff, 0 0 30px #7C3AED;
+  top: -5px;
+  left: calc(50% - 5px);
 }
 
-.orb-ring::before {
-  top: -4px;
-}
+.orb-ring-1 { animation: spinRing1 15s linear infinite; border-color: rgba(124, 58, 237, 0.6); }
+.orb-ring-2 { animation: spinRing2 20s linear infinite; border-color: rgba(139, 92, 246, 0.5); }
+.orb-ring-3 { width: 140%; height: 140%; animation: spinRing3 25s linear infinite; border: 1px dashed rgba(168, 85, 247, 0.3); }
 
-.orb-ring::after {
-  bottom: -4px;
-}
-
-.orb-ring-1 {
-  animation: spinRing1 12s linear infinite;
-  border-color: rgba(168, 85, 247, 0.7);
-}
-
-.orb-ring-2 {
-  animation: spinRing2 16s linear infinite;
-  border-color: rgba(99, 102, 241, 0.7);
-}
-
-.orb-ring-3 {
-  width: 140%;
-  height: 140%;
-  animation: spinRing3 20s linear infinite;
-  border: 1px dashed rgba(168, 85, 247, 0.4);
-}
-
-@keyframes spinRing1 {
-  0% {
-    transform: rotateX(60deg) rotateY(0deg) rotateZ(0deg);
-  }
-
-  100% {
-    transform: rotateX(60deg) rotateY(360deg) rotateZ(360deg);
-  }
-}
-
-@keyframes spinRing2 {
-  0% {
-    transform: rotateX(45deg) rotateY(45deg) rotateZ(0deg);
-  }
-
-  100% {
-    transform: rotateX(45deg) rotateY(45deg) rotateZ(360deg);
-  }
-}
-
-@keyframes spinRing3 {
-  0% {
-    transform: rotateX(75deg) rotateY(-30deg) rotateZ(0deg);
-  }
-
-  100% {
-    transform: rotateX(75deg) rotateY(-30deg) rotateZ(-360deg);
-  }
-}
+@keyframes spinRing1 { 0% { transform: rotateX(60deg) rotateY(0deg); } 100% { transform: rotateX(60deg) rotateY(360deg); } }
+@keyframes spinRing2 { 0% { transform: rotateX(-45deg) rotateY(0deg); } 100% { transform: rotateX(-45deg) rotateY(360deg); } }
+@keyframes spinRing3 { 0% { transform: rotateZ(30deg) rotateY(0deg); } 100% { transform: rotateZ(30deg) rotateY(360deg); } }
 
 @keyframes corePulse {
-  0% {
-    transform: scale(0.9);
-    opacity: 0.8;
-  }
-
-  100% {
-    transform: scale(1.1);
-    opacity: 1;
-  }
+  0% { transform: scale(0.9); opacity: 0.8; }
+  100% { transform: scale(1.1); opacity: 1; }
 }
 
 @keyframes floatOrb {
-  0%,
-  100% {
-    transform: translateY(0px) scale(1);
-  }
-
-  50% {
-    transform: translateY(-20px) scale(1.05);
-  }
-}
-
-@keyframes pulse-subtle {
-  0% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 0 rgba(147, 51, 234, 0.4); }
-  50% { transform: scale(1.05); opacity: 0.9; box-shadow: 0 0 15px 5px rgba(147, 51, 234, 0.2); }
-  100% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 0 rgba(147, 51, 234, 0); }
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-30px) rotate(5deg); }
 }
 
 .animate-pulse-subtle {
-  animation: pulse-subtle 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  animation: pulse-subtle 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-@keyframes slideInRight {
-  from { transform: translateX(100%); opacity: 0; }
-  to   { transform: translateX(0);    opacity: 1; }
+@keyframes pulse-subtle {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(124, 58, 237, 0.3); }
+  50% { transform: scale(1.02); box-shadow: 0 0 20px 5px rgba(124, 58, 237, 0.2); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(124, 58, 237, 0); }
+}
+
+/* ── Custom Scrollbar ── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(124, 58, 237, 0.2);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(124, 58, 237, 0.4);
 }

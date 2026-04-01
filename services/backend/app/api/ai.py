@@ -33,13 +33,13 @@ class AIService:
             # If history is provided, we use a chat session
             if history:
                 chat = self.client.aio.chats.create(
-                    model=settings.gemini_model or "gemini-2.0-flash",
+                    model=settings.gemini_model or "gemini-2.5-flash-lite",
                     history=history
                 )
                 response = await chat.send_message(prompt)
             else:
                 response = await self.client.aio.models.generate_content(
-                    model=settings.gemini_model or "gemini-2.0-flash",
+                    model=settings.gemini_model or "gemini-2.5-flash-lite",
                     contents=prompt
                 )
             return response.text

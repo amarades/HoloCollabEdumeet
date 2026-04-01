@@ -42,8 +42,12 @@ export function useSessionRealtimeListeners({
 
     const unsubModelUpdate = socket.on('MODEL_UPDATE', (data: any) => {
       const payload = data.payload || data;
-      const state = payload.state;
+      const state = payload.state || data.state;
       if (!isHost && state) {
+        // Apply to 3D Scene
+        arSceneRef.current?.applyState(state);
+        
+        // Sync React UI state
         if (state.visual_filter) setVisualFilter(state.visual_filter);
         if (state.auto_oscillate !== undefined) setAutoOscillate(state.auto_oscillate);
       }

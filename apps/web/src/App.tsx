@@ -30,40 +30,44 @@ const ProtectedRoute = ({ children }: { children: ReactNode }) => {
   return <>{children}</>;
 };
 
+import { TranscriptionProvider } from './context/TranscriptionContext';
+
 function App() {
   return (
     <AuthProvider>
       <SettingsProvider>
-        <Router>
-          <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-[#0a0f1c] text-white">Loading EduMeet...</div>}>
-            <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route path="/register" element={<Navigate to="/signup" replace />} />
-          <Route path="/join" element={<JoinSession />} />
+        <TranscriptionProvider>
+          <Router>
+            <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-[#0a0f1c] text-white">Loading EduMeet...</div>}>
+              <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
+            <Route path="/register" element={<Navigate to="/signup" replace />} />
+            <Route path="/join" element={<JoinSession />} />
 
-          <Route path="/dashboard" element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          } />
+            <Route path="/dashboard" element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            } />
 
-          <Route path="/session/:sessionId" element={
-            <ProtectedRoute>
-              <Session />
-            </ProtectedRoute>
-          } />
+            <Route path="/session/:sessionId" element={
+              <ProtectedRoute>
+                <Session />
+              </ProtectedRoute>
+            } />
 
-          {/* Pre-join lobby: camera/mic preview before entering room */}
-          <Route path="/lobby" element={<PreJoinLobby />} />
-          <Route path="/create-session" element={<ProtectedRoute><CreateSession /></ProtectedRoute>} />
-          <Route path="/topic-prep" element={<ProtectedRoute><TopicPrep /></ProtectedRoute>} />
-          <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-          <Route path="/session/:sessionId/report" element={<ProtectedRoute><SessionReport /></ProtectedRoute>} />
-            </Routes>
-          </Suspense>
-        </Router>
+            {/* Pre-join lobby: camera/mic preview before entering room */}
+            <Route path="/lobby" element={<PreJoinLobby />} />
+            <Route path="/create-session" element={<ProtectedRoute><CreateSession /></ProtectedRoute>} />
+            <Route path="/topic-prep" element={<ProtectedRoute><TopicPrep /></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+            <Route path="/session/:sessionId/report" element={<ProtectedRoute><SessionReport /></ProtectedRoute>} />
+              </Routes>
+            </Suspense>
+          </Router>
+        </TranscriptionProvider>
       </SettingsProvider>
     </AuthProvider>
   );

@@ -24,6 +24,7 @@ interface ScenePanelProps {
     onAddToLibrary?: () => void;
     libraryModels?: any[];
     isHost?: boolean;
+    isUploading?: boolean;
 }
 
 const SHAPE_COLORS = [
@@ -51,6 +52,7 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
     onAddToLibrary,
     libraryModels = [],
     isHost = false,
+    isUploading = false,
 }) => {
     const [selectedColor, setSelectedColor] = useState('#6366f1');
     const [activeTab, setActiveTab] = useState<'objects' | 'model' | 'library'>('objects');
@@ -204,10 +206,20 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
                                 </div>
                                 <button
                                     onClick={onUpload}
-                                    className="mt-2 flex items-center gap-2 bg-primary hover:bg-primary/90 text-white font-semibold py-3 px-6 rounded-full transition-all shadow-md"
+                                    disabled={isUploading}
+                                    className={`mt-2 flex items-center gap-2 bg-primary hover:bg-primary/90 text-white font-semibold py-3 px-6 rounded-full transition-all shadow-md ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >
-                                    <Upload className="w-4 h-4" />
-                                    Upload Model
+                                    {isUploading ? (
+                                        <>
+                                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                            Processing Asset...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Upload className="w-4 h-4" />
+                                            Upload Model
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         ) : (

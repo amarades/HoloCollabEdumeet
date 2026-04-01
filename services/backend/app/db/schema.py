@@ -102,3 +102,15 @@ class DBMessage(Base):
 
     session = relationship("DBSession")
     user = relationship("DBUser")
+
+
+class DBVoiceRecording(Base):
+    __tablename__ = "voice_recordings"
+
+    id = Column(String, primary_key=True)
+    session_id = Column(String, ForeignKey("sessions.id"), nullable=False, index=True)
+    file_path = Column(String, nullable=False)
+    duration_seconds = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    session = relationship("DBSession")

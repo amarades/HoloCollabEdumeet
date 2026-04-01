@@ -130,7 +130,7 @@ export const useGestureSession = ({
                         const deltaX = detected.position.x - lastPointingPosRef.current.x;
                         const deltaY = detected.position.y - lastPointingPosRef.current.y;
                         // Multiply by a sensitivity factor, e.g., 200, to make rotation responsive
-                        arSceneRef.current.rotateModelByDelta(deltaX * 200, deltaY * 200);
+                        arSceneRef.current.moveModelByDelta(deltaX * 200, deltaY * 200);
                     }
                     lastPointingPosRef.current = { x: detected.position.x, y: detected.position.y };
                     arSceneRef.current.selectAt(detected.position.x, detected.position.y);

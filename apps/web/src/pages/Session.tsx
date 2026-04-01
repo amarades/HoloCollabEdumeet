@@ -18,7 +18,7 @@ import pdfWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
 import { useMediaSession } from '../hooks/useMediaSession';
 import { useGestureSession } from '../hooks/useGestureSession';
 import { usePresentationSession } from '../hooks/usePresentationSession';
-import { useSessionTranscription } from '../hooks/useSessionTranscription';
+import { useTranscription } from '../context/TranscriptionContext';
 import { useVoiceActivity } from '../hooks/useVoiceActivity';
 
 
@@ -62,6 +62,7 @@ const Session = () => {
     const [gesturesEnabled, setGesturesEnabled] = useState(false); 
     const [modelVisible, setModelVisible] = useState(true);
     const [modelLoaded, setModelLoaded] = useState(false);
+    const [isUploadingModel, setIsUploadingModel] = useState(false);
     const [visualFilter, setVisualFilter] = useState<'realistic' | 'blue_glow' | 'red_glow'>('realistic');
     const [autoOscillate, setAutoOscillate] = useState(false);
     const [engagementMap, setEngagementMap] = useState<Record<string, number>>({});
@@ -99,6 +100,13 @@ const Session = () => {
         initializeMedia,
         cleanupMedia
     } = useMediaSession({ sessionId, socketInstance, user });
+
+    const { 
+        startPostSessionRecording, 
+        startSessionTranscription, 
+        stopSessionTranscription,
+        isTranscribing 
+    } = useTranscription();
 
     // ── Presentation Session Hook ─────────────────────────────────────────
     const {
@@ -142,12 +150,14 @@ const Session = () => {
         fetchLibraryModels();
     }, []);
 
-    // ── Silent Transcription Hook ──────────────────────────────────────────
-    useSessionTranscription({ 
-        sessionId, 
-        isHost: sessionRole === 'host', 
-        isActive: isConnected 
-    });
+    useEffect(() => {
+        if (sessionId && isHost && isConnected) {
+            startSessionTranscription(sessionId);
+        }
+        return () => {
+            stopSessionTranscription();
+        };
+    }, [sessionId, isHost, isConnected, startSessionTranscription, stopSessionTranscription]);
 
     // ── Scene sync hook ────────────────────────────────────────────────────
     const {
@@ -403,6 +413,7 @@ const Session = () => {
             alert('Only GLB and GLTF files are supported');
             return;
         }
+        setIsUploadingModel(true);
         try {
             const formData = new FormData();
             formData.append('model', file);
@@ -419,6 +430,8 @@ const Session = () => {
         } catch (error) {
             console.error('Model upload failed:', error);
             alert(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        } finally {
+            setIsUploadingModel(false);
         }
     };
 
@@ -447,6 +460,10 @@ const Session = () => {
     const handleLeave = () => setShowLeaveConfirm(true);
     const confirmLeave = () => {
         if (sessionId) {
+            if (isHost) {
+                // Trigger 2-minute post-session voice recording
+                startPostSessionRecording(sessionId);
+            }
             navigate(`/session/${sessionId}/report`);
         } else {
             navigate('/dashboard');
@@ -456,7 +473,13 @@ const Session = () => {
     // ── Waiting for Approval logic ──────────────────────────────────────────
 
     return (
-        <div className="relative h-screen w-screen overflow-hidden bg-background">
+        <div className="relative h-screen w-screen overflow-hidden bg-surface selection:bg-primary/30">
+            {/* ── Premium Background for Session ── */}
+            <div className="premium-bg opacity-40"></div>
+            <div className="floating-shape s1 !opacity-20"></div>
+            <div className="floating-shape s3 !opacity-20"></div>
+            <div className="floating-shape s6 !opacity-20"></div>
+
             {/* ── Participant Approval Overlay ── */}
             <ParticipantApproval isHost={isHost} />
 
@@ -497,6 +520,7 @@ const Session = () => {
                     currentGesture={currentGesture}
                     sceneObjectCount={sceneObjects.length}
                     handRaised={handRaised}
+                    isTranscribing={isTranscribing}
                 />
 
                 {/* ── Bottom Control Bar ── */}
@@ -605,6 +629,7 @@ const Session = () => {
                     onAddToLibrary={handleAddToLibrary}
                     onSelectLibraryModel={async (url, name) => {
                         if (!isHost) return;
+                        setIsUploadingModel(true);
                         try {
                             if (arSceneRef.current) {
                                 await arSceneRef.current.loadModel(url);
@@ -619,8 +644,11 @@ const Session = () => {
                             }
                         } catch (err) {
                             console.error('Failed to load library model:', err);
+                        } finally {
+                            setIsUploadingModel(false);
                         }
                     }}
+                    isUploading={isUploadingModel}
                 />
             )}
             {activeTool === 'settings' && (

@@ -1,34 +1,31 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useState, useEffect } from 'react';
-import { Video, Plus, Loader2, BarChart3, User } from 'lucide-react';
+import { Video, Plus, Loader2, BarChart3 } from 'lucide-react';
 import { apiRequest, API_BASE_URL } from '../services/api';
 import { AIChatMenu } from '../components/AIChatMenu';
+import Sidebar from '../components/Sidebar';
+import TopBar from '../components/TopBar';
+import { motion } from 'framer-motion';
 
 const Dashboard = () => {
-    const { user, logout } = useAuth();
+    const { user } = useAuth();
     const navigate = useNavigate();
     const [isCreating, setIsCreating] = useState(false);
 
     useEffect(() => {
-        // Verification check for backend connectivity (as requested)
         const checkBackend = async () => {
             try {
                 const response = await fetch(`${API_BASE_URL}/health`);
                 if (response.ok) {
-                    console.log("✅ Backend connection verified via /health");
+                    console.log("✅ Backend connection verified");
                 }
             } catch (err) {
-                console.error("❌ Backend connection failure:", err);
+                console.error("❌ Backend failure:", err);
             }
         };
         checkBackend();
     }, []);
-
-    const handleLogout = () => {
-        logout();
-        navigate('/login');
-    };
 
     const handleJoinSession = () => {
         navigate('/join');
@@ -41,118 +38,122 @@ const Dashboard = () => {
                 method: 'POST',
                 body: JSON.stringify({
                     session_name: `${user?.name || 'My'}'s Session`,
-                    topic: 'General',
+                    topic: 'Spatial Computing',
                 })
             });
             sessionStorage.setItem('room_code', data.room_code);
             sessionStorage.setItem('session_role', data.role || 'host');
             if (data.host_token) {
                 sessionStorage.setItem('host_token', data.host_token);
-            } else {
-                sessionStorage.removeItem('host_token');
             }
             navigate(`/lobby?session=${data.session_id}&code=${data.room_code}&role=${data.role || 'host'}`);
         } catch (err) {
-            console.error('Create session failed:', err);
-            alert('Failed to create session. Please try again.');
+            console.error('Create failed:', err);
         } finally {
             setIsCreating(false);
         }
     };
 
     return (
-        <div className="min-h-screen flex flex-col">
+        <div className="bg-bg-white text-text-dark min-h-screen overflow-x-hidden selection:bg-primary/30">
             <AIChatMenu />
-            <div className="premium-bg">
-                <div className="floating-shape circle s1" />
-                <div className="floating-shape square s4" />
-                <div className="floating-shape circle s6" />
-            </div>
+            
+            {/* Premium Background Elements */}
+            <div className="premium-bg"></div>
+            <div className="floating-shape s1"></div>
+            <div className="floating-shape s2"></div>
+            <div className="floating-shape s4 square"></div>
+            <div className="floating-shape s6"></div>
 
-            <nav className="fixed top-0 left-0 w-full z-50 bg-black/20 backdrop-blur-md border-b border-purple-500/20">
-                <div className="max-w-7xl mx-auto px-6 md:px-10 h-20 flex items-center justify-between">
-                    <div className="flex items-center gap-2 md:gap-3">
-                        <div className="w-8 h-8 md:w-9 md:h-9 rounded-xl bg-purple-500 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-purple-500/40">⬡</div>
-                        <h1 className="text-lg md:text-xl font-black text-white tracking-tight leading-tight">
-                            HoloCollab<span className="hidden sm:inline text-purple-400 font-medium ml-1">Dashboard</span>
-                        </h1>
+            <Sidebar />
+            <TopBar />
+
+            <main className="ml-[300px] pt-32 pb-20 pr-10 relative z-10">
+                <motion.header 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mb-14"
+                >
+                    <div className="flex items-center gap-2 mb-4">
+                        <span className="w-8 h-px bg-primary/40"></span>
+                        <p className="text-primary font-black uppercase tracking-[0.3em] text-[10px]">Dashboard</p>
                     </div>
-                    <div className="flex items-center gap-4 md:gap-8">
-                        <button
-                            onClick={() => navigate('/profile')}
-                            className="hidden xs:flex items-center gap-2 text-xs md:text-sm font-bold text-white/40 hover:text-white transition-colors group"
-                        >
-                            <User className="w-4 h-4 text-purple-400 group-hover:scale-110 transition-transform" />
-                            Welcome, <span className="text-white">{user?.name}</span>
-                        </button>
-                        <button
-                            onClick={handleLogout}
-                            className="bg-red-500/20 text-red-300 border border-red-500/30 px-3 md:px-4 py-2 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest transition-all hover:bg-red-500 hover:text-white hover:border-red-500"
-                        >
-                            Log Out
-                        </button>
-                    </div>
-                </div>
-            </nav>
+                    <h2 className="text-5xl font-black text-white tracking-tighter mb-4 italic">Dashboard<span className="text-primary non-italic ml-2">.</span></h2>
+                    <p className="text-gray-500 font-medium max-w-xl">Join or create learning sessions.</p>
+                </motion.header>
 
-            <main className="flex-1 max-w-5xl mx-auto px-6 md:px-10 pt-32 pb-20 w-full">
-                <div className="mb-12 text-center md:text-left">
-                    <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight mb-2 italic">Workspace</h2>
-                    <p className="text-purple-300/50 font-bold uppercase tracking-widest text-[10px] md:text-xs">Manage immersive sessions</p>
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-8">
-                    {/* Join Session */}
-                    <div
-                        className="glass-card p-10 cursor-pointer transition-all hover:-translate-y-2 hover:shadow-2xl group rounded-[32px]"
+                <div className="grid grid-cols-12 gap-10">
+                    {/* Action Cards */}
+                    <motion.div 
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: 0.1 }}
+                        className="col-span-12 lg:col-span-6 glass-card p-12 cursor-pointer group rounded-[40px] relative overflow-hidden"
                         onClick={handleJoinSession}
                     >
-                        <div className="w-16 h-16 rounded-2xl bg-purple-500/15 text-purple-400 flex items-center justify-center mb-8 group-hover:bg-purple-600 group-hover:text-white transition-all duration-500 group-hover:shadow-lg group-hover:shadow-purple-600/40">
-                            <Video className="w-8 h-8" />
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 blur-[50px] -mr-16 -mt-16 group-hover:bg-primary/10 transition-colors" />
+                        
+                        <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-purple-600 to-purple-700 text-white flex items-center justify-center mb-10 group-hover:scale-110 transition-transform shadow-[0_0_40px_rgba(147,51,234,0.4)] border border-purple-400">
+                            <Video className="w-10 h-10" />
                         </div>
-                        <h3 className="text-2xl font-black text-white mb-2">Join Session</h3>
-                        <p className="text-white/40 font-medium leading-relaxed">Enter a 6-digit room code to participate in an ongoing holographic class.</p>
-                    </div>
+                        <h3 className="text-3xl font-black text-white mb-4 tracking-tight">Join Session</h3>
+                        <p className="text-gray-400 font-medium leading-relaxed mb-10 text-sm">Join an existing session with room code.</p>
+                        
+                        <div className="flex items-center gap-3 text-purple-600 font-black uppercase text-[10px] tracking-[0.2em] group-hover:gap-5 transition-all">
+                            Join Session <span className="material-symbols-outlined text-sm font-bold">arrow_right_alt</span>
+                        </div>
+                    </motion.div>
 
-                    {/* Create Session */}
-                    <div
-                        className={`glass-card p-10 cursor-pointer transition-all hover:-translate-y-2 hover:shadow-2xl group rounded-[32px] ${isCreating ? 'opacity-70 pointer-events-none' : ''}`}
+                    <motion.div 
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: 0.2 }}
+                        className={`col-span-12 lg:col-span-6 glass-card p-12 cursor-pointer group rounded-[40px] relative overflow-hidden ${isCreating ? 'opacity-50 pointer-events-none' : ''}`}
                         onClick={handleCreateSession}
                     >
-                        <div className="w-16 h-16 rounded-2xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center mb-8 group-hover:bg-emerald-600 group-hover:text-white transition-all duration-500">
-                            {isCreating ? <Loader2 className="w-8 h-8 animate-spin" /> : <Plus className="w-8 h-8" />}
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-secondary/5 blur-[50px] -mr-16 -mt-16 group-hover:bg-secondary/10 transition-colors" />
+                        
+                        <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-purple-500 to-purple-600 text-white flex items-center justify-center mb-10 group-hover:scale-110 transition-transform shadow-[0_0_40px_rgba(168,85,247,0.4)] border border-purple-400">
+                            {isCreating ? <Loader2 className="w-10 h-10 animate-spin" /> : <Plus className="w-10 h-10" />}
                         </div>
-                        <h3 className="text-2xl font-black text-white mb-2">
-                            {isCreating ? 'Initializing...' : 'Start New Session'}
-                        </h3>
-                        <p className="text-white/40 font-medium leading-relaxed">Host a new interactive 3D laboratory environment for your students.</p>
-                    </div>
+                        <h3 className="text-3xl font-black text-white mb-4 tracking-tight">Create Session</h3>
+                        <p className="text-gray-400 font-medium leading-relaxed mb-10 text-sm">Create a new session and invite participants.</p>
+                        
+                        <div className="flex items-center gap-3 text-purple-500 font-black uppercase text-[10px] tracking-[0.2em] group-hover:gap-5 transition-all">
+                            Create Room <span className="material-symbols-outlined text-sm font-bold">bolt</span>
+                        </div>
+                    </motion.div>
 
-                    {/* Performance Profile */}
-                    <div
-                        className="glass-card p-10 cursor-pointer transition-all hover:-translate-y-2 hover:shadow-2xl group rounded-[32px] md:col-span-2"
+                    {/* Analytics Teaser */}
+                    <motion.div 
+                        initial={{ opacity: 0, y: 30 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.3 }}
+                        className="col-span-12 glass-card p-12 cursor-pointer group rounded-[50px] relative overflow-hidden"
                         onClick={() => navigate('/profile')}
                     >
-                        <div className="flex items-center justify-between mb-8">
-                            <div className="w-16 h-16 rounded-2xl bg-blue-500/15 text-blue-400 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-all duration-500 shadow-lg group-hover:shadow-blue-600/40">
-                                <BarChart3 className="w-8 h-8" />
+                        <div className="absolute -bottom-20 -right-20 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[120px] pointer-events-none transition-all group-hover:bg-primary/10"></div>
+                        
+                        <div className="flex flex-col lg:flex-row items-center justify-between gap-12 relative z-10">
+                            <div className="flex-1">
+                                <div className="flex items-center gap-4 mb-8">
+                                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary/10 to-secondary/10 border border-primary/30 text-primary flex items-center justify-center shadow-inner group-hover:border-primary/60 transition-colors">
+                                        <BarChart3 className="w-7 h-7" />
+                                    </div>
+                                    <div>
+                                        <span className="px-4 py-1.5 bg-gradient-to-r from-primary/15 to-secondary/15 border border-primary/30 rounded-full text-[9px] font-black uppercase tracking-widest text-primary shadow-lg">Reports</span>
+                                    </div>
+                                </div>
+                                <h3 className="text-4xl font-black text-white mb-6 tracking-tight italic">Session<br /><span className="non-italic"> & Insights.</span></h3>
+                                <p className="text-gray-400 font-medium leading-relaxed max-w-2xl text-sm">View session history, reports, and performance analytics.</p>
                             </div>
-                            <div className="px-4 py-2 bg-blue-500/10 border border-blue-500/20 rounded-xl text-[10px] font-black uppercase tracking-widest text-blue-400">
-                                New Feature
-                            </div>
-                        </div>
-                        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-                            <div className="max-w-xl">
-                                <h3 className="text-2xl font-black text-white mb-2">Performance Analytics</h3>
-                                <p className="text-white/40 font-medium leading-relaxed">Visualize your learning journey, track focus efficiency, and review comprehensive session intelligence.</p>
-                            </div>
-                            <button className="px-8 py-4 bg-white/5 hover:bg-white/10 text-white rounded-2xl border border-white/10 font-black uppercase tracking-widest text-xs transition-all whitespace-nowrap">
-                                View Profile
+                            
+                            <button className="px-12 py-6 bg-gradient-to-br from-purple-600 via-purple-500 to-purple-700 text-white rounded-[24px] font-black uppercase tracking-[0.2em] text-[10px] shadow-[0_10px_30px_rgba(147,51,234,0.5)] hover:scale-105 hover:shadow-[0_20px_50px_rgba(147,51,234,0.7)] transition-all flex items-center gap-4 border border-purple-400">
+                                View Reports <span className="material-symbols-outlined font-black">arrow_forward_ios</span>
                             </button>
                         </div>
-                    </div>
+                    </motion.div>
                 </div>
-
             </main>
         </div>
     );
