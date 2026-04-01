@@ -107,7 +107,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ socket, user, roomId }) =>
 
                             <div className={`px-4 py-3 text-sm leading-relaxed ${msg.isOwn
                                 ? 'bg-gradient-to-br from-primary to-secondary text-white rounded-2xl rounded-tr-none shadow-[0_8px_20px_rgba(168,85,247,0.2)]'
-                                : 'bg-white/5 border border-white/10 text-white/90 rounded-2xl rounded-tl-none backdrop-blur-md'
+                                : 'bg-white/10 border border-white/20 text-white rounded-2xl rounded-tl-none backdrop-blur-md shadow-lg shadow-black/20'
                                 }`}>
                                 <p>{msg.text}</p>
                             </div>
@@ -124,17 +124,17 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ socket, user, roomId }) =>
             </div>
 
             {/* Chat Input */}
-            <div className="p-6 border-t border-white/5 bg-[#1a1919]/40 backdrop-blur-xl">
-                <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-2xl px-4 py-2.5 focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20 transition-all group">
+            <div className="p-6 border-t border-white/10 bg-black/40 backdrop-blur-3xl">
+                <div className="flex items-center gap-3 bg-white/5 border border-white/20 rounded-2xl px-4 py-2.5 focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20 transition-all group shadow-inner">
                     <input
                         type="text"
                         placeholder="Pulse a message..."
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={handleKeyPress}
-                        className="flex-1 bg-transparent outline-none text-sm text-white placeholder-white/20 font-medium"
+                        className="flex-1 bg-transparent outline-none text-sm text-white placeholder:text-white/40 font-medium"
                     />
-                    <button className="text-white/30 hover:text-white transition-colors">
+                    <button className="text-white/40 hover:text-white transition-colors">
                         <Smile size={18} />
                     </button>
                     <button
