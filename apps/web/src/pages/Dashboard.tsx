@@ -55,7 +55,7 @@ const Dashboard = () => {
     };
 
     return (
-        <div className="bg-bg-white text-text-dark min-h-screen overflow-x-hidden selection:bg-primary/30">
+        <div className="bg-transparent text-white min-h-screen overflow-x-hidden selection:bg-primary/30">
             <AIChatMenu />
             
             {/* Premium Background Elements */}
@@ -79,7 +79,7 @@ const Dashboard = () => {
                         <p className="text-primary font-black uppercase tracking-[0.3em] text-[10px]">Dashboard</p>
                     </div>
                     <h2 className="text-5xl font-black text-white tracking-tighter mb-4 italic">Dashboard<span className="text-primary non-italic ml-2">.</span></h2>
-                    <p className="text-gray-500 font-medium max-w-xl">Join or create learning sessions.</p>
+                    <p className="text-white/60 font-medium max-w-xl">Join or create holographic learning sessions across the spatial network.</p>
                 </motion.header>
 
                 <div className="grid grid-cols-12 gap-10">
@@ -97,10 +97,10 @@ const Dashboard = () => {
                             <Video className="w-10 h-10" />
                         </div>
                         <h3 className="text-3xl font-black text-white mb-4 tracking-tight">Join Session</h3>
-                        <p className="text-gray-400 font-medium leading-relaxed mb-10 text-sm">Join an existing session with room code.</p>
+                        <p className="text-white/40 font-medium leading-relaxed mb-10 text-sm">Join an existing holographic stream with a unique neural code.</p>
                         
                         <div className="flex items-center gap-3 text-purple-600 font-black uppercase text-[10px] tracking-[0.2em] group-hover:gap-5 transition-all">
-                            Join Session <span className="material-symbols-outlined text-sm font-bold">arrow_right_alt</span>
+                            Initialize Link <span className="material-symbols-outlined text-sm font-bold">arrow_right_alt</span>
                         </div>
                     </motion.div>
 
@@ -116,11 +116,11 @@ const Dashboard = () => {
                         <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-purple-500 to-purple-600 text-white flex items-center justify-center mb-10 group-hover:scale-110 transition-transform shadow-[0_0_40px_rgba(168,85,247,0.4)] border border-purple-400">
                             {isCreating ? <Loader2 className="w-10 h-10 animate-spin" /> : <Plus className="w-10 h-10" />}
                         </div>
-                        <h3 className="text-3xl font-black text-white mb-4 tracking-tight">Create Session</h3>
-                        <p className="text-gray-400 font-medium leading-relaxed mb-10 text-sm">Create a new session and invite participants.</p>
+                        <h3 className="text-3xl font-black text-white mb-4 tracking-tight">Host Environment</h3>
+                        <p className="text-white/40 font-medium leading-relaxed mb-10 text-sm">Provision a new spatial environment and invite linked participants.</p>
                         
                         <div className="flex items-center gap-3 text-purple-500 font-black uppercase text-[10px] tracking-[0.2em] group-hover:gap-5 transition-all">
-                            Create Room <span className="material-symbols-outlined text-sm font-bold">bolt</span>
+                            Spawn Module <span className="material-symbols-outlined text-sm font-bold">bolt</span>
                         </div>
                     </motion.div>
 
@@ -141,15 +141,15 @@ const Dashboard = () => {
                                         <BarChart3 className="w-7 h-7" />
                                     </div>
                                     <div>
-                                        <span className="px-4 py-1.5 bg-gradient-to-r from-primary/15 to-secondary/15 border border-primary/30 rounded-full text-[9px] font-black uppercase tracking-widest text-primary shadow-lg">Reports</span>
+                                        <span className="px-4 py-1.5 bg-gradient-to-r from-primary/15 to-secondary/15 border border-primary/30 rounded-full text-[9px] font-black uppercase tracking-widest text-primary shadow-lg">Network Intel</span>
                                     </div>
                                 </div>
-                                <h3 className="text-4xl font-black text-white mb-6 tracking-tight italic">Session<br /><span className="non-italic"> & Insights.</span></h3>
-                                <p className="text-gray-400 font-medium leading-relaxed max-w-2xl text-sm">View session history, reports, and performance analytics.</p>
+                                <h3 className="text-4xl font-black text-white mb-6 tracking-tight italic">Session Archives<br /><span className="non-italic"> & Neural Insights.</span></h3>
+                                <p className="text-white/50 font-medium leading-relaxed max-w-2xl text-sm">Retrieve historical telemetry, engagement reports, and AI-synthesized performance analytics.</p>
                             </div>
                             
                             <button className="px-12 py-6 bg-gradient-to-br from-purple-600 via-purple-500 to-purple-700 text-white rounded-[24px] font-black uppercase tracking-[0.2em] text-[10px] shadow-[0_10px_30px_rgba(147,51,234,0.5)] hover:scale-105 hover:shadow-[0_20px_50px_rgba(147,51,234,0.7)] transition-all flex items-center gap-4 border border-purple-400">
-                                View Reports <span className="material-symbols-outlined font-black">arrow_forward_ios</span>
+                                Retrieval Center <span className="material-symbols-outlined font-black">arrow_forward_ios</span>
                             </button>
                         </div>
                     </motion.div>
