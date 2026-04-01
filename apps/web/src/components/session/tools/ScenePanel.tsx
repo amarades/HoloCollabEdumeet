@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Eye, EyeOff, RotateCcw, Upload, Box, Trash2, Plus, Circle, Cylinder, Lock, Sparkles, MoveHorizontal, Palette, BookmarkPlus } from 'lucide-react';
+import { X, Eye, EyeOff, Upload, Box, Trash2, Plus, Circle, Cylinder, Lock, Sparkles, Palette, BookmarkPlus } from 'lucide-react';
 import type { SceneObject } from '../../../3d/SceneSync';
 
 interface ScenePanelProps {
@@ -28,7 +28,7 @@ interface ScenePanelProps {
 }
 
 const SHAPE_COLORS = [
-    '#6366f1', '#ef4444', '#22c55e', '#f59e0b',
+    '#9333ea', '#ef4444', '#10b981', '#f59e0b',
     '#3b82f6', '#ec4899', '#14b8a6', '#f97316',
 ];
 
@@ -46,15 +46,12 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
     selectedObjectId,
     visualFilter = 'blue_glow',
     onSetVisualFilter,
-    autoOscillate = true,
-    onSetAutoOscillate,
     onSelectLibraryModel,
-    onAddToLibrary,
     libraryModels = [],
     isHost = false,
     isUploading = false,
 }) => {
-    const [selectedColor, setSelectedColor] = useState('#6366f1');
+    const [selectedColor, setSelectedColor] = useState('#9333ea');
     const [activeTab, setActiveTab] = useState<'objects' | 'model' | 'library'>('objects');
 
     const getShapeIcon = (type: SceneObject['type']) => {
@@ -66,72 +63,71 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
     };
 
     return (
-        <div className="absolute inset-4 md:inset-y-10 md:right-10 md:left-auto md:w-[360px] bg-white rounded-2xl border border-gray-200 shadow-2xl z-40 flex flex-col overflow-hidden animate-in slide-in-from-right duration-200">
+        <div className="absolute top-0 md:top-8 right-0 md:right-8 bottom-0 md:bottom-36 w-full md:w-[380px] bg-[#1a1919]/80 backdrop-blur-3xl border border-white/10 md:rounded-[32px] shadow-2xl z-[100] md:z-40 flex flex-col overflow-hidden animate-in md:slide-in-from-right-8">
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-gray-50/50">
-                <h2 className="text-gray-900 font-semibold text-lg flex items-center gap-2">
-                    <Box className="w-5 h-5 text-primary" />
-                    3D Scene
-                </h2>
-                <button onClick={onClose} className="p-1.5 hover:bg-gray-200 rounded-full text-gray-500 hover:text-gray-900 transition-colors">
-                    <X className="w-5 h-5" />
+            <div className="p-6 border-b border-white/5 flex items-center justify-between">
+                <div className="flex flex-col gap-0.5">
+                    <h3 className="text-white font-black text-xs uppercase tracking-[0.2em]">Manifest</h3>
+                    <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold">Spatial Registry</p>
+                </div>
+                <button onClick={onClose} className="w-8 h-8 flex items-center justify-center hover:bg-white/10 rounded-full transition-colors text-white/40 hover:text-white">
+                    <X size={18} />
                 </button>
             </div>
 
             {/* Tabs */}
-            <div className="flex border-b border-gray-100">
+            <div className="flex border-b border-white/5 bg-white/3">
                 {(['objects', 'model', 'library'] as const).map((tab) => (
                     <button
                         key={tab}
                         onClick={() => setActiveTab(tab)}
-                        className={`flex-1 py-2.5 text-sm font-medium transition-colors capitalize
+                        className={`flex-1 py-4 text-[10px] font-black uppercase tracking-widest transition-all
                             ${activeTab === tab
-                                ? 'text-primary border-b-2 border-primary bg-primary/5'
-                                : 'text-gray-500 hover:text-gray-700'
+                                ? 'text-primary bg-primary/5 after:absolute after:bottom-0 after:left-0 after:w-full after:h-0.5 after:bg-primary relative'
+                                : 'text-white/40 hover:text-white/70 hover:bg-white/5'
                             }`}
                     >
-                        {tab === 'objects' ? `Objects (${sceneObjects.length})` : tab === 'model' ? '3D Model' : 'Library'}
+                        {tab === 'objects' ? `Entities (${sceneObjects.length})` : tab === 'model' ? 'Primary Asset' : 'Protocol Library'}
                     </button>
                 ))}
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto bg-white">
+            <div className="flex-1 overflow-y-auto bg-transparent custom-scrollbar">
 
                 {/* ── Objects Tab ── */}
                 {activeTab === 'objects' && (
-                    <div className="p-4 flex flex-col gap-4">
+                    <div className="p-6 flex flex-col gap-6">
                         {/* Spawn shapes */}
                         <div>
-                            <h3 className="text-gray-700 font-semibold text-sm mb-3">Add Shape</h3>
+                            <h3 className="text-white/40 font-black text-[9px] uppercase tracking-[0.2em] mb-4">Initialize Primitive</h3>
 
                             {/* Color picker */}
-                            <div className="flex flex-wrap gap-2 mb-3">
+                            <div className="flex flex-wrap gap-2.5 mb-5">
                                 {SHAPE_COLORS.map(c => (
                                     <button
                                         key={c}
                                         onClick={() => setSelectedColor(c)}
-                                        className={`w-7 h-7 rounded-full transition-all ${selectedColor === c ? 'ring-2 ring-offset-2 ring-gray-700 scale-110' : 'hover:scale-105'}`}
+                                        className={`w-7 h-7 rounded-lg transition-all border-2 ${selectedColor === c ? 'border-white scale-110 shadow-[0_0_15px_rgba(255,255,255,0.3)]' : 'border-transparent opacity-60 hover:opacity-100'}`}
                                         style={{ backgroundColor: c }}
-                                        title={c}
                                     />
                                 ))}
                             </div>
 
                             {/* Shape buttons */}
-                            <div className="grid grid-cols-3 gap-2">
+                            <div className="grid grid-cols-3 gap-3">
                                 {([
                                     { type: 'box' as const, Icon: Box, label: 'Cube' },
                                     { type: 'sphere' as const, Icon: Circle, label: 'Sphere' },
-                                    { type: 'cylinder' as const, Icon: Cylinder, label: 'Cylinder' },
+                                    { type: 'cylinder' as const, Icon: Cylinder, label: 'Cylid' },
                                 ] as { type: SceneObject['type'], Icon: any, label: string }[]).map(({ type, Icon, label }) => (
                                     <button
                                         key={type}
                                         onClick={() => onAddObject?.(type, selectedColor)}
-                                        className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-gray-200 hover:border-primary/40 hover:bg-primary/5 transition-all group"
+                                        className="flex flex-col items-center gap-2.5 p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-primary/40 hover:bg-primary/10 transition-all group"
                                     >
-                                        <Icon className="w-6 h-6 text-gray-600 group-hover:text-primary transition-colors" />
-                                        <span className="text-xs text-gray-600 font-medium group-hover:text-primary">{label}</span>
+                                        <Icon className="w-5 h-5 text-white/40 group-hover:text-primary transition-colors" />
+                                        <span className="text-[9px] text-white/40 font-black uppercase tracking-widest group-hover:text-white">{label}</span>
                                     </button>
                                 ))}
                             </div>
@@ -140,39 +136,34 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
                         {/* Scene object list */}
                         {sceneObjects.length > 0 && (
                             <div>
-                                <h3 className="text-gray-700 font-semibold text-sm mb-2">Scene Objects</h3>
-                                <div className="flex flex-col gap-1.5 max-h-52 overflow-y-auto pr-1">
+                                <h3 className="text-white/40 font-black text-[9px] uppercase tracking-[0.2em] mb-3">Active Registry</h3>
+                                <div className="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1">
                                     {sceneObjects.map(obj => (
                                         <div
                                             key={obj.id}
                                             onClick={() => onSelectObject?.(selectedObjectId === obj.id ? null : obj.id)}
-                                            className={`flex items-center gap-2 p-2.5 rounded-xl border cursor-pointer transition-all
+                                            className={`flex items-center gap-3 p-3.5 rounded-2xl border transition-all cursor-pointer group/item
                                                 ${selectedObjectId === obj.id
-                                                    ? 'border-primary/40 bg-primary/5'
-                                                    : 'border-gray-100 hover:bg-gray-50'
+                                                    ? 'border-primary/40 bg-primary/10'
+                                                    : 'border-white/5 bg-white/3 hover:bg-white/5'
                                                 }`}
                                         >
                                             <div
-                                                className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                                                style={{ backgroundColor: obj.color + '30' }}
+                                                className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 border border-white/10"
+                                                style={{ backgroundColor: obj.color + '20' }}
                                             >
                                                 <span style={{ color: obj.color }}>{getShapeIcon(obj.type)}</span>
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <div className="text-gray-800 text-xs font-medium capitalize">{obj.type}</div>
-                                                <div className="text-gray-400 text-xs font-mono truncate">
-                                                    [{obj.position.map(v => v.toFixed(1)).join(', ')}]
+                                                <div className="text-white font-bold text-xs capitalize">{obj.type}</div>
+                                                <div className="text-white/20 text-[9px] font-mono tracking-tighter truncate">
+                                                    ADDR: [{obj.position.map(v => v.toFixed(1)).join(', ')}]
                                                 </div>
                                             </div>
-                                            {obj.lockedBy && (
-                                                <span title="Locked" className="flex-shrink-0 flex items-center justify-center">
-                                                    <Lock className="w-3.5 h-3.5 text-amber-500" />
-                                                </span>
-                                            )}
+                                            {obj.lockedBy && <Lock className="w-3.5 h-3.5 text-amber-500 opacity-60" />}
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); onDeleteObject?.(obj.id); }}
-                                                className="p-1 hover:bg-red-100 rounded-lg transition-colors"
-                                                title="Delete object"
+                                                className="p-2 hover:bg-red-500/10 rounded-xl transition-colors opacity-0 group-hover/item:opacity-100"
                                             >
                                                 <Trash2 className="w-3.5 h-3.5 text-red-400" />
                                             </button>
@@ -183,178 +174,130 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
                         )}
 
                         {sceneObjects.length === 0 && (
-                            <p className="text-center text-gray-400 text-sm py-6">
-                                No objects yet — spawn a shape above!
-                            </p>
+                            <div className="flex flex-col items-center justify-center py-10 opacity-20 border-2 border-dashed border-white/5 rounded-3xl">
+                                <Box size={32} className="mb-3 text-white" />
+                                <p className="text-[10px] uppercase font-black tracking-widest">Registry Empty</p>
+                            </div>
                         )}
                     </div>
                 )}
 
                 {/* ── Model Tab ── */}
                 {activeTab === 'model' && (
-                    <div className="p-4 flex flex-col gap-4">
+                    <div className="p-6 flex flex-col gap-6">
                         {!modelLoaded ? (
-                            <div className="flex flex-col items-center justify-center gap-4 py-10 text-center">
-                                <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center">
-                                    <Box className="w-10 h-10 text-primary" />
+                            <div className="flex flex-col items-center justify-center gap-6 py-12 text-center">
+                                <div className="w-24 h-24 bg-white/5 border border-white/10 rounded-[32px] flex items-center justify-center shadow-inner group transition-all hover:border-primary/40">
+                                    <Box className="w-10 h-10 text-white/20 group-hover:text-primary transition-colors" />
                                 </div>
-                                <div>
-                                    <h3 className="text-gray-900 font-semibold text-base">No Model Loaded</h3>
-                                    <p className="text-gray-500 text-sm mt-1 max-w-xs">
-                                        Upload a GLB or GLTF file to display a 3D model in your session.
+                                <div className="max-w-[200px]">
+                                    <h3 className="text-white font-black text-sm uppercase tracking-widest mb-2">Protocol Uninitialized</h3>
+                                    <p className="text-white/30 text-[10px] uppercase tracking-widest font-bold leading-relaxed">
+                                        Upload neural asset (GLB/GLTF) to initiate spatial environment.
                                     </p>
                                 </div>
                                 <button
                                     onClick={onUpload}
                                     disabled={isUploading}
-                                    className={`mt-2 flex items-center gap-2 bg-primary hover:bg-primary/90 text-white font-semibold py-3 px-6 rounded-full transition-all shadow-md ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    className={`flex items-center gap-3 bg-primary hover:bg-secondary text-white font-black uppercase text-[10px] tracking-[0.2em] py-4 px-8 rounded-2xl transition-all shadow-lg shadow-primary/20 active:scale-95 ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >
                                     {isUploading ? (
                                         <>
                                             <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                            Processing Asset...
+                                            Syncing Asset...
                                         </>
                                     ) : (
                                         <>
                                             <Upload className="w-4 h-4" />
-                                            Upload Model
+                                            Initialize Asset
                                         </>
                                     )}
                                 </button>
                             </div>
                         ) : (
                             <>
-                                <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-100 rounded-xl">
-                                    <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-                                        <Box className="w-5 h-5 text-green-600" />
+                                <div className="flex items-center gap-4 p-5 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl shadow-inner">
+                                    <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center border border-emerald-500/30">
+                                        <Box className="w-5 h-5 text-emerald-400" />
                                     </div>
                                     <div>
-                                        <div className="text-green-800 font-semibold text-sm">Model Active</div>
-                                        <div className="text-green-600 text-xs">3D model is loaded in the scene</div>
+                                        <div className="text-emerald-400 font-black text-[10px] uppercase tracking-widest">Asset Active</div>
+                                        <div className="text-emerald-400/50 text-[9px] uppercase tracking-widest font-bold mt-0.5">Telemetry Synchronized</div>
                                     </div>
                                 </div>
 
-                                <div className="flex flex-col gap-2">
+                                <div className="flex flex-col gap-2.5">
                                     <button
                                         onClick={onToggleModel}
-                                        className={`flex items-center gap-3 p-4 rounded-xl border transition-all shadow-sm
+                                        className={`flex items-center gap-4 p-4 rounded-2xl border transition-all shadow-lg
                                             ${modelVisible
-                                                ? 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                                                : 'bg-primary/5 border-primary/30 text-primary'
+                                                ? 'bg-white/5 border-white/10 hover:bg-white/8'
+                                                : 'bg-primary/20 border-primary/40 text-primary'
                                             }`}
                                     >
-                                        {modelVisible ? <Eye className="w-5 h-5 text-gray-600" /> : <EyeOff className="w-5 h-5 text-primary" />}
-                                        <div className="text-left">
-                                            <div className="text-gray-800 font-medium text-sm">{modelVisible ? 'Hide Model' : 'Show Model'}</div>
-                                            <div className="text-gray-400 text-xs">Toggle 3D model visibility</div>
+                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${modelVisible ? 'bg-white/5 text-white/40' : 'bg-primary/20 text-primary animate-pulse'}`}>
+                                            {modelVisible ? <Eye size={18} /> : <EyeOff size={18} />}
+                                        </div>
+                                        <div className="text-left flex-1">
+                                            <div className="text-white font-black text-[10px] uppercase tracking-widest">{modelVisible ? 'Terminate Viz' : 'Initiate Viz'}</div>
+                                            <div className="text-white/20 text-[9px] uppercase font-bold tracking-widest mt-0.5">Overlay Status Toggle</div>
                                         </div>
                                     </button>
 
                                     <button
                                         onClick={onUpload}
-                                        className="flex items-center gap-3 p-4 rounded-xl border border-gray-200 hover:bg-gray-50 transition-all bg-white"
+                                        className="flex items-center gap-4 p-4 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all group"
                                     >
-                                        <Upload className="w-5 h-5 text-gray-600" />
-                                        <div className="text-left">
-                                            <div className="text-gray-800 font-medium text-sm">Replace Model</div>
-                                            <div className="text-gray-400 text-xs">Upload a new GLB / GLTF file</div>
+                                        <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-white/40 group-hover:text-white transition-colors">
+                                            <Upload size={18} />
                                         </div>
-                                    </button>
-
-                                    <button
-                                        onClick={onAddToLibrary}
-                                        className="flex items-center gap-3 p-4 rounded-xl border border-primary/20 hover:bg-primary/5 transition-all bg-white text-primary"
-                                    >
-                                        <BookmarkPlus className="w-5 h-5" />
-                                        <div className="text-left">
-                                            <div className="font-medium text-sm">Add to Library</div>
-                                            <div className="text-primary/60 text-xs">Save this model for future use</div>
+                                        <div className="text-left flex-1">
+                                            <div className="text-white font-black text-[10px] uppercase tracking-widest">Update Source</div>
+                                            <div className="text-white/20 text-[9px] uppercase font-bold tracking-widest mt-0.5">Provision new GLB data</div>
                                         </div>
                                     </button>
 
                                     <button
                                         onClick={onDeleteModel}
-                                        className="flex items-center gap-3 p-4 rounded-xl border border-red-100 hover:bg-red-50 transition-all bg-white"
+                                        className="flex items-center gap-4 p-4 bg-red-500/5 border border-red-500/10 rounded-2xl hover:bg-red-500/10 hover:border-red-500/20 transition-all group"
                                     >
-                                        <Trash2 className="w-5 h-5 text-red-500" />
-                                        <div className="text-left">
-                                            <div className="text-red-600 font-medium text-sm">Remove Model</div>
-                                            <div className="text-red-400 text-xs">Clear the 3D scene</div>
+                                        <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center text-red-400 group-hover:scale-110 transition-transform">
+                                            <Trash2 size={18} />
+                                        </div>
+                                        <div className="text-left flex-1">
+                                            <div className="text-red-400 font-black text-[10px] uppercase tracking-widest">Purge Entity</div>
+                                            <div className="text-red-400/40 text-[9px] uppercase font-bold tracking-widest mt-0.5">Wipe Registry Segment</div>
                                         </div>
                                     </button>
                                 </div>
 
                                 {/* Visual Filters */}
-                                <div className="p-4 bg-gray-50/50 border border-gray-100 rounded-2xl">
-                                    <h3 className="text-gray-700 font-semibold text-xs mb-3 flex items-center gap-2 uppercase tracking-wider">
+                                <div className="p-5 bg-white/3 border border-white/5 rounded-3xl">
+                                    <h3 className="text-white/30 font-black text-[9px] tracking-[0.3em] mb-4 flex items-center gap-2 uppercase">
                                         <Palette className="w-3.5 h-3.5 text-primary" />
-                                        Visual Filters
+                                        Visual Protocol
                                     </h3>
-                                    <div className="grid grid-cols-1 gap-2">
+                                    <div className="grid grid-cols-1 gap-2.5">
                                         {[
-                                            { id: 'realistic', label: 'Realistic', color: 'bg-gray-400' },
-                                            { id: 'blue_glow', label: 'Blue Glow', color: 'bg-blue-500' },
-                                            { id: 'red_glow', label: 'Red Glow', color: 'bg-red-500' },
+                                            { id: 'realistic', label: 'Neutral', color: 'bg-white/40' },
+                                            { id: 'blue_glow', label: 'Cyan Pulse', color: 'bg-blue-400' },
+                                            { id: 'red_glow', label: 'Ruby Trace', color: 'bg-red-400' },
                                         ].map((filter) => (
                                             <button
                                                 key={filter.id}
                                                 onClick={() => onSetVisualFilter?.(filter.id as any)}
-                                                className={`flex items-center justify-between p-3 rounded-xl border transition-all
+                                                className={`flex items-center justify-between p-4 rounded-2xl border transition-all
                                                     ${visualFilter === filter.id
-                                                        ? 'bg-white border-primary shadow-sm ring-1 ring-primary/20'
-                                                        : 'bg-gray-50 border-gray-100 hover:bg-white hover:border-gray-200'
+                                                        ? 'bg-primary/20 border-primary/40 shadow-[0_0_20px_rgba(124,58,237,0.2)]'
+                                                        : 'bg-white/5 border-white/5 hover:bg-white/8 hover:border-white/10'
                                                     }`}
                                             >
-                                                <div className="flex items-center gap-3">
-                                                    <div className={`w-3 h-3 rounded-full ${filter.color} shadow-sm`} />
-                                                    <span className={`text-sm font-medium ${visualFilter === filter.id ? 'text-primary' : 'text-gray-600'}`}>{filter.label}</span>
+                                                <div className="flex items-center gap-4">
+                                                    <div className={`w-2.5 h-2.5 rounded-full ${filter.color} ${visualFilter === filter.id ? 'animate-pulse' : 'opacity-40'}`} />
+                                                    <span className={`text-[10px] font-black uppercase tracking-widest ${visualFilter === filter.id ? 'text-white' : 'text-white/40'}`}>{filter.label}</span>
                                                 </div>
-                                                {visualFilter === filter.id && <Sparkles className="w-4 h-4 text-primary animate-pulse" />}
+                                                {visualFilter === filter.id && <Sparkles className="w-3.5 h-3.5 text-primary animate-spin-slow" />}
                                             </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* Movement Controls */}
-                                <div className="p-4 bg-gray-50/50 border border-gray-100 rounded-2xl">
-                                    <h3 className="text-gray-700 font-semibold text-xs mb-3 flex items-center gap-2 uppercase tracking-wider">
-                                        <MoveHorizontal className="w-3.5 h-3.5 text-primary" />
-                                        Movement
-                                    </h3>
-                                    <button
-                                        onClick={() => onSetAutoOscillate?.(!autoOscillate)}
-                                        className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all
-                                            ${autoOscillate
-                                                ? 'bg-white border-primary shadow-sm ring-1 ring-primary/20'
-                                                : 'bg-gray-50 border-gray-100 hover:bg-white hover:border-gray-200'
-                                            }`}
-                                    >
-                                        <div className="flex flex-col text-left">
-                                            <span className={`text-sm font-medium ${autoOscillate ? 'text-primary' : 'text-gray-600'}`}>180° Oscillation</span>
-                                            <span className="text-[10px] text-gray-400">Left-to-right smooth motion</span>
-                                        </div>
-                                        <div className={`relative w-10 h-5 rounded-full transition-colors ${autoOscillate ? 'bg-primary' : 'bg-gray-200'}`}>
-                                            <div className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-transform ${autoOscillate ? 'translate-x-5' : 'translate-x-0'}`} />
-                                        </div>
-                                    </button>
-                                </div>
-
-                                {/* Gesture tips */}
-                                <div className="p-4 bg-primary/5 border border-primary/20 rounded-xl mt-2">
-                                    <h4 className="text-primary font-semibold text-sm mb-2 flex items-center gap-2">
-                                        <RotateCcw className="w-3.5 h-3.5" />
-                                        Gesture Controls
-                                    </h4>
-                                    <div className="flex flex-col gap-1.5">
-                                        {[
-                                            ['✊', 'Fist to reset position'],
-                                            ['☝️', 'Point to move model'],
-                                            ['🤏', 'Pinch to zoom'],
-                                            ['🖐️', 'Open hand to rotate'],
-                                        ].map(([emoji, tip]) => (
-                                            <div key={tip} className="flex items-center gap-2 text-xs text-gray-600">
-                                                <span>{emoji}</span><span>{tip}</span>
-                                            </div>
                                         ))}
                                     </div>
                                 </div>
@@ -365,86 +308,82 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
 
                 {/* ── Library Tab ── */}
                 {activeTab === 'library' && (
-                    <div className="p-4 flex flex-col gap-4">
-                        <div className="flex items-center gap-2 mb-1">
-                            <Sparkles className="w-4 h-4 text-primary" />
-                            <h3 className="text-gray-900 font-semibold text-sm">3D Library</h3>
+                    <div className="p-6 flex flex-col gap-6">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-inner">
+                                <BookmarkPlus size={20} />
+                            </div>
+                            <div>
+                                <h2 className="text-white font-black text-sm uppercase tracking-widest">Curated Archives</h2>
+                                <p className="text-white/20 text-[9px] uppercase font-bold tracking-widest mt-0.5">Verified Knowledge Assets</p>
+                            </div>
                         </div>
-                        <p className="text-gray-500 text-xs leading-relaxed mb-4">
-                            Select a curated model from our interactive library. These are optimized for high-performance spatial education.
-                        </p>
                         
                         {!isHost && (
-                            <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl text-amber-700 text-xs mb-4">
-                                <strong>Note:</strong> Only the session host can change the primary 3D model for all participants.
+                            <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-amber-200 text-[10px] font-bold uppercase tracking-widest leading-relaxed">
+                                CRITICAL: Only Prime Entity (Host) can re-provision the primary spatial asset.
                             </div>
                         )}
 
-                        <div className="space-y-6">
+                        <div className="space-y-8">
                             {/* Curated Section */}
                             <div>
-                                <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                <h4 className="text-[9px] font-black text-white/20 uppercase tracking-[.4em] mb-4 flex items-center gap-2">
                                     <Lock className="w-3 h-3" />
-                                    In-built Models
+                                    Core Protocol Assets
                                 </h4>
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-2 gap-4">
                                     {libraryModels.filter(m => m.is_curated).map(model => (
                                         <button
                                             key={model.id}
                                             disabled={!isHost}
                                             onClick={() => onSelectLibraryModel?.(model.url, model.name)}
-                                            className={`flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all text-center group
+                                            className={`flex flex-col items-center gap-3 p-5 rounded-3xl border transition-all text-center group relative overflow-hidden
                                                 ${isHost 
-                                                    ? 'bg-purple-50/30 border-purple-100 hover:border-primary/40 hover:bg-primary/5 hover:shadow-md' 
-                                                    : 'bg-gray-50/50 border-gray-100 opacity-60 cursor-not-allowed'}`}
+                                                    ? 'bg-white/5 border-white/10 hover:border-primary/40 hover:bg-primary/10 hover:shadow-xl' 
+                                                    : 'bg-white/[0.02] border-white/5 opacity-40 cursor-not-allowed'}`}
                                         >
-                                            <span className="text-3xl group-hover:scale-110 transition-transform duration-300">
+                                            <span className="text-4xl group-hover:scale-110 transition-transform duration-500 filter drop-shadow-[0_10px_10px_rgba(0,0,0,0.5)]">
                                                 {model.thumbnail || '📦'}
                                             </span>
                                             <div>
-                                                <div className="text-gray-900 font-bold text-[11px] leading-tight">{model.name}</div>
-                                                <div className="text-primary text-[9px] uppercase tracking-tighter mt-0.5 font-medium">{model.category}</div>
+                                                <div className="text-white font-black text-[10px] uppercase tracking-widest">{model.name}</div>
+                                                <div className="text-primary text-[8px] uppercase tracking-widest mt-1 font-black opacity-60 group-hover:opacity-100 transition-opacity">{model.category}</div>
                                             </div>
                                         </button>
                                     ))}
-                                    {libraryModels.filter(m => m.is_curated).length === 0 && (
-                                        <div className="col-span-2 py-4 text-center text-gray-400 text-xs italic">
-                                            Loading curated collection...
-                                        </div>
-                                    )}
                                 </div>
                             </div>
 
                             {/* Community Section */}
                             <div>
-                                <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                <h4 className="text-[9px] font-black text-white/20 uppercase tracking-[.4em] mb-4 flex items-center gap-2">
                                     <Plus className="w-3 h-3" />
-                                    Community Contributions
+                                    Community Intel
                                 </h4>
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-2 gap-4">
                                     {libraryModels.filter(m => !m.is_curated).map(model => (
                                         <button
                                             key={model.id}
                                             disabled={!isHost}
                                             onClick={() => onSelectLibraryModel?.(model.url, model.name)}
-                                            className={`flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all text-center group
+                                            className={`flex flex-col items-center gap-3 p-5 rounded-3xl border transition-all text-center group
                                                 ${isHost 
-                                                    ? 'bg-gray-50 border-gray-100 hover:border-primary/40 hover:bg-primary/5 hover:shadow-md' 
-                                                    : 'bg-gray-50/50 border-gray-100 opacity-60 cursor-not-allowed'}`}
+                                                    ? 'bg-white/5 border-white/10 hover:border-primary/40 hover:bg-primary/10' 
+                                                    : 'bg-white/[0.02] border-white/5 opacity-40'}`}
                                         >
-                                            <span className="text-3xl group-hover:scale-110 transition-transform duration-300">
+                                            <span className="text-4xl group-hover:scale-110 transition-transform duration-500">
                                                 {model.thumbnail || '📦'}
                                             </span>
                                             <div>
-                                                <div className="text-gray-900 font-bold text-[11px] leading-tight">{model.name}</div>
-                                                <div className="text-gray-400 text-[9px] uppercase tracking-tighter mt-0.5">{model.category}</div>
+                                                <div className="text-white font-black text-[10px] uppercase tracking-widest">{model.name}</div>
+                                                <div className="text-white/20 text-[8px] uppercase tracking-widest mt-1 font-black">{model.category}</div>
                                             </div>
                                         </button>
                                     ))}
                                     {libraryModels.filter(m => !m.is_curated).length === 0 && (
-                                        <div className="col-span-2 py-8 text-center border border-dashed border-gray-200 rounded-2xl">
-                                            <p className="text-gray-400 text-xs italic">No uploads in the library yet.</p>
-                                            <p className="text-gray-400 text-[10px] mt-1">Uploaded models appear here once saved.</p>
+                                        <div className="col-span-2 py-10 text-center border-2 border-dashed border-white/5 rounded-3xl bg-white/[0.01]">
+                                            <p className="text-white/20 text-[9px] font-black uppercase tracking-[.3em]">No Community Metadata</p>
                                         </div>
                                     )}
                                 </div>
@@ -454,15 +393,15 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
                 )}
             </div>
 
-            {/* Add object quick-action footer */}
+            {/* Quick action footer */}
             {activeTab === 'objects' && (
-                <div className="p-3 border-t border-gray-100 bg-gray-50/50">
+                <div className="p-4 border-t border-white/10 bg-black/40 backdrop-blur-3xl">
                     <button
                         onClick={() => onAddObject?.('box', selectedColor)}
-                        className="w-full flex items-center justify-center gap-2 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-all shadow-sm"
+                        className="w-full flex items-center justify-center gap-3 py-4 bg-primary text-white rounded-2xl text-[10px] font-black uppercase tracking-[.3em] hover:bg-secondary transition-all shadow-lg shadow-primary/20 hover:shadow-secondary/30 active:scale-95"
                     >
-                        <Plus className="w-4 h-4" />
-                        Quick Add Cube
+                        <Plus size={16} />
+                        Instantiate Cube
                     </button>
                 </div>
             )}
