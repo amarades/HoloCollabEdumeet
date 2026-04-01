@@ -34,7 +34,7 @@ interface ProfileData {
 
 const Profile = () => {
     const navigate = useNavigate();
-    const { user } = useAuth();
+    const { user: _ } = useAuth();
     const [data, setData] = useState<ProfileData | null>(null);
     const [loading, setLoading] = useState(true);
 
@@ -67,7 +67,7 @@ const Profile = () => {
     }
 
     return (
-        <div className="bg-bg-white text-text-dark min-h-screen overflow-x-hidden selection:bg-primary/30">
+        <div className="bg-transparent text-white min-h-screen overflow-x-hidden selection:bg-primary/30">
             <AIChatMenu />
             
             {/* Premium Background Elements */}
