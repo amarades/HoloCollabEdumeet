@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
     Loader2, 
     Download, 
-    CheckCircle2, 
     BarChart3, 
     Mic, 
     Play, 
@@ -14,7 +13,6 @@ import {
     History,
     ArrowLeft,
     TrendingUp,
-    FileText
 } from 'lucide-react';
 import { apiRequest, AUTH_TOKEN_KEY } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -218,7 +216,7 @@ const SessionReport = () => {
     const ratingInfo = RATING_INFO(report?.rating || '');
 
     return (
-        <div className="bg-bg-white text-text-dark min-h-screen overflow-x-hidden selection:bg-primary/30">
+        <div className="bg-transparent text-white min-h-screen overflow-x-hidden selection:bg-primary/30">
             <AIChatMenu />
             
             {/* Premium Background Elements */}
