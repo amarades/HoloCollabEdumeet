@@ -18,11 +18,20 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage }) => {
 
     const menuItems = [
         { id: 'home', label: 'Home', icon: 'home', path: '/dashboard' },
-        { id: 'assets', label: 'Assets', icon: 'inventory_2', path: '#' },
+        { 
+            id: 'assets', 
+            label: 'Assets', 
+            icon: 'inventory_2', 
+            path: '/library',
+            subItems: [
+                { id: 'library', label: 'Library', path: '/library', icon: 'local_library' },
+                { id: 'vault', label: 'Neural Vault', path: '#', icon: 'lock' },
+            ]
+        },
         { id: 'sessions', label: 'Sessions', icon: 'groups', path: '/join' },
         { id: 'report', label: 'Report', icon: 'monitoring', path: location.pathname.includes('/report') ? location.pathname : '#' },
         { id: 'profile', label: 'Profile', icon: 'person', path: '/profile' },
-        { id: 'settings', label: 'Settings', icon: 'settings', path: '#' },
+        { id: 'settings', label: 'Settings', icon: 'settings', path: '/settings' },
     ];
 
     const currentPath = activePage || location.pathname;
@@ -52,25 +61,47 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage }) => {
                     }
 
                     return (
-                        <button
-                            key={item.id}
-                            onClick={() => item.path !== '#' && navigate(item.path)}
-                            className={`px-5 py-3.5 flex items-center gap-4 transition-all duration-500 ease-out rounded-2xl w-full text-left group relative overflow-hidden ${
-                                isActive 
-                                ? 'bg-white/5 text-white shadow-lg border border-primary/30' 
-                                : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'
-                            }`}
-                        >
-                            {isActive && (
-                                <div className="absolute left-0 top-0 w-1 h-full bg-gradient-to-b from-primary to-secondary" />
+                        <div key={item.id} className="flex flex-col gap-1">
+                            <button
+                                onClick={() => item.path !== '#' && navigate(item.path)}
+                                className={`px-5 py-3.5 flex items-center gap-4 transition-all duration-500 ease-out rounded-2xl w-full text-left group relative overflow-hidden ${
+                                    isActive 
+                                    ? 'bg-white/5 text-white shadow-lg border border-primary/30' 
+                                    : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'
+                                }`}
+                            >
+                                {isActive && (
+                                    <div className="absolute left-0 top-0 w-1 h-full bg-gradient-to-b from-primary to-secondary" />
+                                )}
+                                <span className={`material-symbols-outlined transition-colors duration-300 ${isActive ? 'text-primary' : 'group-hover:text-primary'}`} data-icon={item.icon}>{item.icon}</span>
+                                <span className="font-['Inter'] tracking-wider text-xs uppercase font-black">{item.label}</span>
+                                
+                                {isActive && (
+                                    <div className="absolute right-4 w-1.5 h-1.5 rounded-full bg-primary animate-pulse shadow-[0_0_8px_rgba(124,58,237,0.8)]" />
+                                )}
+                            </button>
+
+                            {/* Sub Items */}
+                            {item.subItems && (isActive || currentPath.includes(item.path)) && (
+                                <div className="flex flex-col gap-1 ml-6 mt-1 border-l border-white/5 pl-4 animate-in fade-in slide-in-from-left-2 duration-500">
+                                    {item.subItems.map(subItem => {
+                                        const isSubActive = currentPath === subItem.path;
+                                        return (
+                                            <button
+                                                key={subItem.id}
+                                                onClick={() => subItem.path !== '#' && navigate(subItem.path)}
+                                                className={`px-4 py-2 flex items-center gap-3 transition-all rounded-xl text-left group ${
+                                                    isSubActive ? 'text-primary' : 'text-gray-500 hover:text-white'
+                                                }`}
+                                            >
+                                                <span className="material-symbols-outlined text-sm">{subItem.icon}</span>
+                                                <span className="text-[10px] uppercase font-black tracking-widest">{subItem.label}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                             )}
-                            <span className={`material-symbols-outlined transition-colors duration-300 ${isActive ? 'text-primary' : 'group-hover:text-primary'}`} data-icon={item.icon}>{item.icon}</span>
-                            <span className="font-['Inter'] tracking-wider text-xs uppercase font-black">{item.label}</span>
-                            
-                            {isActive && (
-                                <div className="absolute right-4 w-1.5 h-1.5 rounded-full bg-primary animate-pulse shadow-[0_0_8px_rgba(124,58,237,0.8)]" />
-                            )}
-                        </button>
+                        </div>
                     );
                 })}
             </nav>
