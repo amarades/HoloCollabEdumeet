@@ -15,6 +15,8 @@ const PreJoinLobby = lazy(() => import('./pages/PreJoinLobby'));
 const CreateSession = lazy(() => import('./pages/CreateSession'));
 const TopicPrep = lazy(() => import('./pages/TopicPrep'));
 const Profile = lazy(() => import('./pages/Profile'));
+const Library = lazy(() => import('./pages/Library'));
+const Settings = lazy(() => import('./pages/Settings'));
 
 // Protected Route Component
 const ProtectedRoute = ({ children }: { children: ReactNode }) => {
@@ -63,6 +65,8 @@ function App() {
             <Route path="/create-session" element={<ProtectedRoute><CreateSession /></ProtectedRoute>} />
             <Route path="/topic-prep" element={<ProtectedRoute><TopicPrep /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+            <Route path="/library" element={<ProtectedRoute><Library /></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="/session/:sessionId/report" element={<ProtectedRoute><SessionReport /></ProtectedRoute>} />
               </Routes>
             </Suspense>
