@@ -129,7 +129,7 @@ const Dashboard = () => {
                         initial={{ opacity: 0, y: 30 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.3 }}
-                        className="col-span-12 glass-card p-12 cursor-pointer group rounded-[50px] relative overflow-hidden"
+                        className="col-span-12 lg:col-span-8 glass-card p-12 cursor-pointer group rounded-[50px] relative overflow-hidden"
                         onClick={() => navigate('/profile')}
                     >
                         <div className="absolute -bottom-20 -right-20 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[120px] pointer-events-none transition-all group-hover:bg-primary/10"></div>
@@ -153,6 +153,41 @@ const Dashboard = () => {
                             </button>
                         </div>
                     </motion.div>
+
+                    {/* Quick Links */}
+                    <div className="col-span-12 lg:col-span-4 flex flex-col gap-6">
+                        <motion.div 
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: 0.4 }}
+                            className="flex-1 glass-card p-8 rounded-[40px] cursor-pointer group hover:border-emerald-500/40 transition-all flex items-center gap-6"
+                            onClick={() => navigate('/library')}
+                        >
+                            <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg shadow-emerald-500/10">
+                                <span className="material-symbols-outlined text-3xl">local_library</span>
+                            </div>
+                            <div>
+                                <h4 className="text-lg font-black text-white italic tracking-tight">Asset Library<span className="text-emerald-500 non-italic">.</span></h4>
+                                <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest mt-1">Holographic Registry</p>
+                            </div>
+                        </motion.div>
+
+                        <motion.div 
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: 0.5 }}
+                            className="flex-1 glass-card p-8 rounded-[40px] cursor-pointer group hover:border-primary/40 transition-all flex items-center gap-6"
+                            onClick={() => navigate('/settings')}
+                        >
+                            <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg shadow-primary/10">
+                                <span className="material-symbols-outlined text-3xl">settings</span>
+                            </div>
+                            <div>
+                                <h4 className="text-lg font-black text-white italic tracking-tight">Preferences<span className="text-primary non-italic">.</span></h4>
+                                <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest mt-1">Neural Parameters</p>
+                            </div>
+                        </motion.div>
+                    </div>
                 </div>
             </main>
         </div>
