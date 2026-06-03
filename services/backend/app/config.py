@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 30
 
     # CORS
-    cors_origin: str = "http://localhost:5173"
+    cors_origin: str = "http://localhost:5173, http://127.0.0.1:5173"
     cors_origins: Optional[str] = None
 
     # Internal service auth

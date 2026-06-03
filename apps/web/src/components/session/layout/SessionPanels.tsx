@@ -38,8 +38,8 @@ export const SessionPanels: React.FC<SessionPanelsProps> = React.memo(({
                 <div className="absolute top-0 md:top-8 right-0 md:right-8 bottom-0 md:bottom-36 w-full md:w-80 bg-[#1a1919]/60 backdrop-blur-3xl border border-white/5 md:rounded-[32px] shadow-2xl z-[100] md:z-40 flex flex-col overflow-hidden animate-in md:slide-in-from-right-8">
                     <div className="p-6 border-b border-white/5 flex items-center justify-between">
                         <div className="flex flex-col gap-0.5">
-                            <h3 className="text-white font-black text-xs uppercase tracking-[0.2em]">Manifest</h3>
-                            <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold">Active Entities</p>
+                            <h3 className="text-white font-black text-xs uppercase tracking-[0.2em]">Participants</h3>
+                            <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold">In this session</p>
                         </div>
                         <button onClick={() => setShowParticipants(false)} className="w-8 h-8 flex items-center justify-center hover:bg-white/10 rounded-full transition-colors text-white/40 hover:text-white">
                             <X size={18} />
@@ -54,13 +54,13 @@ export const SessionPanels: React.FC<SessionPanelsProps> = React.memo(({
                                 <div className="overflow-hidden">
                                     <div className="text-white font-bold text-sm truncate">{user?.name}</div>
                                     <div className="text-[9px] text-primary font-black uppercase tracking-widest">
-                                        {isHost ? 'Prime Entity' : 'Linked Participant'}
+                                        {isHost ? 'Host' : 'Participant'}
                                     </div>
                                 </div>
                             </div>
                             <Mic size={14} className="text-primary" />
                         </div>
-                        {users.map((p, idx) => {
+                        {users.filter(p => p.id !== (user as any)?.id && p.id !== user?.email).map((p, idx) => {
                             const engagement = engagementMap[p.id] || 0;
                             return (
                                 <div key={idx} className="p-4 rounded-2xl flex flex-col gap-3 group border border-transparent hover:border-white/5 hover:bg-white/5 transition-all cursor-pointer">
@@ -74,7 +74,7 @@ export const SessionPanels: React.FC<SessionPanelsProps> = React.memo(({
                                                     {p.name}
                                                     {p.handRaised && <span className="text-amber-400 animate-bounce text-xs">✋</span>}
                                                 </div>
-                                                <div className="text-[9px] text-white/30 uppercase tracking-widest">Subscriber</div>
+                                                <div className="text-[9px] text-white/30 uppercase tracking-widest">Member</div>
                                             </div>
                                         </div>
                                         <Mic size={14} className={p.micOn !== false ? "text-emerald-400" : "text-white/20"} />
@@ -101,8 +101,8 @@ export const SessionPanels: React.FC<SessionPanelsProps> = React.memo(({
                 <div className="absolute top-0 md:top-8 right-0 md:right-8 bottom-0 md:bottom-36 w-full md:w-96 bg-[#1a1919]/60 backdrop-blur-3xl border border-white/5 md:rounded-[32px] shadow-2xl z-[100] md:z-40 flex flex-col overflow-hidden animate-in md:slide-in-from-right-8">
                     <div className="p-6 border-b border-white/5 flex items-center justify-between">
                         <div className="flex flex-col gap-0.5">
-                            <h3 className="text-white font-black text-xs uppercase tracking-[0.2em]">Stream</h3>
-                            <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold">Synchronized Intel</p>
+                            <h3 className="text-white font-black text-xs uppercase tracking-[0.2em]">Chat</h3>
+                            <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold">Live Conversation</p>
                         </div>
                         <button onClick={() => setShowChat(false)} className="w-8 h-8 flex items-center justify-center hover:bg-white/10 rounded-full transition-colors text-white/40 hover:text-white">
                             <X size={18} />

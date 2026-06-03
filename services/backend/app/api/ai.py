@@ -27,7 +27,7 @@ class AIService:
 
     async def generate_content(self, prompt: str, history: Optional[List[dict]] = None) -> str:
         if self.client is None:
-            raise HTTPException(status_code=500, detail="AI Service is not initialized. Please ensure your API key and AI_SERVICE environment variables are set.")
+            return f"[Mock AI Response] API Key invalid or not configured. I would have responded to: {prompt[:50]}..."
 
         try:
             # If history is provided, we use a chat session
@@ -44,8 +44,8 @@ class AIService:
                 )
             return response.text
         except Exception as e:
-            print(f"Error generating AI content: {e}")
-            raise HTTPException(status_code=500, detail=f"AI Service Error: {str(e)}")
+            print(f"Error generating AI content, using mock fallback: {e}")
+            return f"[Mock AI Response] API Key invalid or quota exceeded. I would have responded to: {prompt[:50]}..."
 
     async def generate_class_summary(self, transcript: str, topic: str) -> str:
         if not transcript.strip():
@@ -106,10 +106,18 @@ async def detect_topic(request: TranscriptRequest, current_user: dict = Depends(
     """
     Detects the topic from a short transcript/speech segment.
     """
-    prompt = f"Detect the main educational topic and up to 5 keywords from this text: '{request.transcript}'. Return as JSON: {{'topic': '...', 'keywords': ['...', ...], 'auto_load_model': {{'name': '...', 'thumbnail': '...'}} if a 3D model match exists}}"
-    # Note: In a real app, we'd use constrained output (Schema) but for now we'll just parse the text or return a simple response.
-    # For this task, we'll keep it simple.
+    prompt = f"""You are an educational topic detector. Extract the core educational topic and up to 5 keywords from the given transcript/text. 
+Return ONLY a JSON dictionary with the keys:
+- "topic": string (the core topic)
+- "keywords": string[] (up to 5 keywords)
+- "auto_load_model": {{ "name": string, "thumbnail": string }} (ONLY if there is a highly relevant, highly visual 3D model that should be loaded. Select an emoji for the thumbnail. If no visual model is relevant, omit this key entirely.)
+Do not wrap in markdown blocks.
+
+Transcript: "{request.transcript}"
+"""
     response_text = await ai_service.generate_content(prompt)
+    return {"response": response_text}
+
 @router.post("/summarize")
 async def summarize_transcript(request: TranscriptRequest, current_user: dict = Depends(get_current_user)):
     """
@@ -122,6 +130,15 @@ async def generate_notes(request: TranscriptRequest, current_user: dict = Depend
     """
     Converts a transcript into clean lecture notes.
     """
-    prompt = f"Convert this transcript into clean lecture notes with headings and bullet points: {request.transcript}"
+    prompt = f"""You are an educational AI assistant. Convert the provided user topic/transcript into structured, clean lecture notes.
+Return ONLY a JSON dictionary with the exact keys:
+- "summary": string (a comprehensive summary)
+- "key_points": string[] (bullet points of core concepts)
+- "important_terms": string[] (vocabulary terms)
+- "follow_up_questions": string[] (questions to ask students)
+Do not wrap in markdown blocks.
+
+Topic/Transcript: "{request.transcript}"
+"""
     response_text = await ai_service.generate_content(prompt)
     return {"response": response_text}

@@ -126,8 +126,10 @@ const Session = () => {
         arSceneRef,
         socketInstance,
         user,
+        // Pass the ref object so the hook can watch for when the video element mounts
         videoElement: videoRef.current,
-        isApproved
+        // Gesture control is a local 3D interaction — always allow it for everyone
+        isApproved: true
     });
 
     // Meeting timer
@@ -303,7 +305,14 @@ const Session = () => {
                     user?.name || (user as any)?.email || 'Guest',
                     isHost,
                     (updatedUsers: any[]) => {
-                        setUsers(updatedUsers.filter((u: any) => u.id !== (user as any)?.id && u.id !== user?.email));
+                        const localName = user?.name || (user as any)?.email;
+                        // Deduplicate by name first (handles stale reconnects)
+                        const uniqueUsers = Array.from(new Map(updatedUsers.map(u => [u.name, u])).values());
+                        const filtered = uniqueUsers.filter((u: any) => 
+                            u.id !== socket?.getUserId() && 
+                            u.name !== localName
+                        );
+                        setUsers(filtered);
                     }
                 );
                 
@@ -312,7 +321,13 @@ const Session = () => {
                 });
 
                 socket.on('USER_JOINED', (data: any) => {
-                    setUsers(prev => [...prev.filter(u => u.id !== data.user.id), data.user]);
+                    const localName = user?.name || (user as any)?.email;
+                    if (data.user.name === localName) return;
+                    
+                    setUsers(prev => [
+                        ...prev.filter(u => u.id !== data.user.id && u.name !== data.user.name), 
+                        data.user
+                    ]);
                 });
 
                 socket.on('USER_LEFT', (data: any) => {
@@ -340,10 +355,23 @@ const Session = () => {
                 scene.onStateChange = (state) => {
                     const now = Date.now();
                     if (now - lastTransformEmit > 50) {
-                        socket?.emit('MODEL_TRANSFORM', state);
+                        socket?.emit('MODEL_TRANSFORM', { 
+                            payload: state, 
+                            sender: socket.getUserId() 
+                        });
                         lastTransformEmit = now;
                     }
                 };
+
+                socket.on('MODEL_TRANSFORM', (data: any) => {
+                    // Ignore echos of our own transformation to prevent jitter/snap-back
+                    if (data.sender === socket?.getUserId()) return;
+                    
+                    const state = data.payload || data;
+                    if (arSceneRef.current) {
+                        arSceneRef.current.applyState(state);
+                    }
+                });
 
                 // Initialize permissions BEFORE setSocketInstance so host listeners
                 // are registered before the socket fully opens and events arrive.

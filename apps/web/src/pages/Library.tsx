@@ -31,12 +31,12 @@ const Library = () => {
                 console.error('Failed to fetch library models:', err);
                 // Fallback some mock data if request fails for UI demonstration
                 setModels([
-                    { id: 1, name: 'Human Heart (Neural)', category: 'Medical', thumbnail: '🫀', is_curated: true, author: 'HoloMed' },
-                    { id: 2, name: 'James Webb Protocol', category: 'Space', thumbnail: '🛰️', is_curated: true, author: 'SpaceOps' },
-                    { id: 3, name: 'Internal Combustion', category: 'Engineering', thumbnail: '⚙️', is_curated: false, author: 'MechCore' },
-                    { id: 4, name: 'Mars Rover Unit', category: 'Space', thumbnail: '🚜', is_curated: true, author: 'NASA' },
-                    { id: 5, name: 'Eiffel Structure', category: 'Historical', thumbnail: '🗼', is_curated: false, author: 'HistoryHub' },
-                    { id: 6, name: 'DNA Helix Trace', category: 'Science', thumbnail: '🧬', is_curated: true, author: 'BioLink' },
+                    { id: 1, name: 'Human Heart', category: 'Medical', thumbnail: '🫀', is_curated: true, author: 'HoloMed' },
+                    { id: 2, name: 'James Webb Telescope', category: 'Space', thumbnail: '🛰️', is_curated: true, author: 'SpaceOffice' },
+                    { id: 3, name: 'Engine Model', category: 'Engineering', thumbnail: '⚙️', is_curated: false, author: 'MechCore' },
+                    { id: 4, name: 'Mars Rover', category: 'Space', thumbnail: '🚜', is_curated: true, author: 'NASA' },
+                    { id: 5, name: 'Eiffel Tower', category: 'Historical', thumbnail: '🗼', is_curated: false, author: 'HistoryHub' },
+                    { id: 6, name: 'DNA Helix', category: 'Science', thumbnail: '🧬', is_curated: true, author: 'BioLink' },
                 ]);
             } finally {
                 setLoading(false);
@@ -71,10 +71,10 @@ const Library = () => {
                     <div className="flex-1">
                         <div className="flex items-center gap-2 mb-4">
                             <span className="w-8 h-px bg-primary/40"></span>
-                            <p className="text-primary font-black uppercase tracking-[0.3em] text-[10px]">Registry</p>
+                            <p className="text-primary font-black uppercase tracking-[0.3em] text-[10px]">Library</p>
                         </div>
                         <h2 className="text-5xl font-black text-white tracking-tighter mb-4 italic">Asset Library<span className="text-emerald-500 non-italic ml-2">.</span></h2>
-                        <p className="text-white/60 font-medium max-w-xl">Browse curated neural assets and holographic simulations available for deployment.</p>
+                        <p className="text-white/60 font-medium max-w-xl">Browse curated 3D assets and holographic simulations for your sessions.</p>
                     </div>
 
                     <div className="flex items-center gap-4">
@@ -93,7 +93,7 @@ const Library = () => {
                             </button>
                         </div>
                         <button className="px-8 py-4 bg-gradient-to-br from-emerald-600 to-emerald-700 text-white font-black uppercase text-[10px] tracking-[0.2em] rounded-2xl shadow-xl shadow-emerald-700/20 hover:scale-105 transition-all flex items-center gap-4 border border-emerald-400">
-                           <Plus size={16} /> Asset Provision
+                           <Plus size={16} /> Upload Asset
                         </button>
                     </div>
                 </motion.header>
@@ -130,7 +130,7 @@ const Library = () => {
                 {loading ? (
                     <div className="flex flex-col items-center justify-center py-40">
                         <div className="w-16 h-16 border-4 border-primary/20 border-t-primary rounded-full animate-spin mb-6" />
-                        <p className="text-primary font-black uppercase tracking-[0.3em] text-[10px]">Initializing Registry...</p>
+                        <p className="text-primary font-black uppercase tracking-[0.3em] text-[10px]">Loading Library...</p>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-8">
@@ -155,11 +155,11 @@ const Library = () => {
 
                                 <div className="flex-1">
                                     <div className="flex items-center gap-3 mb-2">
-                                        <span className="px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-[8px] font-bold text-white/30 uppercase tracking-widest">Protocol {idx + 104}</span>
+                                        <span className="px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-[8px] font-bold text-white/30 uppercase tracking-widest">Model {idx + 104}</span>
                                         <span className="text-primary text-[8px] font-black uppercase tracking-widest opacity-60 group-hover:opacity-100 transition-opacity">{model.category}</span>
                                     </div>
                                     <h3 className="text-xl font-black text-white mb-2 italic tracking-tight group-hover:text-primary transition-colors">{model.name}</h3>
-                                    <p className="text-white/20 text-[10px] uppercase font-bold tracking-widest mb-6">Author: {model.author || 'Neural Core'}</p>
+                                    <p className="text-white/20 text-[10px] uppercase font-bold tracking-widest mb-6">Author: {model.author || 'HoloCollab'}</p>
                                 </div>
 
                                 <div className="flex items-center gap-2">
@@ -182,8 +182,8 @@ const Library = () => {
                 {!loading && filteredModels.length === 0 && (
                     <div className="flex flex-col items-center justify-center py-40 border-2 border-dashed border-white/5 rounded-[60px]">
                         <Database className="w-16 h-16 text-white/10 mb-6" />
-                        <h3 className="text-2xl font-black text-white/40 uppercase tracking-tight">Registry Fragmented</h3>
-                        <p className="text-white/20 text-xs font-bold uppercase tracking-widest mt-2">No neural assets matched your current search parameters.</p>
+                        <h3 className="text-2xl font-black text-white/40 uppercase tracking-tight">No results</h3>
+                        <p className="text-white/20 text-xs font-bold uppercase tracking-widest mt-2">No assets matched your current search parameters.</p>
                     </div>
                 )}
             </main>

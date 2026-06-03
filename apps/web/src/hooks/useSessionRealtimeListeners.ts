@@ -34,16 +34,14 @@ export function useSessionRealtimeListeners({
     });
     const unsubSlide = socket.on('SLIDE_CHANGED', (data: any) => {
       const payload = data.payload || data;
-      if (!isHost) {
-        if (payload.direction === 'next') arSceneRef.current?.nextSlide();
-        else arSceneRef.current?.prevSlide();
-      }
+      if (payload.direction === 'next') arSceneRef.current?.nextSlide();
+      else arSceneRef.current?.prevSlide();
     });
 
     const unsubModelUpdate = socket.on('MODEL_UPDATE', (data: any) => {
       const payload = data.payload || data;
       const state = payload.state || data.state;
-      if (!isHost && state) {
+      if (state) {
         // Apply to 3D Scene
         arSceneRef.current?.applyState(state);
         
@@ -55,19 +53,15 @@ export function useSessionRealtimeListeners({
 
     const unsubPresentationStart = socket.on('PRESENTATION_STARTED', (data: any) => {
       const payload = data.payload || data;
-      if (!isHost) {
-        const slidesToUse = payload.slides || currentSlides;
-        setCurrentSlides(slidesToUse);
-        arSceneRef.current?.startPresentationMode(slidesToUse);
-        setPresentationMode(true);
-      }
+      const slidesToUse = payload.slides || currentSlides;
+      setCurrentSlides(slidesToUse);
+      arSceneRef.current?.startPresentationMode(slidesToUse);
+      setPresentationMode(true);
     });
 
     const unsubPresentationStop = socket.on('PRESENTATION_STOPPED', () => {
-      if (!isHost) {
-        arSceneRef.current?.stopPresentationMode();
-        setPresentationMode(false);
-      }
+      arSceneRef.current?.stopPresentationMode();
+      setPresentationMode(false);
     });
 
     return () => {

@@ -1,177 +1,181 @@
 import type { NormalizedLandmark } from '@mediapipe/hands';
 
 export interface GestureResult {
-    type: 'none' | 'pointing' | 'open_left' | 'open_right' | 'pinch_in' | 'pinch_out' | 'fist' | 'fist_left' | 'fist_right';
+    // fist       = all 4 fingers closed → zoom OUT
+    // pinch      = thumb+index close together → zoom IN
+    // pointing   = index extended, others folded → drag/move model
+    // open_hand  = 3+ fingers extended, slow/still → reset
+    // open_left  = 3+ fingers extended, fast leftward → rotate left
+    // open_right = 3+ fingers extended, fast rightward → rotate right
+    // none       = no confident gesture
+    type: 'none' | 'pointing' | 'open_hand' | 'open_left' | 'open_right' | 'fist' | 'pinch';
     confidence: number;
     position?: { x: number; y: number; z: number };
-    scale?: number;
-    rotation?: { left: boolean; right: boolean };
+    // Raw velocity so the hook can also read it independently of smoothed type
+    velocityX: number;
 }
 
 export class GestureRecognizer {
-    private previousHandPosition: { x: number; y: number; z: number } | null = null;
+    // Smoothing only for stable gestures (fist, pointing, open_hand, pinch)
+    // Directional variants (open_left/open_right) bypass smoothing — see below
+    private readonly HISTORY_SIZE = 3; // Reduced for faster response
     private gestureHistory: GestureResult[] = [];
-    private readonly HISTORY_SIZE = 15;
 
-    private previousTime = Date.now();
+    // Velocity tracking
+    private previousHandCenter: { x: number; y: number } | null = null;
+    private previousTime = 0;
+
+    // Normalized coords/second needed to count as a directional swipe
+    private readonly SWIPE_THRESHOLD = 0.40;
 
     recognize(landmarks: NormalizedLandmark[]): GestureResult {
-        // Landmark indices
-        const indexTip = landmarks[8];
+        const indexTip  = landmarks[8];
+        const thumbTip  = landmarks[4];
+        const fingerExt = this.calculateFingerExtensions(landmarks);
 
-        // Calculate finger extension
-        const fingerExtended = this.calculateFingerExtensions(landmarks);
-        const extendedCount = fingerExtended.filter(Boolean).length;
-
-        // Detect gesture type
-        let gesture: GestureResult = { type: 'none', confidence: 0 };
+        // Index/Middle/Ring/Pinky extension (ignore thumb for most gestures)
+        const [, idxExt, midExt, ringExt, pinkyExt] = fingerExt;
+        const fourCount = [idxExt, midExt, ringExt, pinkyExt].filter(Boolean).length;
 
         const handCenter = this.calculateHandCenter(landmarks);
-        const swipe = this.detectSwipe(handCenter);
+        const velocityX  = this.calculateVelocityX(handCenter);
 
-        // 1. SWIPE - Fast movement (rotates model)
-        if (swipe.left || swipe.right) {
-            gesture = {
-                type: swipe.left ? 'fist_left' : 'fist_right', // Mapping to existing types for spin
-                confidence: 0.9,
-                rotation: swipe
-            };
+        let raw: GestureResult = { type: 'none', confidence: 0, velocityX };
+
+        // ── 1. PINCH: thumb tip and index tip very close → zoom IN ───────────
+        const pinchDist = this.dist2D(thumbTip, indexTip);
+        const wristToMid = this.dist2D(landmarks[0], landmarks[9]);
+        if (pinchDist < wristToMid * 0.40) {
+            raw = { type: 'pinch', confidence: 0.93, velocityX };
         }
-        // 2. FIST - All fingers closed (zoom)
-        else if (extendedCount === 0) {
-            gesture = {
+
+        else if (fourCount === 0 || (fourCount === 1 && !idxExt)) {
+            // Relaxed fist: either 0 fingers extended, or 1 finger that isn't the index
+            raw = {
                 type: 'fist',
-                confidence: 0.95
-            };
-        }
-        // 3. POINTING - Only index finger extended (selection)
-        else if (extendedCount === 1 && fingerExtended[1]) {
-            gesture = {
-                type: 'pointing',
-                confidence: 0.9,
-                position: {
-                    x: (0.5 - indexTip.x) * 2, // Corrected Mirroring to NDC [-1, 1]
-                    y: (0.5 - indexTip.y) * 2, // Corrected Y-axis to NDC [-1, 1]
-                    z: indexTip.z
-                }
-            };
-        }
-        // 4. OPEN HAND - All fingers extended (reset)
-        else if (extendedCount >= 3) { // Lowered from 4 to 3 for better reliability
-            gesture = {
-                type: 'open_left', // Using open_left as the signal for "Open Hand"
-                confidence: 0.8
+                confidence: 0.95,
+                position: { x: handCenter.x, y: handCenter.y, z: 0 },
+                velocityX,
             };
         }
 
-        // Smooth gesture using history
-        return this.smoothGesture(gesture);
+        // ── 3. POINTING: index extended, at least 2 of middle/ring/pinky folded
+        //    (relaxed — allows slight middle finger extension which is natural)
+        else if (idxExt && [midExt, ringExt, pinkyExt].filter(Boolean).length <= 1) {
+            raw = {
+                type: 'pointing',
+                confidence: 0.90,
+                position: {
+                    x: 1.0 - indexTip.x,   // Mirror X: webcam is flipped horizontally
+                    y: indexTip.y,
+                    z: indexTip.z,
+                },
+                velocityX,
+            };
+        }
+
+        // ── 4. OPEN HAND: 3+ fingers extended ────────────────────────────────
+        //    Direction is decided BEFORE smoothing to avoid the majority-vote problem.
+        //    open_left / open_right are returned directly (not smoothed) so fast
+        //    swipe gestures aren't washed out by the history buffer.
+        else if (fourCount >= 2) {
+            if (velocityX < -this.SWIPE_THRESHOLD) {
+                // Raw video moves left (physically moves right if mirrored)
+                return { type: 'open_right', confidence: 0.88, velocityX };
+            } else if (velocityX > this.SWIPE_THRESHOLD) {
+                // Raw video moves right (physically moves left if mirrored)
+                return { type: 'open_left', confidence: 0.88, velocityX };
+            } else {
+                // Slow/stationary → reset (goes through smoothing for stability)
+                raw = { type: 'open_hand', confidence: 0.82, velocityX };
+            }
+        }
+
+        return this.smoothGesture(raw);
     }
 
     private calculateFingerExtensions(landmarks: NormalizedLandmark[]): boolean[] {
-        const fingerConfigs = [
-            { tip: 4, pip: 3, mcp: 2, wrist: 0 },    // Thumb
-            { tip: 8, pip: 6, mcp: 5 },             // Index
-            { tip: 12, pip: 10, mcp: 9 },           // Middle
-            { tip: 16, pip: 14, mcp: 13 },          // Ring
-            { tip: 20, pip: 18, mcp: 17 }           // Pinky
+        const configs = [
+            { tip: 4,  pip: 3,  mcp: 2 },  // Thumb
+            { tip: 8,  pip: 6,  mcp: 5 },  // Index
+            { tip: 12, pip: 10, mcp: 9 },  // Middle
+            { tip: 16, pip: 14, mcp: 13 }, // Ring
+            { tip: 20, pip: 18, mcp: 17 }, // Pinky
         ];
 
-        return fingerConfigs.map((config, index) => {
-            const tip = landmarks[config.tip];
-            const mcp = landmarks[config.mcp];
+        return configs.map((cfg, i) => {
+            const tip = landmarks[cfg.tip];
+            const mcp = landmarks[cfg.mcp];
 
-            if (index === 0) {
-                // Thumb: Compare distance from tip to pinky MCP vs IP to pinky MCP
-                // This checks if the thumb is "tucked in"
+            if (i === 0) {
+                // Thumb: extended if tip is further from pinky MCP than the IP joint
                 const pinkyMCP = landmarks[17];
-                const tipDist = this.calculateDistance(tip, pinkyMCP);
-                const ipDist = this.calculateDistance(landmarks[config.pip], pinkyMCP);
-                return tipDist > ipDist * 1.2;
-            } else {
-                // Other fingers: Use the "pseudo-angle" (tip-to-mcp distance)
-                // Normalize by the length of the hand (wrist to middle MCP)
-                const wrist = landmarks[0];
-                const middleMCP = landmarks[9];
-                const handSize = this.calculateDistance(wrist, middleMCP);
-                
-                const tipToMcpDist = this.calculateDistance(tip, mcp);
-                
-                // If tip-to-mcp distance is > 70% of hand size, finger is extended
-                // This is much more reliable than simple Y-coordinate checks
-                return tipToMcpDist > handSize * 0.7;
+                return this.dist2D(tip, pinkyMCP) > this.dist2D(landmarks[cfg.pip], pinkyMCP) * 1.15;
             }
+            // Other fingers: tip-to-MCP distance > 50% of hand size (relaxed from 65%)
+            const handSize = this.dist2D(landmarks[0], landmarks[9]);
+            return this.dist2D(tip, mcp) > handSize * 0.50;
         });
     }
 
-    private calculateDistance(p1: NormalizedLandmark, p2: NormalizedLandmark): number {
-        return Math.sqrt(
-            Math.pow(p1.x - p2.x, 2) +
-            Math.pow(p1.y - p2.y, 2) +
-            Math.pow(p1.z - p2.z, 2)
-        );
-    }
-
     private calculateHandCenter(landmarks: NormalizedLandmark[]) {
-        const wrist = landmarks[0];
+        const wrist     = landmarks[0];
         const middleMCP = landmarks[9];
         return {
             x: (wrist.x + middleMCP.x) / 2,
             y: (wrist.y + middleMCP.y) / 2,
-            z: (wrist.z + middleMCP.z) / 2
         };
     }
 
-    private detectSwipe(handCenter: { x: number; y: number; z: number }) {
-        if (!this.previousHandPosition) {
-            this.previousHandPosition = handCenter;
-            return { left: false, right: false };
+    /**
+     * Returns horizontal velocity in normalized-coordinate-units/second.
+     * Positive = moving right, negative = moving left.
+     * Updated every frame; always returns fresh value (not smoothed).
+     */
+    private calculateVelocityX(center: { x: number; y: number }): number {
+        const now = Date.now();
+        if (!this.previousHandCenter || this.previousTime === 0) {
+            this.previousHandCenter = center;
+            this.previousTime       = now;
+            return 0;
         }
-
-        const currentTime = Date.now();
-        const deltaTime = (currentTime - this.previousTime) / 1000;
-        this.previousTime = currentTime;
-
-        const deltaX = handCenter.x - this.previousHandPosition.x;
-        const velocity = deltaX / (deltaTime || 0.001);
-
-        this.previousHandPosition = handCenter;
-
-        // Higher threshold for swipe to distinguish from jitter
-        const swipeThreshold = 0.8;
-
-        return {
-            left: velocity < -swipeThreshold, 
-            right: velocity > swipeThreshold 
-        };
+        const dt = (now - this.previousTime) / 1000;
+        const dx = center.x - this.previousHandCenter.x;
+        this.previousHandCenter = center;
+        this.previousTime       = now;
+        return dt > 0.002 ? dx / dt : 0;
     }
 
+    private dist2D(p1: NormalizedLandmark, p2: NormalizedLandmark): number {
+        return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
+    }
+
+    /**
+     * Majority-vote smoothing over the last HISTORY_SIZE frames.
+     * Only stable gestures (fist, pointing, open_hand, pinch) go through this.
+     * Directional gestures (open_left, open_right) skip this entirely.
+     */
     private smoothGesture(gesture: GestureResult): GestureResult {
         this.gestureHistory.push(gesture);
         if (this.gestureHistory.length > this.HISTORY_SIZE) {
             this.gestureHistory.shift();
         }
 
-        // Use most common gesture in history for stability
-        const gestureCounts: { [key: string]: number } = {};
-        this.gestureHistory.forEach(g => {
-            gestureCounts[g.type] = (gestureCounts[g.type] || 0) + 1;
-        });
+        const counts: Record<string, number> = {};
+        for (const g of this.gestureHistory) {
+            counts[g.type] = (counts[g.type] || 0) + 1;
+        }
 
-        const mostCommon = Object.keys(gestureCounts).reduce((a, b) =>
-            gestureCounts[a] > gestureCounts[b] ? a : b
-        );
+        const best = Object.keys(counts).reduce((a, b) =>
+            counts[a] > counts[b] ? a : b
+        ) as GestureResult['type'];
 
-        const validTypes: GestureResult['type'][] = ['none', 'pointing', 'open_left', 'open_right', 'pinch_in', 'pinch_out', 'fist', 'fist_left', 'fist_right'];
-        const smoothedType: GestureResult['type'] = validTypes.includes(mostCommon as GestureResult['type'])
-            ? (mostCommon as GestureResult['type'])
-            : 'none';
-
-        return { ...gesture, type: smoothedType };
+        return { ...gesture, type: best };
     }
 
     reset() {
-        this.previousHandPosition = null;
-        this.gestureHistory = [];
+        this.gestureHistory     = [];
+        this.previousHandCenter = null;
+        this.previousTime       = 0;
     }
 }

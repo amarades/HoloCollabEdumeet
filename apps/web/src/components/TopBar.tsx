@@ -20,7 +20,7 @@ const TopBar: React.FC = () => {
                     
                     <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-primary/10 border border-primary/20 rounded-full">
                         <Zap className="w-3 h-3 text-primary fill-primary animate-pulse" />
-                        <span className="text-[9px] font-black text-primary uppercase tracking-widest whitespace-nowrap">Neural Link Active</span>
+                        <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">Connected</span>
                     </div>
                 </div>
 

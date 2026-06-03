@@ -22,8 +22,6 @@ import Sidebar from '../components/Sidebar';
 import TopBar from '../components/TopBar';
 import { AIChatMenu } from '../components/AIChatMenu';
 
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || 'AIzaSyAarkXMp1O7UqsMspE9iy2ltJaNqZt_QS8';
-
 interface StudentStat {
     name: string;
     duration_minutes: number;
@@ -164,15 +162,15 @@ const SessionReport = () => {
                 setIsGeneratingAI(false);
                 return;
             }
-            const prompt = `Pedagogical analysis: ${report.topic}, ${report.total_students} students, ${report.average_attention}% avg attention. Transcript: ${transcriptText}`;
-            const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${GEMINI_API_KEY}`, {
+            const aiData = await apiRequest('/api/ai/summarize', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                body: JSON.stringify({ transcript: transcriptText })
             });
-            const aiData = await aiRes.json();
-            const textResponse = aiData.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (textResponse) { setAiSummary(textResponse); }
+            if (aiData && aiData.response) { 
+                setAiSummary(aiData.response); 
+            } else {
+                setAiSummary("AI Analysis failed.");
+            }
         } catch (err) {
             setAiSummary("AI Analysis failed.");
         } finally {
@@ -202,7 +200,7 @@ const SessionReport = () => {
                     <Loader2 className="w-12 h-12 text-primary animate-spin" />
                     <div className="absolute inset-0 blur-xl bg-primary/20 animate-pulse" />
                 </div>
-                <p className="text-primary font-black uppercase tracking-[0.3em] text-[10px] animate-pulse">Compiling Intelligence Archive...</p>
+                <p className="text-primary font-black uppercase tracking-[0.3em] text-[10px] animate-pulse">Loading Session Report...</p>
             </div>
         </div>
     );
@@ -237,7 +235,7 @@ const SessionReport = () => {
                     className="mb-8 flex items-center gap-2 text-gray-500 hover:text-primary transition-all group"
                 >
                     <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-                    <span className="text-[10px] font-black uppercase tracking-widest">Return to Command Central</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest">Back to Dashboard</span>
                 </button>
 
                 {/* Syncing Banner */}
@@ -255,13 +253,13 @@ const SessionReport = () => {
                                     <div className="absolute inset-0 blur-md bg-primary/20 animate-pulse" />
                                 </div>
                                 <div>
-                                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-primary mb-1">Archiving Link Insights</p>
-                                    <p className="text-xs text-gray-500 font-bold tracking-tight">Syncing spatial telemetry data with neural engine...</p>
+                                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-primary mb-1">Saving Session Data</p>
+                                    <p className="text-xs text-gray-500 font-bold tracking-tight">Processing session records and interactions...</p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-6">
                                 <div className="text-right">
-                                    <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Efficiency</span>
+                                    <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Progress</span>
                                     <p className="text-sm font-black text-primary">{Math.round(syncProgress)}%</p>
                                 </div>
                                 <div className="w-64 h-2 bg-white/5 rounded-full overflow-hidden border border-white/5 p-0.5">
@@ -293,10 +291,10 @@ const SessionReport = () => {
                             <div className="flex items-center justify-center md:justify-start gap-4 mb-5">
                                 <div className="flex items-center gap-2 px-5 py-2 bg-primary/10 border border-primary/20 rounded-full">
                                     <Brain className="w-3.5 h-3.5 text-primary" />
-                                    <span className="text-[9px] font-black uppercase tracking-[0.3em] text-primary">Neural Synthesis Output</span>
+                                    <span className="text-[9px] font-black uppercase tracking-[0.3em] text-primary">AI Session Analysis</span>
                                 </div>
                                 <div className={`flex items-center gap-2 px-5 py-2 ${ratingInfo.bg} border border-white/5 rounded-full`}>
-                                    <span className={`text-[9px] font-black uppercase tracking-[0.3em] ${ratingInfo.color}`}>{ratingInfo.label} Integrity</span>
+                                    <span className={`text-[9px] font-black uppercase tracking-[0.3em] ${ratingInfo.color}`}>{ratingInfo.label} Rating</span>
                                 </div>
                             </div>
                             <h1 className="text-6xl font-black tracking-tighter mb-4 italic text-white leading-tight">
@@ -304,7 +302,7 @@ const SessionReport = () => {
                             </h1>
                             <p className="text-gray-400 font-bold tracking-[0.25em] flex items-center justify-center md:justify-start gap-3 uppercase text-[11px]">
                                 <History className="w-4 h-4 text-primary" />
-                                {report?.topic} • PROTOCOL_DATE_{new Date().toLocaleDateString().replace(/\//g, '_')}
+                                {report?.topic} • Date: {new Date().toLocaleDateString()}
                             </p>
                         </div>
 
@@ -313,13 +311,13 @@ const SessionReport = () => {
                                 onClick={handleExportCSV} 
                                 className="btn-premium-primary px-10 py-5 text-[10px] uppercase tracking-[0.25em] font-black flex items-center justify-center gap-3"
                             >
-                                <Download className="w-4 h-4" /> Export CSV Record
+                                <Download className="w-4 h-4" /> Download CSV Report
                             </button>
                             <button 
                                 onClick={() => navigate('/dashboard')} 
                                 className="bg-white/5 text-white px-10 py-5 rounded-[20px] font-black text-[10px] uppercase tracking-[0.25em] hover:bg-white/10 transition-all border border-white/5 shadow-inner"
                             >
-                                Terminate Review
+                                Close Report
                             </button>
                         </div>
                     </div>
@@ -338,9 +336,9 @@ const SessionReport = () => {
                             </h2>
                             <div className="grid grid-cols-1 gap-6">
                                 {[
-                                    { label: 'Mean Attention', value: report?.average_attention + '%', color: 'primary', icon: BarChart3 },
-                                    { label: 'Sync Duration', value: report?.average_duration_minutes + 'm', color: 'white', icon: Clock },
-                                    { label: 'Neural Participants', value: report?.total_students, color: 'accent', icon: Users }
+                                    { label: 'Avg Attention', value: report?.average_attention + '%', color: 'primary', icon: BarChart3 },
+                                    { label: 'Session Length', value: report?.average_duration_minutes + 'm', color: 'white', icon: Clock },
+                                    { label: 'Total Participants', value: report?.total_students, color: 'accent', icon: Users }
                                 ].map((stat) => (
                                     <div key={stat.label} className="p-8 bg-white/5 rounded-3xl border border-white/5 flex items-center justify-between hover:border-primary/20 transition-all group/stat cursor-default">
                                         <div>
@@ -359,7 +357,7 @@ const SessionReport = () => {
                                 <div className="w-12 h-12 rounded-2xl bg-secondary/10 text-secondary flex items-center justify-center not-italic border border-secondary/20">
                                     <Mic className="w-5 h-5" />
                                 </div>
-                                Telemetry Vault
+                                Audio Recordings
                             </h2>
                             <div className="space-y-5">
                                 {recordings.map((rec, idx) => (
@@ -369,7 +367,7 @@ const SessionReport = () => {
                                                 <div className="w-8 h-8 rounded-xl bg-secondary/10 text-secondary flex items-center justify-center">
                                                     <Play className="w-4 h-4 fill-secondary" />
                                                 </div>
-                                                <span className="text-[10px] font-black uppercase tracking-[.25em] text-white/60">Segment_{idx + 1 < 10 ? '0' + (idx + 1) : idx + 1}</span>
+                                                <span className="text-[10px] font-black uppercase tracking-[.25em] text-white/60">Part {idx + 1 < 10 ? '0' + (idx + 1) : idx + 1}</span>
                                             </div>
                                             <TrendingUp className="w-4 h-4 text-secondary opacity-40 group-hover/rec:animate-pulse" />
                                         </div>
@@ -401,8 +399,8 @@ const SessionReport = () => {
                                         <Brain className="w-8 h-8" />
                                     </div>
                                     <div>
-                                        <h3 className="text-3xl font-black text-white italic tracking-tighter">Neural Engine Analysis</h3>
-                                        <p className="text-[10px] text-primary font-black uppercase tracking-[.4em] mt-1">High-Fidelity Learning Synthesis</p>
+                                        <h3 className="text-3xl font-black text-white italic tracking-tighter">AI Session Summary</h3>
+                                        <p className="text-[10px] text-primary font-black uppercase tracking-[.4em] mt-1">Automated insights from your session</p>
                                     </div>
                                 </div>
                                 {!aiSummary && isHost && (
@@ -412,7 +410,7 @@ const SessionReport = () => {
                                         className="px-8 py-4 glass-panel rounded-2xl text-[10px] font-black uppercase tracking-widest text-primary hover:bg-white/10 transition-all border border-primary/30 group/btn flex items-center gap-3"
                                     >
                                         {isGeneratingAI ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4 group-hover/btn:scale-125 transition-transform" />}
-                                        {isGeneratingAI ? "Processing..." : "Force Synthesis"}
+                                        {isGeneratingAI ? "Processing..." : "Regenerate Summary"}
                                     </button>
                                 )}
                             </div>
@@ -424,7 +422,7 @@ const SessionReport = () => {
                                             <Loader2 className="w-12 h-12 text-primary animate-spin" />
                                             <div className="absolute inset-0 blur-xl bg-primary/30 animate-pulse" />
                                         </div>
-                                        <p className="text-[10px] font-black uppercase tracking-[0.4em] text-primary">Synthesizing raw transcripts with pedagogical models...</p>
+                                        <p className="text-[10px] font-black uppercase tracking-[0.4em] text-primary">Analyzing session transcripts and interactions...</p>
                                     </div>
                                 ) : (
                                     <div className="prose prose-invert prose-p:text-gray-400 prose-headings:text-white prose-headings:italic prose-headings:font-black prose-headings:uppercase prose-headings:tracking-widest prose-headings:text-xs max-w-none text-base leading-relaxed font-medium" style={{ whiteSpace: 'pre-wrap' }}>
@@ -435,7 +433,7 @@ const SessionReport = () => {
 
                             {/* Decorative footer */}
                             <div className="mt-8 flex items-center justify-between text-[8px] font-black text-white/20 uppercase tracking-[0.5em] relative z-10">
-                                <span>Engine_v4.2.0_Stable</span>
+                                <span>Analysis Engine v4.2</span>
                                 <span>Confidence: 98.4%</span>
                             </div>
                         </div>
@@ -446,15 +444,15 @@ const SessionReport = () => {
                                 <div className="w-14 h-14 rounded-[24px] bg-white/5 text-gray-400 flex items-center justify-center not-italic border border-white/10 shadow-inner">
                                     <Users className="w-7 h-7" />
                                 </div>
-                                Neural Participant Ledger
+                                Attendance & Engagement
                             </h2>
                             <div className="overflow-x-auto h-[400px] scrollbar-hide">
                                 <table className="w-full">
                                     <thead className="sticky top-0 bg-bg-white/80 backdrop-blur-xl z-20">
                                         <tr className="text-[10px] uppercase tracking-[0.4em] text-primary font-black border-b border-white/10">
-                                            <th className="text-left py-6 px-4">Entity Identity</th>
-                                            <th className="text-left py-6 px-4">Active Timeline</th>
-                                            <th className="text-left py-6 px-4">Focus.Load.Factor</th>
+                                            <th className="text-left py-6 px-4">Participant Name</th>
+                                            <th className="text-left py-6 px-4">Session Duration</th>
+                                            <th className="text-left py-6 px-4">Engagement Score</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-white/5 mt-4">
@@ -471,7 +469,7 @@ const SessionReport = () => {
                                                 <td className="py-7 px-4">
                                                     <div className="flex items-center gap-3">
                                                         <Clock className="w-4 h-4 text-gray-500" />
-                                                        <span className="text-xs text-gray-400 font-bold tracking-tight">{s.duration_minutes}m active_session</span>
+                                                        <span className="text-xs text-gray-400 font-bold tracking-tight">{s.duration_minutes}m participated</span>
                                                     </div>
                                                 </td>
                                                 <td className="py-7 px-4">

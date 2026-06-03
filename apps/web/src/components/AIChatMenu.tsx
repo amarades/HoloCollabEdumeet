@@ -1,20 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageSquare, X, Send } from 'lucide-react';
+import { apiRequest } from '../services/api';
 import './AIChatMenu.css';
-
-// ─── CONFIG ──────────────────────────────────────────────────────────────────
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "AIzaSyAarkXMp1O7UqsMspE9iy2ltJaNqZt_QS8";
-const GEMINI_MODEL   = "gemini-2.5-flash-lite";
-
-const SYSTEM_PROMPT = `You are EduMeet AI, an intelligent assistant embedded inside HoloCollab EduMeet — an immersive AI-powered classroom platform. 
-You help students with:
-- Summarizing lectures and generating timestamped notes
-- Explaining deep learning, AI, and computer science concepts clearly
-- Analyzing whiteboard notes and collaborative sessions
-- Providing study guidance and concept breakdowns
-- Answering questions about neural networks, NLP, transformers, CNNs, and related topics
-
-Be concise, friendly, and educational. Use markdown-style formatting when helpful (bold key terms, use bullet points for lists). Keep responses focused and practical.`;
 
 const SUGGESTIONS = [
   "Summarize today's lecture",
@@ -25,34 +12,27 @@ const SUGGESTIONS = [
 
 // ─── GEMINI API CALL ─────────────────────────────────────────────────────────
 async function callGemini(chatHistory: Message[]) {
-  const contents = chatHistory.map(msg => ({
+  // Extract the latest message to send as the prompt, 
+  // and the rest as the history context.
+  const history = chatHistory.slice(0, -1).map(msg => ({
     role: msg.role === "ai" ? "model" : "user",
-    parts: [{ text: msg.content }],
+    text: msg.content
   }));
+  const message = chatHistory[chatHistory.length - 1].content;
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+  try {
+    const response = await apiRequest('/api/ai/chat', {
+      method: 'POST',
       body: JSON.stringify({
-        system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-        contents,
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 1024,
-        },
-      }),
-    }
-  );
-
-  if (!response.ok) {
-    const err = await response.json();
-    throw new Error(err?.error?.message || "Gemini API error");
+        history,
+        message
+      })
+    });
+    
+    return response.response || "Sorry, I couldn't generate a response.";
+  } catch (err: any) {
+    throw new Error(err?.message || "AI Service error");
   }
-
-  const data = await response.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || "Sorry, I couldn't generate a response.";
 }
 
 // ─── COMPONENTS ──────────────────────────────────────────────────────────────

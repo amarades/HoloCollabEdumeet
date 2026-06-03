@@ -14,11 +14,11 @@ const Settings = () => {
     const [activeSection, setActiveSection] = useState('profile');
 
     const sections = [
-        { id: 'profile', label: 'Profile Settings', icon: User, description: 'Manage your researcher identity and neural links.' },
-        { id: 'notifications', label: 'Notifications', icon: Bell, description: 'Configure telemetry alerts and system pings.' },
-        { id: 'security', label: 'Security & Access', icon: Shield, description: 'Neural key management and access protocols.' },
-        { id: 'appearance', label: 'Interface Interface', icon: Palette, description: 'Customize your spatial workspace aesthetics.' },
-        { id: 'devices', label: 'Neural Hardware', icon: Laptop, description: 'Manage connected VR/AR peripherals and sensors.' },
+        { id: 'profile', label: 'Profile Settings', icon: User, description: 'Manage your profile and account links.' },
+        { id: 'notifications', label: 'Notifications', icon: Bell, description: 'Configure activity alerts and system notifications.' },
+        { id: 'security', label: 'Security & Access', icon: Shield, description: 'Manage your passwords and access security.' },
+        { id: 'appearance', label: 'Theme & Appearance', icon: Palette, description: 'Customize your workspace theme and colors.' },
+        { id: 'devices', label: 'Devices & Hardware', icon: Laptop, description: 'Manage connected VR/AR headsets and controllers.' },
     ];
 
     return (
@@ -43,7 +43,7 @@ const Settings = () => {
                         <p className="text-primary font-black uppercase tracking-[0.3em] text-[10px]">Preferences</p>
                     </div>
                     <h2 className="text-5xl font-black text-white tracking-tighter mb-4 italic">Settings<span className="text-primary non-italic ml-2">.</span></h2>
-                    <p className="text-white/60 font-medium max-w-xl">Configure your spatial workspace and neural bridge parameters.</p>
+                    <p className="text-white/60 font-medium max-w-xl">Configure your workspace and account preferences.</p>
                 </motion.header>
 
                 <div className="grid grid-cols-12 gap-10">
@@ -109,12 +109,12 @@ const Settings = () => {
                                         </div>
                                         <div>
                                             <h3 className="text-3xl font-black text-white italic tracking-tight mb-2">{user?.name || 'Researcher'}<span className="text-primary non-italic">.</span></h3>
-                                            <p className="text-primary font-black uppercase tracking-[0.3em] text-[10px] mb-4">Prime Entity Instance</p>
+                                            <p className="text-primary font-black uppercase tracking-[0.3em] text-[10px] mb-4">Active User Profile</p>
                                             <div className="flex items-center gap-3">
-                                                <span className="px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-[9px] font-bold text-white/40 uppercase tracking-widest">Node ID: 0x4F2A</span>
+                                                <span className="px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-[9px] font-bold text-white/40 uppercase tracking-widest">User ID: 0x4F2A</span>
                                                 <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-[9px] font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-1.5">
                                                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                                                    Sync Active
+                                                    Status: Online
                                                 </span>
                                             </div>
                                         </div>
@@ -122,7 +122,7 @@ const Settings = () => {
 
                                     <div className="grid grid-cols-2 gap-8">
                                         <div className="space-y-3">
-                                            <label className="text-[9px] font-black text-white/30 uppercase tracking-[0.3em] ml-2">Researcher Alias</label>
+                                            <label className="text-[9px] font-black text-white/30 uppercase tracking-[0.3em] ml-2">Display Name</label>
                                             <input 
                                                 type="text" 
                                                 defaultValue={user?.name || ''}
@@ -131,7 +131,7 @@ const Settings = () => {
                                             />
                                         </div>
                                         <div className="space-y-3">
-                                            <label className="text-[9px] font-black text-white/30 uppercase tracking-[0.3em] ml-2">Neural Email</label>
+                                            <label className="text-[9px] font-black text-white/30 uppercase tracking-[0.3em] ml-2">Account Email</label>
                                             <input 
                                                 type="email" 
                                                 defaultValue={user?.email || ''}
@@ -140,7 +140,7 @@ const Settings = () => {
                                             />
                                         </div>
                                         <div className="col-span-2 space-y-3">
-                                            <label className="text-[9px] font-black text-white/30 uppercase tracking-[0.3em] ml-2">Bio Protocol</label>
+                                            <label className="text-[9px] font-black text-white/30 uppercase tracking-[0.3em] ml-2">Bio / About</label>
                                             <textarea 
                                                 rows={4}
                                                 className="w-full bg-white/5 border border-white/10 rounded-3xl px-6 py-4 text-sm font-bold text-white focus:outline-none focus:border-primary/50 transition-colors resize-none"
@@ -151,7 +151,7 @@ const Settings = () => {
 
                                     <div className="pt-6">
                                         <button className="px-10 py-5 bg-gradient-to-r from-primary to-secondary text-white font-black uppercase text-[10px] tracking-[0.2em] rounded-2xl shadow-xl shadow-primary/20 hover:scale-105 transition-all border border-white/10">
-                                            Authorize Synchronization
+                                            Update Preferences
                                         </button>
                                     </div>
                                 </div>
@@ -162,8 +162,8 @@ const Settings = () => {
                                     <div className="w-20 h-20 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center mb-8 text-white/20">
                                         <SettingsIcon size={32} />
                                     </div>
-                                    <h3 className="text-2xl font-black text-white mb-2 uppercase tracking-tight">Protocol Component Under Construction</h3>
-                                    <p className="text-white/30 text-xs font-bold uppercase tracking-widest max-w-sm">Neural bridge segment is being provisioned. This module will be available in the next deployment cycle.</p>
+                                    <h3 className="text-2xl font-black text-white mb-2 uppercase tracking-tight">Section Under Construction</h3>
+                                    <p className="text-white/30 text-xs font-bold uppercase tracking-widest max-w-sm">This module is currently being updated and will be available soon.</p>
                                 </div>
                             )}
                         </motion.div>

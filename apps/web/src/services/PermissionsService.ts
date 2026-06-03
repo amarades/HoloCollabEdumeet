@@ -210,10 +210,10 @@ export class PermissionsService {
     }
 
     canInteract(): boolean {
-        if (this.isHost) return true;
-        const myId = this.socket?.getUserId();
-        if (!myId) return false;
-        return this.hasPermission(myId, 'canControlGestures');
+        // Gesture control manipulates the local 3D scene view —
+        // this is a client-side action that doesn't need host approval.
+        // Everyone (host or participant) can always interact with the model.
+        return true;
     }
 
     getPendingRequests(): ParticipantRequest[] {

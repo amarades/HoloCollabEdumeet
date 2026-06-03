@@ -67,8 +67,8 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
             {/* Header */}
             <div className="p-6 border-b border-white/5 flex items-center justify-between">
                 <div className="flex flex-col gap-0.5">
-                    <h3 className="text-white font-black text-xs uppercase tracking-[0.2em]">Manifest</h3>
-                    <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold">Spatial Registry</p>
+                    <h3 className="text-white font-black text-xs uppercase tracking-[0.2em]">Assets</h3>
+                    <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold">All Objects</p>
                 </div>
                 <button onClick={onClose} className="w-8 h-8 flex items-center justify-center hover:bg-white/10 rounded-full transition-colors text-white/40 hover:text-white">
                     <X size={18} />
@@ -87,7 +87,7 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
                                 : 'text-white/40 hover:text-white/70 hover:bg-white/5'
                             }`}
                     >
-                        {tab === 'objects' ? `Entities (${sceneObjects.length})` : tab === 'model' ? 'Primary Asset' : 'Protocol Library'}
+                        {tab === 'objects' ? `Objects (${sceneObjects.length})` : tab === 'model' ? 'Current Model' : 'Asset Library'}
                     </button>
                 ))}
             </div>
@@ -100,7 +100,7 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
                     <div className="p-6 flex flex-col gap-6">
                         {/* Spawn shapes */}
                         <div>
-                            <h3 className="text-white/40 font-black text-[9px] uppercase tracking-[0.2em] mb-4">Initialize Primitive</h3>
+                            <h3 className="text-white/40 font-black text-[9px] uppercase tracking-[0.2em] mb-4">Add Shapes</h3>
 
                             {/* Color picker */}
                             <div className="flex flex-wrap gap-2.5 mb-5">
@@ -136,7 +136,7 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
                         {/* Scene object list */}
                         {sceneObjects.length > 0 && (
                             <div>
-                                <h3 className="text-white/40 font-black text-[9px] uppercase tracking-[0.2em] mb-3">Active Registry</h3>
+                                <h3 className="text-white/40 font-black text-[9px] uppercase tracking-[0.2em] mb-3">Live Objects</h3>
                                 <div className="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1">
                                     {sceneObjects.map(obj => (
                                         <div
@@ -157,7 +157,7 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
                                             <div className="flex-1 min-w-0">
                                                 <div className="text-white font-bold text-xs capitalize">{obj.type}</div>
                                                 <div className="text-white/20 text-[9px] font-mono tracking-tighter truncate">
-                                                    ADDR: [{obj.position.map(v => v.toFixed(1)).join(', ')}]
+                                                    POS: [{obj.position.map(v => v.toFixed(1)).join(', ')}]
                                                 </div>
                                             </div>
                                             {obj.lockedBy && <Lock className="w-3.5 h-3.5 text-amber-500 opacity-60" />}
@@ -176,7 +176,7 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
                         {sceneObjects.length === 0 && (
                             <div className="flex flex-col items-center justify-center py-10 opacity-20 border-2 border-dashed border-white/5 rounded-3xl">
                                 <Box size={32} className="mb-3 text-white" />
-                                <p className="text-[10px] uppercase font-black tracking-widest">Registry Empty</p>
+                                <p className="text-[10px] uppercase font-black tracking-widest">No Objects Found</p>
                             </div>
                         )}
                     </div>
@@ -185,21 +185,26 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
                 {/* ── Model Tab ── */}
                 {activeTab === 'model' && (
                     <div className="p-6 flex flex-col gap-6">
+                        {!isHost && (
+                            <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-amber-200 text-[10px] font-bold uppercase tracking-widest leading-relaxed">
+                                Note: Only the Host can change the primary model.
+                            </div>
+                        )}
                         {!modelLoaded ? (
                             <div className="flex flex-col items-center justify-center gap-6 py-12 text-center">
                                 <div className="w-24 h-24 bg-white/5 border border-white/10 rounded-[32px] flex items-center justify-center shadow-inner group transition-all hover:border-primary/40">
                                     <Box className="w-10 h-10 text-white/20 group-hover:text-primary transition-colors" />
                                 </div>
                                 <div className="max-w-[200px]">
-                                    <h3 className="text-white font-black text-sm uppercase tracking-widest mb-2">Protocol Uninitialized</h3>
+                                    <h3 className="text-white font-black text-sm uppercase tracking-widest mb-2">No Model Uploaded</h3>
                                     <p className="text-white/30 text-[10px] uppercase tracking-widest font-bold leading-relaxed">
-                                        Upload neural asset (GLB/GLTF) to initiate spatial environment.
+                                        Upload a 3D model (GLB/GLTF) to start the session.
                                     </p>
                                 </div>
                                 <button
                                     onClick={onUpload}
-                                    disabled={isUploading}
-                                    className={`flex items-center gap-3 bg-primary hover:bg-secondary text-white font-black uppercase text-[10px] tracking-[0.2em] py-4 px-8 rounded-2xl transition-all shadow-lg shadow-primary/20 active:scale-95 ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    disabled={isUploading || !isHost}
+                                    className={`flex items-center gap-3 bg-primary hover:bg-secondary text-white font-black uppercase text-[10px] tracking-[0.2em] py-4 px-8 rounded-2xl transition-all shadow-lg shadow-primary/20 active:scale-95 ${isUploading || !isHost ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >
                                     {isUploading ? (
                                         <>
@@ -209,7 +214,7 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
                                     ) : (
                                         <>
                                             <Upload className="w-4 h-4" />
-                                            Initialize Asset
+                                            Upload GLB Model
                                         </>
                                     )}
                                 </button>
@@ -221,52 +226,55 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
                                         <Box className="w-5 h-5 text-emerald-400" />
                                     </div>
                                     <div>
-                                        <div className="text-emerald-400 font-black text-[10px] uppercase tracking-widest">Asset Active</div>
-                                        <div className="text-emerald-400/50 text-[9px] uppercase tracking-widest font-bold mt-0.5">Telemetry Synchronized</div>
+                                        <div className="text-emerald-400 font-black text-[10px] uppercase tracking-widest">Model Ready</div>
+                                        <div className="text-emerald-400/50 text-[9px] uppercase tracking-widest font-bold mt-0.5">Status: Synchronized</div>
                                     </div>
                                 </div>
 
                                 <div className="flex flex-col gap-2.5">
                                     <button
                                         onClick={onToggleModel}
+                                        disabled={!isHost}
                                         className={`flex items-center gap-4 p-4 rounded-2xl border transition-all shadow-lg
                                             ${modelVisible
                                                 ? 'bg-white/5 border-white/10 hover:bg-white/8'
                                                 : 'bg-primary/20 border-primary/40 text-primary'
-                                            }`}
+                                            } ${!isHost ? 'opacity-50 cursor-not-allowed' : ''}`}
                                     >
                                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${modelVisible ? 'bg-white/5 text-white/40' : 'bg-primary/20 text-primary animate-pulse'}`}>
                                             {modelVisible ? <Eye size={18} /> : <EyeOff size={18} />}
                                         </div>
                                         <div className="text-left flex-1">
-                                            <div className="text-white font-black text-[10px] uppercase tracking-widest">{modelVisible ? 'Terminate Viz' : 'Initiate Viz'}</div>
-                                            <div className="text-white/20 text-[9px] uppercase font-bold tracking-widest mt-0.5">Overlay Status Toggle</div>
+                                            <div className="text-white font-black text-[10px] uppercase tracking-widest">{modelVisible ? 'Hide Model' : 'Show Model'}</div>
+                                            <div className="text-white/20 text-[9px] uppercase font-bold tracking-widest mt-0.5">Visibility Toggle</div>
                                         </div>
                                     </button>
 
                                     <button
                                         onClick={onUpload}
-                                        className="flex items-center gap-4 p-4 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all group"
+                                        disabled={!isHost}
+                                        className={`flex items-center gap-4 p-4 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all group ${!isHost ? 'opacity-50 cursor-not-allowed' : ''}`}
                                     >
                                         <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-white/40 group-hover:text-white transition-colors">
                                             <Upload size={18} />
                                         </div>
                                         <div className="text-left flex-1">
-                                            <div className="text-white font-black text-[10px] uppercase tracking-widest">Update Source</div>
-                                            <div className="text-white/20 text-[9px] uppercase font-bold tracking-widest mt-0.5">Provision new GLB data</div>
+                                            <div className="text-white font-black text-[10px] uppercase tracking-widest">Change Model</div>
+                                            <div className="text-white/20 text-[9px] uppercase font-bold tracking-widest mt-0.5">Upload a different file</div>
                                         </div>
                                     </button>
 
                                     <button
                                         onClick={onDeleteModel}
-                                        className="flex items-center gap-4 p-4 bg-red-500/5 border border-red-500/10 rounded-2xl hover:bg-red-500/10 hover:border-red-500/20 transition-all group"
+                                        disabled={!isHost}
+                                        className={`flex items-center gap-4 p-4 bg-red-500/5 border border-red-500/10 rounded-2xl hover:bg-red-500/10 hover:border-red-500/20 transition-all group ${!isHost ? 'opacity-50 cursor-not-allowed' : ''}`}
                                     >
                                         <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center text-red-400 group-hover:scale-110 transition-transform">
                                             <Trash2 size={18} />
                                         </div>
                                         <div className="text-left flex-1">
-                                            <div className="text-red-400 font-black text-[10px] uppercase tracking-widest">Purge Entity</div>
-                                            <div className="text-red-400/40 text-[9px] uppercase font-bold tracking-widest mt-0.5">Wipe Registry Segment</div>
+                                            <div className="text-red-400 font-black text-[10px] uppercase tracking-widest">Remove Model</div>
+                                            <div className="text-red-400/40 text-[9px] uppercase font-bold tracking-widest mt-0.5">Clear model from scene</div>
                                         </div>
                                     </button>
                                 </div>
@@ -275,7 +283,7 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
                                 <div className="p-5 bg-white/3 border border-white/5 rounded-3xl">
                                     <h3 className="text-white/30 font-black text-[9px] tracking-[0.3em] mb-4 flex items-center gap-2 uppercase">
                                         <Palette className="w-3.5 h-3.5 text-primary" />
-                                        Visual Protocol
+                                        Visual Effects
                                     </h3>
                                     <div className="grid grid-cols-1 gap-2.5">
                                         {[
@@ -314,14 +322,14 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
                                 <BookmarkPlus size={20} />
                             </div>
                             <div>
-                                <h2 className="text-white font-black text-sm uppercase tracking-widest">Curated Archives</h2>
-                                <p className="text-white/20 text-[9px] uppercase font-bold tracking-widest mt-0.5">Verified Knowledge Assets</p>
+                                <h2 className="text-white font-black text-sm uppercase tracking-widest">Asset Library</h2>
+                                <p className="text-white/20 text-[9px] uppercase font-bold tracking-widest mt-0.5">Select a model to use</p>
                             </div>
                         </div>
                         
                         {!isHost && (
                             <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-amber-200 text-[10px] font-bold uppercase tracking-widest leading-relaxed">
-                                CRITICAL: Only Prime Entity (Host) can re-provision the primary spatial asset.
+                                Note: Only the Host can change the primary model.
                             </div>
                         )}
 
@@ -330,7 +338,7 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
                             <div>
                                 <h4 className="text-[9px] font-black text-white/20 uppercase tracking-[.4em] mb-4 flex items-center gap-2">
                                     <Lock className="w-3 h-3" />
-                                    Core Protocol Assets
+                                    Default Models
                                 </h4>
                                 <div className="grid grid-cols-2 gap-4">
                                     {libraryModels.filter(m => m.is_curated).map(model => (
@@ -359,7 +367,7 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
                             <div>
                                 <h4 className="text-[9px] font-black text-white/20 uppercase tracking-[.4em] mb-4 flex items-center gap-2">
                                     <Plus className="w-3 h-3" />
-                                    Community Intel
+                                    Shared Models
                                 </h4>
                                 <div className="grid grid-cols-2 gap-4">
                                     {libraryModels.filter(m => !m.is_curated).map(model => (
@@ -383,7 +391,7 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
                                     ))}
                                     {libraryModels.filter(m => !m.is_curated).length === 0 && (
                                         <div className="col-span-2 py-10 text-center border-2 border-dashed border-white/5 rounded-3xl bg-white/[0.01]">
-                                            <p className="text-white/20 text-[9px] font-black uppercase tracking-[.3em]">No Community Metadata</p>
+                                            <p className="text-white/20 text-[9px] font-black uppercase tracking-[0.3em]">No shared models yet</p>
                                         </div>
                                     )}
                                 </div>
@@ -401,7 +409,7 @@ export const ScenePanel: React.FC<ScenePanelProps> = ({
                         className="w-full flex items-center justify-center gap-3 py-4 bg-primary text-white rounded-2xl text-[10px] font-black uppercase tracking-[.3em] hover:bg-secondary transition-all shadow-lg shadow-primary/20 hover:shadow-secondary/30 active:scale-95"
                     >
                         <Plus size={16} />
-                        Instantiate Cube
+                        Add New Cube
                     </button>
                 </div>
             )}

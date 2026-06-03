@@ -69,9 +69,9 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({ onClose, socket, user })
             // data could be wrapped: { event, payload } or flat
             const d = data.payload || data;
             
-            // Ignore own events echoed back from server
+            // Ignore own events echoed back from server using unique websocket ID
             const localUserId = socket.getUserId ? socket.getUserId() : null;
-            if (d.senderId === localUserId || (d.user && d.user === user?.email)) return;
+            if (d.senderId === localUserId) return;
             if (!ctxRef.current) return;
 
             if (d.type === 'text') {

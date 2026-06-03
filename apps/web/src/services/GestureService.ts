@@ -72,9 +72,9 @@ export class GestureService {
 
                 globalHandsInstance.setOptions({
                     maxNumHands: 1,
-                    modelComplexity: 1,
-                    minDetectionConfidence: 0.6, // Slightly lowered for better initial detection
-                    minTrackingConfidence: 0.5
+                    modelComplexity: 0,          // LITE model: ~2x faster inference
+                    minDetectionConfidence: 0.5,  // Lower = fewer re-detection cycles
+                    minTrackingConfidence: 0.4    // Lower = stays in tracking mode longer
                 });
 
                 globalHandsInstance.onResults((results) => {
@@ -153,15 +153,17 @@ export class GestureService {
             if (this.videoElement.readyState >= 2 && this.videoElement.videoWidth > 0 && this.canvasElement && this.canvasCtx) {
                 const startTime = performance.now();
                 try {
-                    // Update canvas dimensions if they changed
-                    if (this.canvasElement.width !== this.videoElement.videoWidth || 
-                        this.canvasElement.height !== this.videoElement.videoHeight) {
-                        this.canvasElement.width = this.videoElement.videoWidth;
-                        this.canvasElement.height = this.videoElement.videoHeight;
+                    // Use half-resolution canvas to significantly reduce per-frame inference time.
+                    // MediaPipe lite model on a 320x240 canvas is more than sufficient for gesture detection.
+                    const targetW = Math.floor(this.videoElement.videoWidth / 2);
+                    const targetH = Math.floor(this.videoElement.videoHeight / 2);
+                    if (this.canvasElement.width !== targetW || this.canvasElement.height !== targetH) {
+                        this.canvasElement.width = targetW;
+                        this.canvasElement.height = targetH;
                     }
 
-                    // Draw video to off-screen buffer
-                    this.canvasCtx.drawImage(this.videoElement, 0, 0);
+                    // Draw video to half-resolution off-screen buffer
+                    this.canvasCtx.drawImage(this.videoElement, 0, 0, targetW, targetH);
 
                     // Process input
                     await globalHandsInstance.send({ image: this.canvasElement });

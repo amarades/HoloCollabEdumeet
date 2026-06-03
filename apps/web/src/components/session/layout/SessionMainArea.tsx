@@ -112,7 +112,7 @@ export const SessionMainArea: React.FC<SessionMainAreaProps> = ({
                             className={`flex items-center gap-3 px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-2xl transition-all ${presentationMode ? 'bg-primary text-white shadow-primary/30 border border-primary/40' : 'bg-[#1a1919]/80 backdrop-blur-xl hover:bg-primary/20 text-white border border-white/10'}`}
                         >
                             <Presentation className="w-4 h-4" />
-                            {presentationMode ? 'Terminate Stream' : 'Deploy Presentation'}
+                            {presentationMode ? 'Stop Presentation' : 'Start Presentation'}
                         </button>
                         
                         <button
@@ -121,7 +121,7 @@ export const SessionMainArea: React.FC<SessionMainAreaProps> = ({
                             className="flex items-center gap-3 px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-2xl transition-all bg-secondary/80 hover:bg-secondary text-white border border-secondary/40 disabled:opacity-50"
                         >
                             <FileUp className="w-4 h-4" />
-                            {isConverting ? 'Processing Buffer...' : 'Inject PDF Asset'}
+                            {isConverting ? 'Processing PDF...' : 'Upload PDF'}
                         </button>
 
                         {presentationMode && (

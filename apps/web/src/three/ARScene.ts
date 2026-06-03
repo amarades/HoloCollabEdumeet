@@ -56,12 +56,16 @@ export class ARScene {
     // Visual & Motion state
     private visualFilter: 'realistic' | 'blue_glow' | 'red_glow' = 'realistic';
     private autoOscillate: boolean = false;
+    private gestureActive: boolean = false;
+    private gestureIdleTimer: ReturnType<typeof setTimeout> | null = null;
+    private lastLocalInteraction: number = 0;
 
     // Bound listener references for cleanup
     private boundMouseMove: (e: MouseEvent) => void = () => { };
     private boundMouseUp: () => void = () => { };
     private boundResize: () => void = () => { };
     private boundCanvasClick: (e: MouseEvent) => void = () => { };
+    private resizeObserver: ResizeObserver | null = null;
 
     // Callbacks for events
     public onStateChange?: (state: ModelState) => void;
@@ -105,13 +109,14 @@ export class ARScene {
             preserveDrawingBuffer: true
         });
 
-        this.renderer.setSize(this.canvas.clientWidth, this.canvas.clientHeight);
+        this.renderer.setSize(this.canvas.clientWidth, this.canvas.clientHeight, false);
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
         // ✅ CRITICAL: Set clear color with full transparency
         this.renderer.setClearColor(0x000000, 0);  // 0 = fully transparent
 
         // Lights
+        const RESET_HOLD_FRAMES = 90; // Increased reset hold time
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
         this.scene.add(ambientLight);
 
@@ -139,6 +144,12 @@ export class ARScene {
         // Interaction listeners
         this.boundCanvasClick = this.onCanvasClick.bind(this);
         this.canvas.addEventListener('click', this.boundCanvasClick);
+
+        // Responsive Observer
+        this.resizeObserver = new ResizeObserver(() => {
+            this.onWindowResize();
+        });
+        this.resizeObserver.observe(this.canvas.parentElement || this.canvas);
     }
 
     private onCanvasClick(event: MouseEvent) {
@@ -175,10 +186,12 @@ export class ARScene {
     }
 
     /**
-     * Incremental zoom for the camera
+     * Zoom camera. Positive delta = zoom OUT (camera moves back).
+     * Range is clamped between z=2 (very close) and z=12 (far back but model still visible).
      */
     public zoomCamera(delta: number) {
-        this.camera.position.z = Math.max(2, Math.min(15, this.camera.position.z - delta));
+        this.lastLocalInteraction = Date.now();
+        this.camera.position.z = Math.max(2, Math.min(12, this.camera.position.z + delta));
         this.notifyStateChange();
     }
 
@@ -517,25 +530,24 @@ export class ARScene {
         const time = performance.now() / 1000;
 
         // Feature 1: Float animation + shader uniform update
-        if (this.currentModel && !this.isPresentationMode) {
+        if (this.currentModel) {
             // Gentle sine-wave float added as offset to base position
             this.currentModel.position.y = this.basePosition.y + Math.sin(time * 0.8) * 0.15;
             this.currentModel.position.x = this.basePosition.x;
             this.currentModel.position.z = this.basePosition.z;
             
             // 180-degree oscillation (sine wave between -90 and 90 degrees)
-            if (this.autoOscillate && !this.isDragging) {
-                // Math.sin(time) gives -1 to 1. PI/2 is 90 degrees.
+            if (this.autoOscillate && !this.isDragging && !this.gestureActive) {
                 const angle = Math.sin(time * 0.5) * (Math.PI / 2);
                 this.currentModel.rotation.y = this.baseRotation.y + angle;
                 this.currentModel.rotation.x = this.baseRotation.x;
-            } else if (!this.isDragging) {
-                // Fallback slow rotate
+            } else if (!this.isDragging && !this.gestureActive) {
+                // Auto slow-rotate only when no gesture is in control
                 this.baseRotation.y += 0.003;
                 this.currentModel.rotation.y = this.baseRotation.y;
                 this.currentModel.rotation.x = this.baseRotation.x;
             } else {
-                // While dragging, just keep current model rotation synced to base
+                // Gesture or drag is active — respect whatever rotation was set
                 this.currentModel.rotation.copy(this.baseRotation);
             }
 
@@ -740,7 +752,7 @@ export class ARScene {
         if (!this.canvas) return;
         this.camera.aspect = this.canvas.clientWidth / this.canvas.clientHeight;
         this.camera.updateProjectionMatrix();
-        this.renderer.setSize(this.canvas.clientWidth, this.canvas.clientHeight);
+        this.renderer.setSize(this.canvas.clientWidth, this.canvas.clientHeight, false);
     }
 
     public getState(): ModelState | null {
@@ -839,6 +851,9 @@ export class ARScene {
     }
 
     public applyState(state: ModelState) {
+        // Skip remote updates for 1000ms after local interaction to prevent sync-fighting/jitter
+        if (Date.now() - this.lastLocalInteraction < 1000) return;
+
         // Check for model URL change
         if (state.model_url && state.model_url !== this.currentModelUrl) {
             this.loadModelFromUrl(state.model_url);
@@ -1054,12 +1069,30 @@ export class ARScene {
     // Actions for buttons
     public resetView() {
         this.camera.position.set(0, 0, 5);
-        if (this.currentModel) this.currentModel.rotation.set(0, 0, 0);
+        this.basePosition.set(0, 0, 0);
+        this.baseRotation.set(0, 0, 0);
+        if (this.currentModel) {
+            this.currentModel.position.copy(this.basePosition);
+            this.currentModel.rotation.copy(this.baseRotation);
+        }
         this.notifyStateChange();
+    }
+
+    /**
+     * Call this whenever a gesture fires to pause auto-rotation for 2 seconds.
+     * This prevents the background slow-rotate from fighting gesture controls.
+     */
+    public setGestureActive() {
+        this.gestureActive = true;
+        if (this.gestureIdleTimer) clearTimeout(this.gestureIdleTimer);
+        this.gestureIdleTimer = setTimeout(() => {
+            this.gestureActive = false;
+        }, 5000); // 5 seconds idle before auto-rotate resumes
     }
 
     public rotateModel(axis: 'x' | 'y' | 'z', angle: number) {
         if (!this.currentModel) return;
+        this.lastLocalInteraction = Date.now();
         this.baseRotation[axis] += angle;
         this.currentModel.rotation.copy(this.baseRotation);
         this.notifyStateChange();
@@ -1080,6 +1113,7 @@ export class ARScene {
         // Sensitivity factor for smooth movement
         const moveSpeed = 0.012; 
         
+        this.lastLocalInteraction = Date.now();
         this.basePosition.x += deltaX * moveSpeed;
         this.basePosition.y -= deltaY * moveSpeed; // Invert Y for screen-to-world mapping
         
@@ -1126,6 +1160,11 @@ export class ARScene {
         window.removeEventListener('mouseup', this.boundMouseUp);
         window.removeEventListener('resize', this.boundResize);
         this.canvas.removeEventListener('click', this.boundCanvasClick);
+
+        if (this.resizeObserver) {
+            this.resizeObserver.disconnect();
+            this.resizeObserver = null;
+        }
 
         // Dispose all geometries and materials to free GPU memory
         this.scene.traverse((obj: any) => {
